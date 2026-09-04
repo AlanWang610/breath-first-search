@@ -37,8 +37,9 @@ dependencies = [
 raster = ["numba>=0.60"]
 # fitdecode lands with run-history ingest (scope 6.2, milestone M5).
 history = ["fitdecode>=0.10"]
-# duckdb lands with Overture GeoParquet ingest (scope 4.4, milestone M3).
-ingest = ["duckdb>=1.1"]
+# Region-build ingest (scope 13): duckdb reads Overture GeoParquet, osmium clips the
+# state extract to a region polygon and writes the offline LTS tag back into the pbf.
+ingest = ["duckdb>=1.1", "osmium>=4.3"]
 tools = ["mcp>=1.2"]
 agent = ["pydantic-ai>=0.0.14", "anthropic>=0.40"]
 api = ["fastapi>=0.115", "uvicorn[standard]>=0.32"]

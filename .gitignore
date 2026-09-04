@@ -15,6 +15,10 @@ venv/
 .coverage
 htmlcov/
 
+# Java (deploy/graphhopper/lts-wrapper)
+target/
+*.class
+
 # Node (ui/)
 node_modules/
 ui/dist/
