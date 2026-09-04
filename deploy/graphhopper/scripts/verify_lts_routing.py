@@ -111,6 +111,11 @@ def lts_profile(path: dict, carrier: dict) -> tuple[float, dict[int, float]]:
     return sum(seg), by_level
 
 
+def share(by_level: dict, total: float, level: int) -> float:
+    """Percentage of a path's length at one LTS level. Zero-length paths give 0."""
+    return 100.0 * by_level.get(level, 0.0) / total if total else 0.0
+
+
 def geometry_overlap(a: dict, b: dict) -> float:
     """Fraction of a's length whose way ids also appear in b."""
     coords = a["points"]["coordinates"]
@@ -149,22 +154,19 @@ def main() -> int:
         if len(paths) != len(carrier["models"]):
             continue
 
-        print(
-            f"  {'model':8s} {'dist_m':>9s}  {'lts1':>6s} {'lts2':>6s} {'lts3':>6s} {'lts4':>6s} {'lts0':>6s}"
-        )
+        header = f"  {'model':8s} {'dist_m':>9s}  "
+        header += " ".join(f"{'lts' + str(i):>6s}" for i in (1, 2, 3, 4, 0))
+        print(header)
         for name, p in paths.items():
             total, by = lts_profile(p, carrier)
-            pct = lambda lvl: 100 * by.get(lvl, 0.0) / total if total else 0.0
-            print(
-                f"  {name:8s} {total:9.0f}  "
-                f"{pct(1):5.1f}% {pct(2):5.1f}% {pct(3):5.1f}% {pct(4):5.1f}% {pct(0):5.1f}%"
-            )
+            shares = " ".join(f"{share(by, total, lvl):5.1f}%" for lvl in (1, 2, 3, 4, 0))
+            print(f"  {name:8s} {total:9.0f}  {shares}")
 
         avoid_total, avoid_by = lts_profile(paths["avoid"], carrier)
         seek_total, seek_by = lts_profile(paths["seek"], carrier)
         neutral_total, _ = lts_profile(paths["neutral"], carrier)
-        hi_avoid = sum(avoid_by.get(l, 0.0) for l in (3, 4)) / avoid_total * 100
-        hi_seek = sum(seek_by.get(l, 0.0) for l in (3, 4)) / seek_total * 100
+        hi_avoid = sum(share(avoid_by, avoid_total, lvl) for lvl in (3, 4))
+        hi_seek = sum(share(seek_by, seek_total, lvl) for lvl in (3, 4))
         overlap = geometry_overlap(paths["avoid"], paths["seek"])
         print(
             f"  -> lts>=3 share: avoid {hi_avoid:.1f}%  vs  seek {hi_seek:.1f}%   "
