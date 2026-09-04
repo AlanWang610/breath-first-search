@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import sys
 import urllib.error
 import urllib.request
 
@@ -54,10 +53,10 @@ CARRIERS = {
         "detail": "track_type",
         "models": {
             "neutral": [],
-            "avoid": [{"if": "track_type == GRADE3 || track_type == GRADE4",
-                       "multiply_by": "0.02"}],
-            "seek": [{"if": "track_type == GRADE1 || track_type == GRADE2",
-                      "multiply_by": "0.02"}],
+            "avoid": [
+                {"if": "track_type == GRADE3 || track_type == GRADE4", "multiply_by": "0.02"}
+            ],
+            "seek": [{"if": "track_type == GRADE1 || track_type == GRADE2", "multiply_by": "0.02"}],
         },
         # NB: custom-model expressions spell enums UPPERCASE (`track_type == GRADE3`) but
         # path details come back lowercase ("grade3" / "missing"). Compare case-insensitively.
@@ -125,8 +124,12 @@ def geometry_overlap(a: dict, b: dict) -> float:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--url", default="http://localhost:8989")
-    ap.add_argument("--ev", choices=sorted(CARRIERS), default="lts",
-                    help="which encoded value carries LTS (see decision 0001)")
+    ap.add_argument(
+        "--ev",
+        choices=sorted(CARRIERS),
+        default="lts",
+        help="which encoded value carries LTS (see decision 0001)",
+    )
     args = ap.parse_args()
 
     carrier = CARRIERS[args.ev]
@@ -146,7 +149,9 @@ def main() -> int:
         if len(paths) != len(carrier["models"]):
             continue
 
-        print(f"  {'model':8s} {'dist_m':>9s}  {'lts1':>6s} {'lts2':>6s} {'lts3':>6s} {'lts4':>6s} {'lts0':>6s}")
+        print(
+            f"  {'model':8s} {'dist_m':>9s}  {'lts1':>6s} {'lts2':>6s} {'lts3':>6s} {'lts4':>6s} {'lts0':>6s}"
+        )
         for name, p in paths.items():
             total, by = lts_profile(p, carrier)
             pct = lambda lvl: 100 * by.get(lvl, 0.0) / total if total else 0.0
