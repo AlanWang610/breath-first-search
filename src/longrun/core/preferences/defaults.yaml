@@ -1,0 +1,82 @@
+# Shipped preference defaults (scope 6.3).
+#
+# Every entry starts with provenance `default`. Nothing here is a safety limit: the
+# floors in floors.py sit outside this file precisely so that no profile edit can reach
+# them. Weights are -1..+1, where negative avoids, positive seeks, and 0 means the
+# quantity is measured and reported but never costed.
+#
+# There is deliberately no up-front questionnaire (scope 6.3). These values hold until a
+# concrete in-context question makes one of them `stated`.
+
+version: 1
+
+# Sun carries no sign by default. With both weights at 0 the shade fraction is reported
+# and not scored; heat stress is scored regardless, because it is physiology, not taste.
+sun:
+  value:
+    cool: 0.0
+    hot: 0.0
+    pivot_c: 22.0
+  weight: 0.0
+  provenance: 0
+
+# Longest acceptable gap at projected pace, in minutes.
+water_gap_max_min:
+  value: 90.0
+  weight: 0.0
+  provenance: 0
+
+toilet_gap_max_min:
+  value: 150.0
+  weight: 0.0
+  provenance: 0
+
+# Millilitres carried; converts a dry gap into a refill requirement.
+# Asked at first use (scope 6.3) because it affects nearly every plan.
+carry_capacity_ml:
+  value: 500.0
+  weight: 0.0
+  provenance: 0
+
+# Highest LTS that is *not* a soft flag. Also asked at first use.
+# Cannot be raised to 4: LTS 4 is a hard flag and a safety floor.
+traffic_tolerance:
+  value: 2
+  weight: 0.0
+  provenance: 0
+
+# paved | dirt | mixed. Inferred from run history when it is uploaded, not asked.
+surface:
+  value: mixed
+  weight: 0.1
+  provenance: 0
+
+grade:
+  value:
+    max_climb_pct: 10.0
+    max_descent_pct: 10.0
+    hills: 0.0
+  weight: 0.0
+  provenance: 0
+
+# Extra distance accepted to clear a soft flag, in percent.
+detour_tolerance_pct:
+  value: 10.0
+  weight: 0.0
+  provenance: 0
+
+# Signalized stops per km before a soft flag.
+stops_tolerance:
+  value: 3.0
+  weight: 0.0
+  provenance: 0
+
+darkness_tolerance:
+  value: false
+  weight: 0.0
+  provenance: 0
+
+scenery_vs_directness:
+  value: 0.0
+  weight: 0.0
+  provenance: 0
