@@ -1,0 +1,12 @@
+# Text is normalized to LF in the repository. Without this, CRLF normalization silently
+# mutates committed GPX fixtures and makes golden-test content hashes platform-dependent.
+* text=auto eol=lf
+
+# Fixture and data formats are binary: never normalize, never diff as text.
+*.gpx  binary
+*.gpkg binary
+*.tif  binary
+*.tiff binary
+*.pbf  binary
+*.fit  binary
+*.zip  binary
