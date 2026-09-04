@@ -10,6 +10,7 @@ from __future__ import annotations
 import typer
 
 from longrun import __version__
+from longrun.cli import repair
 
 app = typer.Typer(
     name="longrun",
@@ -36,6 +37,9 @@ def main(
     ),
 ) -> None:
     """Long-run planner."""
+
+
+repair.register(app)
 
 
 if __name__ == "__main__":  # pragma: no cover

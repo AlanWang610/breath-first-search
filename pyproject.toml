@@ -81,6 +81,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Typer's whole API is call-valued defaults; B008 is a false positive against it.
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
 [tool.ruff.format]
 # Deliberately NOT docstring-code-format: the package docstrings document shell usage
 # (`longrun plan request.yaml`), which ruff would de-indent as if it were Python.
