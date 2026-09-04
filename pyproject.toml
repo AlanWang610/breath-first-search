@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "longrun"
+version = "0.0.0"
+description = "Long-run planner: verified routes and plan sheets for 20-100 km runs"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Alan Wang" }]
+
+# Intended dependency set from the scope. Not yet resolved or installed; trim to what
+# each layer actually imports as the layers land.
+dependencies = [
+  "pydantic>=2",
+  "typer>=0.12",
+  "httpx>=0.27",
+  "pyyaml>=6",
+  # geospatial core
+  "geopandas>=1.0",
+  "shapely>=2",
+  "pyproj>=3.6",
+  "rasterio>=1.3",
+  # track I/O
+  "gpxpy>=1.6",
+  "fitdecode>=0.10",
+  # environment
+  "pvlib>=0.11",
+  "numba>=0.60",
+  # stores
+  "psycopg[binary]>=3.2",
+  "duckdb>=1.1",
+]
+
+[project.optional-dependencies]
+tools = ["mcp>=1.2"]
+agent = ["pydantic-ai>=0.0.14", "anthropic>=0.40"]
+api = ["fastapi>=0.115", "uvicorn[standard]>=0.32"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.7",
+  "mypy>=1.13",
+]
+
+[project.scripts]
+longrun = "longrun.cli.main:app"
+
+# Jurisdiction adapters register here (scope 7.10). Third-party packages can add entries
+# under the same group; discovery is by entry point, not by import path.
+[project.entry-points."longrun.adapters"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longrun"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "golden: end-to-end route regression, run through the CLI with no model in the loop",
+  "contract: adapter contract test against a recorded response",
+  "network: requires a live external service; skipped by default",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["longrun"]
+strict = false

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node (ui/)
+node_modules/
+ui/dist/
+ui/.vite/
+
+# Secrets and local config
+.env
+.env.local
+*.local.yaml
+
+# Local run artifacts
+*.log
+scratch/
