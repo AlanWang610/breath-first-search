@@ -351,3 +351,82 @@ def test_locking_a_range_is_recorded() -> None:
 
 def test_unknown_scorer_lookup_returns_none() -> None:
     assert _scratchpad().result("nope") is None
+
+
+# --- check 8 must not pass on missing signalization -------------------------
+
+
+def _crossings_result(*, signals_checked: bool, with_soft_flag: bool) -> ScorerResult:
+    """A crossings scorer that read the ways layer but maybe not the node layer."""
+    flags = []
+    if with_soft_flag:
+        flags.append(
+            Flag(
+                scorer="crossings",
+                segment_id="s00002",
+                kind=FlagKind.SOFT,
+                tier=Tier.COMFORT,
+                severity=0.4,
+                reason_code="unsignalized_secondary_crossing",
+            )
+        )
+    result = ScorerResult(name="crossings", flags=flags)
+    result.coverage.append(CoverageEntry(source="ways", kind="osm_crossings", checked=True))
+    result.coverage.append(
+        CoverageEntry(
+            source="nodes",
+            kind="traffic_signals",
+            checked=signals_checked,
+            reason=None if signals_checked else "no node layer",
+        )
+    )
+    return result
+
+
+def test_check_eight_skips_when_signalization_was_never_known() -> None:
+    """A safety check cannot pass on data nobody had.
+
+    The crossings scorer can read the ways layer and emit soft flags while having no node
+    layer to distinguish signalized from unsignalized. Judging by "did anything get
+    flagged" would let check 8 pass on a region where signalization is simply unknown.
+    """
+    results = [_crossings_result(signals_checked=False, with_soft_flag=True)]
+    check = next(
+        c for c in gpx_verify(_route(), _request(), results=results).results if c.number == 8
+    )
+    assert check.status == "skipped"
+
+
+def test_check_eight_skips_even_with_no_flags_when_signals_are_unknown() -> None:
+    results = [_crossings_result(signals_checked=False, with_soft_flag=False)]
+    check = next(
+        c for c in gpx_verify(_route(), _request(), results=results).results if c.number == 8
+    )
+    assert check.status == "skipped"
+
+
+def test_check_eight_passes_once_signalization_is_actually_known() -> None:
+    results = [_crossings_result(signals_checked=True, with_soft_flag=True)]
+    check = next(
+        c for c in gpx_verify(_route(), _request(), results=results).results if c.number == 8
+    )
+    assert check.status == "passed"
+
+
+def test_check_eight_fails_on_a_hard_crossing_when_signals_are_known() -> None:
+    result = _crossings_result(signals_checked=True, with_soft_flag=False)
+    result.flags.append(
+        Flag(
+            scorer="crossings",
+            segment_id="s00004",
+            kind=FlagKind.HARD,
+            tier=Tier.SAFETY,
+            severity=0.95,
+            reason_code="unsignalized_primary_crossing",
+        )
+    )
+    check = next(
+        c for c in gpx_verify(_route(), _request(), results=[result]).results if c.number == 8
+    )
+    assert check.status == "failed"
+    assert check.offenders == ["s00004"]

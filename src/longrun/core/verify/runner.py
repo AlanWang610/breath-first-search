@@ -50,16 +50,29 @@ class VerifyReport(BaseModel):
         )
 
 
-def _offenders_from(results: list[ScorerResult], scorer: str) -> list[str] | None:
-    """Hard-flag segment ids from a scorer, or None if the scorer never ran.
+def _offenders_from(
+    results: list[ScorerResult], scorer: str, requires: str | None = None
+) -> list[str] | None:
+    """Hard-flag segment ids from a scorer, or None if the check cannot be answered.
 
     None and [] are different answers: one means nobody looked, the other means nothing
     was found. Checks 5, 6 and 8 rely on that distinction to skip rather than pass.
+
+    `requires` names the coverage *kind* a check actually depends on, which matters when
+    a scorer half-ran. The crossings scorer can read the ways layer, emit soft flags, and
+    still have no node layer to tell signalized crossings from unsignalized ones. Judging
+    only by "did anything get flagged" would let check 8 - an explicit safety check for
+    unsignalized crossings of fast roads - pass on a region where signalization was never
+    known. A safety check that cannot run has to skip, not pass.
     """
     result = next((r for r in results if r.name == scorer), None)
     if result is None:
         return None
-    if any(not entry.checked for entry in result.coverage) and not result.flags:
+    if result.coverage and all(not entry.checked for entry in result.coverage):
+        return None
+    if requires is not None and any(
+        entry.kind == requires and not entry.checked for entry in result.coverage
+    ):
         return None
     return [f.segment_id for f in result.flags if f.kind is FlagKind.HARD]
 
@@ -92,7 +105,9 @@ def gpx_verify(
             checks.check_7_distance_in_tolerance(
                 route, request.target_distance_km, request.distance_tolerance_pct
             ),
-            checks.check_8_no_dangerous_crossings(_offenders_from(scorer_results, "crossings")),
+            checks.check_8_no_dangerous_crossings(
+                _offenders_from(scorer_results, "crossings", requires="traffic_signals")
+            ),
             checks.check_9_time_constraints(request.time_constraints, etas),
             checks.check_10_locks_intact(segments or [], request.locked, original),
         ]

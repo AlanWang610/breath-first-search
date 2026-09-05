@@ -24,13 +24,14 @@ from typing import Any
 import typer
 
 from longrun.core.data.cache import SqliteCache
-from longrun.core.data.file_store import FileLayerStore, FileRasterStore
+from longrun.core.data.file_store import FileLayerStore, FileRasterStore, LayerNotFound
 from longrun.core.export.sheet_md import render_markdown
 from longrun.core.geo.dem import elevation_profile, sample_elevation
 from longrun.core.geo.gpx import GpxError, gpx_read
-from longrun.core.geo.segments import segment_route
+from longrun.core.geo.matching import assign_way_ids
+from longrun.core.geo.segments import corridor, segment_route
 from longrun.core.models.context import Budget, FrozenClock, ScorerContext
-from longrun.core.models.coverage import CoverageManifest
+from longrun.core.models.coverage import CoverageEntry, CoverageManifest
 from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Plan
 from longrun.core.models.request import PlanRequest
@@ -132,8 +133,6 @@ def repair(
         target_distance_km=target_km,
     )
     profile = load_profile(profile_path)
-    segments = segment_route(route)
-
     root = fixtures or Path("data")
     ctx = ScorerContext(
         layers=FileLayerStore(root),
@@ -144,6 +143,25 @@ def repair(
         profile=profile,
         budget=Budget(),
     )
+
+    # Repair mode has no router, so nothing has told us which way each point lies on.
+    # Snap geometrically instead, or every way-tag scorer reads `unknown` for the whole
+    # route and the commonest entry mode becomes the least useful one.
+    match = _match_ways(route, ctx)
+    segments = segment_route(route, way_ids=match.way_ids if match else None)
+    if match is not None and not match.is_usable:
+        ctx.coverage.record(
+            CoverageEntry(
+                source="way_matching",
+                kind="osm_tags",
+                checked=False,
+                reason=(
+                    f"only {match.match_rate:.0%} of route points snapped to a way within "
+                    f"{match.tolerance_m:.0f} m; tag-driven scorers cover a minority of "
+                    f"this route"
+                ),
+            )
+        )
 
     # sample_elevation already returns all-None where the DEM has no coverage, which is
     # what "unknown elevation" looks like downstream (scope 12).
@@ -183,6 +201,23 @@ def repair(
         typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
     else:
         _echo_utf8(sheet)
+
+
+def _match_ways(route: Any, ctx: ScorerContext) -> Any:
+    """Snap the route to OSM ways, or None when there is no ways layer to snap to."""
+    try:
+        ways = ctx.layers.ways_in_corridor(corridor(route))
+    except (LayerNotFound, FileNotFoundError):
+        ctx.coverage.record(
+            CoverageEntry(
+                source="way_matching",
+                kind="osm_tags",
+                checked=False,
+                reason="no ways layer available to match the route against",
+            )
+        )
+        return None
+    return assign_way_ids(route, ways)
 
 
 def _echo_utf8(text: str) -> None:

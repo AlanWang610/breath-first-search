@@ -40,6 +40,11 @@ STRESS_BY_HIGHWAY: dict[str, int] = {
     "trunk_link": 4,
     "motorway": 4,
     "motorway_link": 4,
+    # `road` means "class unsurveyed", common in thin-data regions (scope 11 region 3).
+    # Treated as a middling street rather than as an unknown tag, so it does not take the
+    # full unknown-class confidence penalty on top of an already vague answer.
+    "road": 2,
+    "busway": 3,
 }
 
 #: Above this posted speed, an unseparated way is high stress regardless of class.
@@ -110,6 +115,15 @@ def has_sidewalk(tags: dict[str, Any]) -> bool | None:
         text = str(value).lower()
         if text in {"no", "none"}:
             return False
+        if text == "separate":
+            # The sidewalk exists but is mapped as its own way, so *this* way - the
+            # roadway - carries none. Reading it as "has sidewalk" would decrement the
+            # stress level on evidence pointing the other way, and on a fast arterial
+            # that is the difference between LTS 2 and LTS 4.
+            return False
+        if text == "crossing":
+            # Says something about a junction, not about walking the length of the way.
+            return None
         return True
     if tags.get("sidewalk:left") or tags.get("sidewalk:right"):
         return True

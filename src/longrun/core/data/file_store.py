@@ -95,8 +95,10 @@ class FileLayerStore:
     def ways_in_corridor(self, corridor: Corridor) -> GeoDataFrame:
         return self._clip("ways", self._corridor_geometry(corridor))
 
-    def points_in_corridor(self, corridor: Corridor, kinds: list[str]) -> GeoDataFrame:
-        frame = self._clip("amenities", self._corridor_geometry(corridor))
+    def points_in_corridor(
+        self, corridor: Corridor, kinds: list[str], layer: str = "amenities"
+    ) -> GeoDataFrame:
+        frame = self._clip(layer, self._corridor_geometry(corridor))
         if kinds and "kind" in frame.columns:
             frame = frame[frame["kind"].isin(kinds)]
         return frame

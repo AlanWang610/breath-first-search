@@ -27,8 +27,16 @@ class LayerStore(Protocol):
         """OSM ways with tags intersecting the corridor."""
         ...
 
-    def points_in_corridor(self, corridor: Corridor, kinds: list[str]) -> GeoDataFrame:
-        """Amenities of the given kinds (water, toilets, food) within the corridor."""
+    def points_in_corridor(
+        self, corridor: Corridor, kinds: list[str], layer: str = "amenities"
+    ) -> GeoDataFrame:
+        """Point features of the given kinds within the corridor.
+
+        `layer` matters for honest coverage, not just tidiness. Signals and gates come
+        from `nodes`; water, toilets and food from `amenities`. Sharing one layer would
+        make a region that extracted fountains but never extracted signal nodes look like
+        a region with no signals - turning "unknown" into a confident "none".
+        """
         ...
 
     def polygons_intersecting(self, corridor: Corridor, layer: str) -> GeoDataFrame:
