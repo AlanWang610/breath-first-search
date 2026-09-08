@@ -19,7 +19,13 @@ import pytest
 from shapely.geometry import LineString, Point
 
 from longrun.core.data.base import Cache, LayerStore, RasterStore
-from longrun.core.data.cache import CacheMiss, SqliteCache, args_hash
+from longrun.core.data.cache import (
+    CacheMiss,
+    SqliteCache,
+    args_hash,
+    cache_path_from_env,
+    offline_from_env,
+)
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore, LayerNotFound
 from longrun.core.geo.segments import corridor
 from longrun.core.models.geometry import Route, RoutePoint
@@ -168,6 +174,47 @@ def test_cache_persists_to_disk(tmp_path: Path) -> None:
     with SqliteCache(path, offline=True) as reopened:
         assert reopened.get("closures", "abc", "2026-03-15") == []
         assert reopened.keys() == [("closures", "abc", "2026-03-15")]
+
+
+# --- environment configuration ----------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on", " 1 "])
+def test_offline_env_var_turns_on_no_miss_mode(value: str) -> None:
+    assert offline_from_env({"LONGRUN_OFFLINE": value}) is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", "", "  "])
+def test_offline_env_var_is_not_merely_truthy(value: str) -> None:
+    """`LONGRUN_OFFLINE=0` must mean off.
+
+    A plain truthiness check on the string would read every one of these as "yes", and the
+    failure would be invisible: golden tests would still pass, just with the network open.
+    """
+    assert offline_from_env({"LONGRUN_OFFLINE": value}) is False
+
+
+def test_offline_defaults_to_off_when_unset() -> None:
+    assert offline_from_env({}) is False
+
+
+def test_cache_is_in_memory_when_no_directory_is_configured() -> None:
+    """The default must not create files anywhere (scope 4.4)."""
+    assert cache_path_from_env({}) == ":memory:"
+
+
+def test_cache_directory_is_honoured_when_set(tmp_path: Path) -> None:
+    path = cache_path_from_env({"LONGRUN_CACHE_DIR": str(tmp_path)})
+    assert path == tmp_path / "cache.sqlite"
+
+
+def test_the_configured_cache_actually_persists(tmp_path: Path) -> None:
+    """The env var and the working cache are wired to each other, not just parsed."""
+    env = {"LONGRUN_CACHE_DIR": str(tmp_path / "cache")}
+    with SqliteCache(cache_path_from_env(env)) as cache:
+        cache.put("forecast", "abc", "2026-03-15", {"temp_c": 21})
+    with SqliteCache(cache_path_from_env(env), offline=True) as reopened:
+        assert reopened.get("forecast", "abc", "2026-03-15") == {"temp_c": 21}
 
 
 # --- layer store ------------------------------------------------------------

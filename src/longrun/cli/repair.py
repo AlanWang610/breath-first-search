@@ -23,7 +23,7 @@ from typing import Any
 
 import typer
 
-from longrun.core.data.cache import SqliteCache
+from longrun.core.data.cache import SqliteCache, cache_path_from_env, offline_from_env
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore, LayerNotFound
 from longrun.core.export.sheet_md import render_markdown
 from longrun.core.geo.dem import elevation_profile, sample_elevation
@@ -134,73 +134,82 @@ def repair(
     )
     profile = load_profile(profile_path)
     root = fixtures or Path("data")
-    ctx = ScorerContext(
-        layers=FileLayerStore(root),
-        rasters=FileRasterStore(root),
-        cache=SqliteCache(offline=offline),
-        clock=FrozenClock(start_at),
-        coverage=CoverageManifest(),
-        profile=profile,
-        budget=Budget(),
-    )
+    # Either door turns no-miss mode on: the `--offline` flag, or the environment variable
+    # that golden and contract runs export. Honouring only the flag would silently ignore a
+    # caller who went to the trouble of exporting it.
+    offline = offline or offline_from_env()
 
-    # Repair mode has no router, so nothing has told us which way each point lies on.
-    # Snap geometrically instead, or every way-tag scorer reads `unknown` for the whole
-    # route and the commonest entry mode becomes the least useful one.
-    match = _match_ways(route, ctx)
-    segments = segment_route(route, way_ids=match.way_ids if match else None)
-    if match is not None and not match.is_usable:
-        ctx.coverage.record(
-            CoverageEntry(
-                source="way_matching",
-                kind="osm_tags",
-                checked=False,
-                reason=(
-                    f"only {match.match_rate:.0%} of route points snapped to a way within "
-                    f"{match.tolerance_m:.0f} m; tag-driven scorers cover a minority of "
-                    f"this route"
-                ),
-            )
+    # Held open with `with`: the connection is otherwise left to the garbage collector, and
+    # on Windows an unclosed SQLite handle keeps a file lock, so a leaked one can stop the
+    # next run - or a test's tmp_path cleanup - from removing the file.
+    with SqliteCache(cache_path_from_env(), offline=offline) as cache:
+        ctx = ScorerContext(
+            layers=FileLayerStore(root),
+            rasters=FileRasterStore(root),
+            cache=cache,
+            clock=FrozenClock(start_at),
+            coverage=CoverageManifest(),
+            profile=profile,
+            budget=Budget(),
         )
 
-    # sample_elevation already returns all-None where the DEM has no coverage, which is
-    # what "unknown elevation" looks like downstream (scope 12).
-    elevations = sample_elevation(route, ctx.rasters)
-    elevation = elevation_profile(route, elevations)
+        # Repair mode has no router, so nothing has told us which way each point lies on.
+        # Snap geometrically instead, or every way-tag scorer reads `unknown` for the whole
+        # route and the commonest entry mode becomes the least useful one.
+        match = _match_ways(route, ctx)
+        segments = segment_route(route, way_ids=match.way_ids if match else None)
+        if match is not None and not match.is_usable:
+            ctx.coverage.record(
+                CoverageEntry(
+                    source="way_matching",
+                    kind="osm_tags",
+                    checked=False,
+                    reason=(
+                        f"only {match.match_rate:.0%} of route points snapped to a way within "
+                        f"{match.tolerance_m:.0f} m; tag-driven scorers cover a minority of "
+                        f"this route"
+                    ),
+                )
+            )
 
-    eta_vector = pacing_model(route, start_at, elevations=elevations)
-    results = _run_scorers(route, segments, ctx, eta_vector.etas)
+        # sample_elevation already returns all-None where the DEM has no coverage, which is
+        # what "unknown elevation" looks like downstream (scope 12).
+        elevations = sample_elevation(route, ctx.rasters)
+        elevation = elevation_profile(route, elevations)
 
-    plan = Plan(
-        id=f"{route.id}-{uuid.uuid4().hex[:8]}",
-        request=request,
-        route=route,
-        segments=segments,
-        results=results,
-        etas=eta_vector.etas,
-        residual_flags=residual_flags(results, segments, route.length_m),
-        coverage=ctx.coverage,
-        profile=profile,
-    )
-    report = gpx_verify(
-        route,
-        request,
-        segments=segments,
-        results=results,
-        etas=eta_vector.etas,
-        elevations=elevations,
-    )
-    sheet = render_markdown(
-        plan, elevation=elevation, verify=report, pacing_caveats=eta_vector.caveats
-    )
+        eta_vector = pacing_model(route, start_at, elevations=elevations)
+        results = _run_scorers(route, segments, ctx, eta_vector.etas)
 
-    if out:
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "sheet.md").write_text(sheet, encoding="utf-8")
-        (out / "plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-        typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
-    else:
-        _echo_utf8(sheet)
+        plan = Plan(
+            id=f"{route.id}-{uuid.uuid4().hex[:8]}",
+            request=request,
+            route=route,
+            segments=segments,
+            results=results,
+            etas=eta_vector.etas,
+            residual_flags=residual_flags(results, segments, route.length_m),
+            coverage=ctx.coverage,
+            profile=profile,
+        )
+        report = gpx_verify(
+            route,
+            request,
+            segments=segments,
+            results=results,
+            etas=eta_vector.etas,
+            elevations=elevations,
+        )
+        sheet = render_markdown(
+            plan, elevation=elevation, verify=report, pacing_caveats=eta_vector.caveats
+        )
+
+        if out:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "sheet.md").write_text(sheet, encoding="utf-8")
+            (out / "plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+            typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
+        else:
+            _echo_utf8(sheet)
 
 
 def _match_ways(route: Any, ctx: ScorerContext) -> Any:

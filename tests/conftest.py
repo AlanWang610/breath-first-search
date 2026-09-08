@@ -7,10 +7,14 @@ Anything that genuinely needs a live service is marked `network` and skipped by 
 That claim is enforced here rather than merely stated: `_block_network` fails any test not
 marked `network` that opens an off-host socket, so "a test reached the internet" is a loud,
 specific failure instead of a slow, flaky one.
+
+`_clear_longrun_env` does the same job for configuration: the suite must not pass or fail
+because of what someone happens to have exported.
 """
 
 from __future__ import annotations
 
+import os
 import socket
 from collections.abc import Iterator
 from pathlib import Path
@@ -47,6 +51,19 @@ def _block_network(request: pytest.FixtureRequest) -> Iterator[None]:
         yield
     finally:
         socket.socket.connect = real_connect  # type: ignore[method-assign]
+
+
+@pytest.fixture(autouse=True)
+def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every test against a clean `LONGRUN_*` environment.
+
+    Ambient configuration is exactly the kind of thing that makes a suite pass on one
+    machine and fail on another: a developer with `LONGRUN_OFFLINE=1` exported would see
+    different behaviour from CI, and the difference would look like a flaky test rather
+    than a stale shell. A test that wants one of these sets it explicitly.
+    """
+    for name in [key for key in os.environ if key.startswith("LONGRUN_")]:
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(scope="session")

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -145,11 +145,36 @@ def _write_points(root: Path, records: Sequence[dict[str, Any]], geometries: Seq
     _write(root / "nodes.gpkg", records, geometries)
 
 
+#: Caches opened by `_ctx`, closed after each test by `_close_caches`.
+_OPEN_CACHES: list[SqliteCache] = []
+
+
+@pytest.fixture(autouse=True)
+def _close_caches() -> Iterator[None]:
+    """Close every cache `_ctx` opened during a test.
+
+    An in-memory SQLite database still holds a connection, and leaving it to the garbage
+    collector raises a ResourceWarning attributed to whatever code happened to trigger the
+    collection - so the traceback points somewhere irrelevant. Left alone it is only noise,
+    but it is the noise that would hide a real handle leak later, when the cache is a file
+    on disk and Windows is holding a lock on it.
+    """
+    _OPEN_CACHES.clear()
+    try:
+        yield
+    finally:
+        for cache in _OPEN_CACHES:
+            cache.close()
+        _OPEN_CACHES.clear()
+
+
 def _ctx(root: Path, profile: PreferenceProfile | None = None) -> ScorerContext:
+    cache = SqliteCache(offline=True)
+    _OPEN_CACHES.append(cache)
     return ScorerContext(
         layers=FileLayerStore(root),
         rasters=FileRasterStore(root),
-        cache=SqliteCache(offline=True),
+        cache=cache,
         clock=FrozenClock(datetime(2026, 9, 4, 7, 0)),
         coverage=CoverageManifest(),
         profile=profile if profile is not None else load_defaults(),

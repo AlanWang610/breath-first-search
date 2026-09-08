@@ -183,6 +183,57 @@ def test_repair_is_deterministic_apart_from_the_plan_id(route_file: Path, tmp_pa
     assert sheets[0] == sheets[1]
 
 
+def test_the_cache_directory_env_var_reaches_the_command(
+    route_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LONGRUN_CACHE_DIR is wired to the cache, not merely documented in .env.example."""
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setenv("LONGRUN_CACHE_DIR", str(cache_dir))
+    result = runner.invoke(
+        app, ["repair", str(route_file), "--date", "2026-03-15", "--start", "07:30"]
+    )
+    assert result.exit_code == 0
+    assert (cache_dir / "cache.sqlite").exists()
+
+
+def test_no_cache_directory_means_no_files_are_written(
+    route_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unconfigured, the cache is in-memory: a plain run must not litter the filesystem."""
+    # A directory of its own, because `route_file` writes its GPX into tmp_path.
+    workdir = tmp_path / "cwd"
+    workdir.mkdir()
+    monkeypatch.chdir(workdir)
+    result = runner.invoke(
+        app, ["repair", str(route_file), "--date", "2026-03-15", "--start", "07:30"]
+    )
+    assert result.exit_code == 0
+    assert list(workdir.iterdir()) == []
+
+
+def test_the_offline_env_var_reaches_the_command(
+    route_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scope 4.4: LONGRUN_OFFLINE=1 must turn on no-miss mode without the flag.
+
+    Golden and contract runs rely on the environment variable alone, so a flag-only
+    implementation would leave them quietly able to reach the network.
+    """
+    from longrun.cli import repair as repair_mod
+
+    seen: list[bool] = []
+    real = repair_mod.SqliteCache
+
+    def spy(*args: object, offline: bool = False, **kwargs: object) -> object:
+        seen.append(offline)
+        return real(*args, offline=offline, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(repair_mod, "SqliteCache", spy)
+    monkeypatch.setenv("LONGRUN_OFFLINE", "1")
+    runner.invoke(app, ["repair", str(route_file), "--date", "2026-03-15", "--start", "07:30"])
+    assert seen == [True]
+
+
 @pytest.mark.network
 def test_installed_entry_point_works() -> None:
     """The subprocess smoke test: proves [project.scripts] actually resolves."""

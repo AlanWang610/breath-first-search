@@ -16,13 +16,23 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+from collections.abc import Mapping
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 #: Set to 1 to make a cache miss an error. Golden and contract tests run this way.
 OFFLINE_ENV_VAR = "LONGRUN_OFFLINE"
+
+#: Where to keep the cache between runs. Unset means in-memory, so nothing is written
+#: outside a configured directory and a test run leaves no trace.
+CACHE_DIR_ENV_VAR = "LONGRUN_CACHE_DIR"
+
+#: Accepted spellings of "yes". A bare `LONGRUN_OFFLINE=0` must not read as truthy, which
+#: a plain truthiness check on the string would get wrong.
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
@@ -62,6 +72,31 @@ def args_hash(args: Any) -> str:
     """
     payload = json.dumps(args, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def offline_from_env(env: Mapping[str, str] | None = None) -> bool:
+    """Whether `LONGRUN_OFFLINE` asks for no-miss mode.
+
+    The environment variable and the CLI's `--offline` flag are two doors to one setting,
+    and either one alone is enough to turn it on: a caller that has gone to the trouble of
+    exporting it should not have that silently ignored.
+    """
+    source = os.environ if env is None else env
+    return source.get(OFFLINE_ENV_VAR, "").strip().lower() in _TRUTHY
+
+
+def cache_path_from_env(env: Mapping[str, str] | None = None) -> Path | str:
+    """The configured on-disk cache file, or `:memory:` when none is configured.
+
+    In-memory is the honest default rather than a guess at a good location: a cache that
+    silently materialises files under the current working directory is a surprise, and it
+    would put a database inside the repository every time the test suite runs the CLI.
+    """
+    source = os.environ if env is None else env
+    directory = source.get(CACHE_DIR_ENV_VAR, "").strip()
+    if not directory:
+        return ":memory:"
+    return Path(directory).expanduser() / "cache.sqlite"
 
 
 class SqliteCache:

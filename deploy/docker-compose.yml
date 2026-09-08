@@ -1,0 +1,48 @@
+# PostGIS only.
+#
+# GraphHopper is deliberately absent: GraphHopper 11 ships a standalone
+# `graphhopper-web-11.0.jar` that needs a JRE rather than a container (ADR 0001), so it
+# runs from `deploy/graphhopper/run.ps1` with native access to `data/`. One process fewer
+# to containerise, and the LTS import module needs a JDK on the host anyway.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   docker compose -f deploy/docker-compose.yml down     # keeps the volume
+#   docker compose -f deploy/docker-compose.yml down -v  # destroys it, so init re-runs
+
+services:
+  postgis:
+    image: postgis/postgis:17-3.5
+    container_name: longrun-postgis
+    environment:
+      # Local development credentials, matching LONGRUN_POSTGIS_DSN in .env.example.
+      # Safe only because the port below is bound to loopback.
+      POSTGRES_USER: longrun
+      POSTGRES_PASSWORD: longrun
+      POSTGRES_DB: longrun
+      # Byte-ordinal collation. The image's default locale and a Windows host's differ,
+      # and text ordering that changes with the platform makes index scans - and any
+      # golden fixture frozen from a query - platform-dependent.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      # Loopback only. Binding 0.0.0.0 would put a database whose password is its
+      # username on every network this laptop joins.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+      # Runs once, and only against an empty data directory.
+      - ./postgis/init:/docker-entrypoint-initdb.d:ro
+    # Corridor joins sort large intermediate results; the 64 MB default /dev/shm is where
+    # that shows up first, as a "could not resize shared memory segment" error.
+    shm_size: 1gb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U longrun -d longrun"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      # Extension creation on first boot takes a while; without this the container is
+      # reported unhealthy before init has finished.
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  postgis-data:
