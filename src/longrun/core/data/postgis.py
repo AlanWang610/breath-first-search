@@ -27,17 +27,26 @@ Nothing creates them yet.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor_polygon
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Mapping
+
     from geopandas import GeoDataFrame
 
     from longrun.core.models.geometry import Corridor, Route
 
 WGS84 = 4326
+
+#: Where the development database lives. Defined here rather than in each caller so the
+#: CLI and the contract tests cannot drift apart on it. The password is the username; the
+#: compose file binds the port to 127.0.0.1, which is what makes that acceptable.
+DSN_ENV_VAR = "LONGRUN_POSTGIS_DSN"
+DEFAULT_DSN = "postgresql://longrun:longrun@localhost:5432/longrun"
 
 #: Layer name -> qualified table, one schema per layer group as the init SQL creates them.
 #: Overridable per store so a region build can point at a staging schema without a code
@@ -214,4 +223,16 @@ def _to_geodataframe(rows: list[Any], columns: list[str]) -> GeoDataFrame:
     return gpd.GeoDataFrame(records, geometry=geometries, crs=f"EPSG:{WGS84}")
 
 
-__all__ = ["DEFAULT_LAYER_TABLES", "PostGISLayerStore"]
+def dsn_from_env(env: Mapping[str, str] | None = None) -> str:
+    """The database to connect to, from the environment or the development default."""
+    source = os.environ if env is None else env
+    return source.get(DSN_ENV_VAR, "").strip() or DEFAULT_DSN
+
+
+__all__ = [
+    "DEFAULT_DSN",
+    "DEFAULT_LAYER_TABLES",
+    "DSN_ENV_VAR",
+    "PostGISLayerStore",
+    "dsn_from_env",
+]

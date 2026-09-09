@@ -11,6 +11,28 @@ Scope section 11. `core/` is where the tests live; the outer layers get thin wir
 
 Markers: `golden`, `contract`, `network` (skipped by default).
 
+## Where fixtures come from
+
+A scorer needs PostGIS for ground truth, the suite must not touch a database and CI has
+no service containers. The resolution is a **freeze**: run the corridor queries once
+against the real thing and commit what came back.
+
+```
+uv run longrun freeze-fixture route.gpx --out tests/golden/routes/<name>/fixtures
+```
+
+It goes through `PostGISLayerStore` rather than issuing its own SQL, so a committed
+GeoPackage is literally what the database answered — same corridor geometry, same
+predicate, same tag flattening a scorer would get. `tests/contract/test_freeze_fixture.py`
+holds it to that with a round trip: freeze, reopen with `FileLayerStore`, and require the
+same LTS levels back.
+
+The freeze is the only thing here that touches PostGIS, and it is `network`-marked
+everywhere it is exercised.
+
+Synthetic golden routes are hand-written instead, as GeoJSON, so their tags read in a
+diff. See `golden/README.md` for why the two kinds are kept apart.
+
 ## Test regions
 
 Chosen for contrast on the dimensions that vary, not geography (scope 11):

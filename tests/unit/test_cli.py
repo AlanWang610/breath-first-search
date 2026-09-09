@@ -245,3 +245,40 @@ def test_installed_entry_point_works() -> None:
     )
     assert result.returncode == 0
     assert "longrun" in result.stdout
+
+
+# --- freeze-fixture ---------------------------------------------------------
+#
+# The command itself needs a database and is exercised in tests/contract. What is
+# hermetic is everything it does *before* connecting - which is where a typo in a layer
+# name should be caught, rather than after a ten-second connection timeout.
+
+
+def test_freeze_fixture_is_registered() -> None:
+    assert "freeze-fixture" in runner.invoke(app, ["--help"]).stdout
+
+
+def test_an_unknown_layer_is_refused_before_connecting(route_file: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "freeze-fixture",
+            str(route_file),
+            "--out",
+            str(tmp_path / "fixtures"),
+            "--layers",
+            "ways,fountains",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "fountains" in result.stderr
+    assert "known layers are" in result.stderr
+    assert not (tmp_path / "fixtures").exists(), "nothing is written before the layers check"
+
+
+def test_a_malformed_gpx_is_refused_by_freeze_too(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.gpx"
+    bad.write_text("<gpx>", encoding="utf-8")
+    result = runner.invoke(app, ["freeze-fixture", str(bad), "--out", str(tmp_path / "fixtures")])
+    assert result.exit_code == 2
+    assert "could not parse" in result.stderr
