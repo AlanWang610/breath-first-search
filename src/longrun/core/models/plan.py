@@ -36,6 +36,11 @@ class SnapshotPins(BaseModel):
     canopy_version: str | None = None
     gtfs_feed_versions: dict[str, str] = Field(default_factory=dict)
     adapter_versions: dict[str, str] = Field(default_factory=dict)
+    #: Vintage per layer, as `meta.layer_vintage` records it at load time. This is the
+    #: half of scope 6.4's pinning that a `LayerStore` can answer for itself:
+    #: `set_vintage` puts it into the store, the scorers read it back out through
+    #: `vintage()`, and every coverage entry then carries the vintage of what it checked.
+    layer_vintages: dict[str, str] = Field(default_factory=dict)
     extra: dict[str, str] = Field(default_factory=dict)
 
 

@@ -88,7 +88,7 @@ def _sample_window(route: Route, window: tuple[Any, Any]) -> list[float | None]:
     rows, cols = array.shape[-2], array.shape[-1]
     band = array[0] if array.ndim == 3 else array
     for point in route.points:
-        col, row = inverse * (point.lon, point.lat)
+        col, row = inverse @ (point.lon, point.lat)
         r, c = int(row), int(col)
         if 0 <= r < rows and 0 <= c < cols:
             value = float(band[r, c])

@@ -74,3 +74,21 @@ def repo_root() -> Path:
 @pytest.fixture(scope="session")
 def fixtures_dir(repo_root: Path) -> Path:
     return repo_root / "tests" / "fixtures"
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """`--update-golden` rewrites golden expectations instead of asserting against them.
+
+    Declared here because pytest only reads `pytest_addoption` from the root conftest.
+    """
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        default=False,
+        help="Rewrite tests/golden/routes/*/expected.json from this run, then review the diff.",
+    )
+
+
+@pytest.fixture
+def update_golden(request: pytest.FixtureRequest) -> bool:
+    return bool(request.config.getoption("--update-golden"))

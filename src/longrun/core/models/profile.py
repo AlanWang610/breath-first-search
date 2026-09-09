@@ -19,7 +19,7 @@ from datetime import date
 from enum import IntEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 #: -1..+1 throughout: negative avoids, positive seeks, 0 reports without scoring.
 Weight = Annotated[float, Field(ge=-1.0, le=1.0)]
@@ -42,6 +42,24 @@ class PreferenceEntry[T](BaseModel):
     weight: Weight = 0.0
     provenance: Provenance = Provenance.DEFAULT
     updated: date | None = None
+
+    @field_validator("provenance", mode="before")
+    @classmethod
+    def _name_or_number(cls, value: object) -> object:
+        """Accept `stated` as well as `2`.
+
+        Profiles are hand-edited YAML — the golden routes pin one, and scope 6.3 expects a
+        user to keep their own. A file that has to say `provenance: 2` is a file whose
+        diffs cannot be reviewed, and the round trip through `save_profile` writes the
+        integer either way.
+        """
+        if isinstance(value, str) and not value.isdigit():
+            try:
+                return Provenance[value.strip().upper()]
+            except KeyError:
+                names = ", ".join(p.name.lower() for p in Provenance)
+                raise ValueError(f"unknown provenance {value!r}; expected one of {names}") from None
+        return value
 
     def supersedes(self, other: PreferenceEntry[T]) -> bool:
         """Whether this entry may overwrite `other` (scope 6.3)."""

@@ -33,7 +33,7 @@ from longrun.core.geo.segments import corridor, segment_route
 from longrun.core.models.context import Budget, FrozenClock, ScorerContext
 from longrun.core.models.coverage import CoverageEntry, CoverageManifest
 from longrun.core.models.measurement import ScorerResult
-from longrun.core.models.plan import Plan
+from longrun.core.models.plan import Manifest, Plan, SnapshotPins
 from longrun.core.models.request import PlanRequest
 from longrun.core.pacing.model import pacing_model
 from longrun.core.plan.arbitrate import residual_flags
@@ -108,6 +108,9 @@ def repair(
     start: str = typer.Option("07:00", "--start", help="Start time, HH:MM."),
     profile_path: Path | None = typer.Option(None, "--profile", help="Preference profile YAML."),
     fixtures: Path | None = typer.Option(None, "--fixtures", help="Layer/raster directory."),
+    snapshot_path: Path | None = typer.Option(
+        None, "--snapshot", help="Data-snapshot pins (JSON), recorded in the manifest."
+    ),
     out: Path | None = typer.Option(None, "--out", help="Directory for outputs."),
     offline: bool = typer.Option(False, "--offline", help="Fail on a cache miss."),
     target_km: float | None = typer.Option(None, "--target-km", help="Target distance."),
@@ -139,12 +142,25 @@ def repair(
     # caller who went to the trouble of exporting it.
     offline = offline or offline_from_env()
 
+    try:
+        snapshot = _load_snapshot(snapshot_path)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"error: could not read --snapshot {snapshot_path}: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
     # Held open with `with`: the connection is otherwise left to the garbage collector, and
     # on Windows an unclosed SQLite handle keeps a file lock, so a leaked one can stop the
     # next run - or a test's tmp_path cleanup - from removing the file.
     with SqliteCache(cache_path_from_env(), offline=offline) as cache:
+        layers = FileLayerStore(root)
+        # Scope 6.4: every source in the manifest carries a vintage. The store is what the
+        # scorers ask, so the pins go in here rather than being stitched on afterwards -
+        # a coverage entry then reports the vintage of the data it actually read.
+        for layer, vintage in snapshot.layer_vintages.items():
+            layers.set_vintage(layer, vintage)
+
         ctx = ScorerContext(
-            layers=FileLayerStore(root),
+            layers=layers,
             rasters=FileRasterStore(root),
             cache=cache,
             clock=FrozenClock(start_at),
@@ -203,6 +219,7 @@ def repair(
             coverage=ctx.coverage,
             profile=profile,
             verify=report,
+            manifest=Manifest(snapshot=snapshot),
         )
         sheet = render_markdown(
             plan, elevation=elevation, verify=report, pacing_caveats=eta_vector.caveats
@@ -215,6 +232,18 @@ def repair(
             typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
         else:
             _echo_utf8(sheet)
+
+
+def _load_snapshot(path: Path | None) -> SnapshotPins:
+    """Read the data-snapshot pins, or return empty ones.
+
+    Empty is the honest default rather than an error: a run against fixtures that carry no
+    recorded vintage should report no vintage, not a made-up one. What it must never do is
+    report a vintage the data does not have.
+    """
+    if path is None:
+        return SnapshotPins()
+    return SnapshotPins.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _match_ways(route: Any, ctx: ScorerContext) -> Any:

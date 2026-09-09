@@ -66,6 +66,10 @@ packages = ["src/longrun"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repo root on the path, so golden tests can import their harness as
+# `tests.golden.harness` rather than relying on pytest's per-directory sys.path
+# insertion, which depends on the import mode and silently changes with it.
+pythonpath = ["."]
 asyncio_mode = "auto"
 markers = [
   "golden: end-to-end route regression, run through the CLI with no model in the loop",
