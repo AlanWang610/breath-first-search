@@ -18,6 +18,7 @@ from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import Flag, ScorerResult
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.verification import VerifyReport
 
 PlanStatus = Literal["complete", "needs_input", "failed"]
 
@@ -96,6 +97,10 @@ class Plan(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     coverage: CoverageManifest = CoverageManifest()
     manifest: Manifest = Manifest()
+    #: The scope 7.9 checklist as run against this plan. `None` means verification
+    #: never ran, which is not the same as running clean - scope 8.1 step 9 needs the
+    #: named offenders to reroute, and a sheet must not imply checks that never happened.
+    verify: VerifyReport | None = None
     profile: PreferenceProfile = PreferenceProfile()
     status: PlanStatus = "complete"
 

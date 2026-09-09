@@ -259,6 +259,42 @@ def test_vintage_is_recorded_for_the_manifest(fixture_dir: Path) -> None:
     assert store.vintage("ways") == "2026-09-04"
 
 
+# --- fixture formats --------------------------------------------------------
+
+
+def test_a_geojson_layer_is_read_like_a_geopackage(tmp_path: Path, sf_route: Route) -> None:
+    """Synthetic goldens ship GeoJSON so a reviewer can read the tags in a diff."""
+    gpd.GeoDataFrame(
+        {"way_id": [1, 2], "highway": ["residential", "motorway"]},
+        geometry=[SF_LINE, KANSAS_LINE],
+        crs="EPSG:4326",
+    ).to_file(tmp_path / "ways.geojson", driver="GeoJSON")
+
+    store = FileLayerStore(tmp_path)
+    assert store.has_layer("ways")
+    assert list(store.ways_in_corridor(corridor(sf_route))["way_id"]) == [1]
+
+
+def test_a_geopackage_wins_over_a_geojson_of_the_same_layer(
+    fixture_dir: Path, sf_route: Route
+) -> None:
+    """Precedence is fixed, so a stale hand-edit cannot silently shadow a frozen fixture."""
+    gpd.GeoDataFrame({"way_id": [99]}, geometry=[SF_LINE], crs="EPSG:4326").to_file(
+        fixture_dir / "ways.geojson", driver="GeoJSON"
+    )
+    store = FileLayerStore(fixture_dir)
+    assert list(store.ways_in_corridor(corridor(sf_route))["way_id"]) == [1]
+
+
+def test_a_missing_layer_names_both_formats_it_looked_for(tmp_path: Path, sf_route: Route) -> None:
+    """The error says what was looked for, so a misnamed fixture is a one-line diagnosis."""
+    store = FileLayerStore(tmp_path)
+    with pytest.raises(LayerNotFound) as caught:
+        store.polygons_intersecting(corridor(sf_route), "parks")
+    assert "parks.gpkg" in str(caught.value)
+    assert "parks.geojson" in str(caught.value)
+
+
 # --- raster store -----------------------------------------------------------
 
 

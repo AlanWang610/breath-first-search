@@ -29,6 +29,14 @@ if TYPE_CHECKING:  # pragma: no cover
 
 WGS84 = "EPSG:4326"
 
+#: Fixture formats, in precedence order, one file per layer.
+#:
+#: GeoPackage is what a fixture freeze writes and what a real golden route carries — it is
+#: compact and it is exactly what the database returned. GeoJSON exists for the *synthetic*
+#: goldens, whose entire value is that a reviewer can read every tag in a diff and check the
+#: expectation by hand; a GeoPackage is a binary blob and `.gitattributes` treats it as one.
+LAYER_SUFFIXES = (".gpkg", ".geojson")
+
 
 class LayerNotFound(FileNotFoundError):
     """A layer was requested that this fixture directory does not carry.
@@ -47,12 +55,21 @@ class FileLayerStore:
         self._cache: dict[str, GeoDataFrame] = {}
         self._vintages: dict[str, str] = {}
 
+    def _path(self, layer: str) -> Path | None:
+        """The file backing a layer, or None when the fixture does not carry it."""
+        for suffix in LAYER_SUFFIXES:
+            candidate = self.root / f"{layer}{suffix}"
+            if candidate.exists():
+                return candidate
+        return None
+
     def _load(self, layer: str) -> GeoDataFrame:
         if layer in self._cache:
             return self._cache[layer]
-        path = self.root / f"{layer}.gpkg"
-        if not path.exists():
-            raise LayerNotFound(f"no {layer!r} layer at {path}")
+        path = self._path(layer)
+        if path is None:
+            wanted = ", ".join(f"{layer}{suffix}" for suffix in LAYER_SUFFIXES)
+            raise LayerNotFound(f"no {layer!r} layer under {self.root}: looked for {wanted}")
         frame = gpd.read_file(path)
         if frame.crs is None:
             frame = frame.set_crs(WGS84)
@@ -63,7 +80,7 @@ class FileLayerStore:
 
     def has_layer(self, layer: str) -> bool:
         """Whether this fixture carries a layer at all (scope 3.6)."""
-        return (self.root / f"{layer}.gpkg").exists()
+        return self._path(layer) is not None
 
     def ways_in_corridor(self, corridor: Corridor) -> GeoDataFrame:
         return self._clip("ways", corridor_polygon(corridor))

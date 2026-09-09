@@ -18,7 +18,7 @@ from longrun.core.export import attribution
 from longrun.core.geo.dem import ElevationProfile
 from longrun.core.models.measurement import Flag, FlagKind, Tier
 from longrun.core.models.plan import Plan
-from longrun.core.verify.runner import VerifyReport
+from longrun.core.models.verification import VerifyReport
 
 WORST_N = 5
 

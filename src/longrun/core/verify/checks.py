@@ -13,16 +13,12 @@ false assurance scope 3.6 exists to prevent.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
-
-from pydantic import BaseModel, Field
 
 from longrun.core.geo.dem import SPIKE_THRESHOLD_M
 from longrun.core.geo.gpx import haversine_m
 from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.request import LockedRange, TimeConstraints
-
-CheckStatus = Literal["passed", "failed", "skipped"]
+from longrun.core.models.verification import CheckResult
 
 #: Scope 7.9 check 3: a gap larger than this means the track is not continuous.
 MAX_POINT_GAP_M = 100.0
@@ -32,25 +28,6 @@ MAX_SNAP_DISTANCE_M = 15.0
 
 #: Scope 7.9 check 8.
 CROSSING_SPEED_LIMIT_KPH = 40.0
-
-
-class CheckResult(BaseModel):
-    """One numbered check's outcome."""
-
-    number: int
-    name: str
-    status: CheckStatus
-    offenders: list[str] = Field(default_factory=list)
-    detail: str | None = None
-
-    @property
-    def passed(self) -> bool:
-        return self.status == "passed"
-
-    @property
-    def blocking(self) -> bool:
-        """Only an outright failure blocks; a skip is reported, not fatal."""
-        return self.status == "failed"
 
 
 def _result(

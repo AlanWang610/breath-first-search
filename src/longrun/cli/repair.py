@@ -180,6 +180,18 @@ def repair(
         eta_vector = pacing_model(route, start_at, elevations=elevations)
         results = _run_scorers(route, segments, ctx, eta_vector.etas)
 
+        # Verification runs before the plan is assembled so the plan can carry its own
+        # report: `plan.json` is the golden-test artifact and the scope 10.3 API contract,
+        # and a verification the plan cannot report is one every later consumer has to
+        # recompute from inputs it may no longer have.
+        report = gpx_verify(
+            route,
+            request,
+            segments=segments,
+            results=results,
+            etas=eta_vector.etas,
+            elevations=elevations,
+        )
         plan = Plan(
             id=f"{route.id}-{uuid.uuid4().hex[:8]}",
             request=request,
@@ -190,14 +202,7 @@ def repair(
             residual_flags=residual_flags(results, segments, route.length_m),
             coverage=ctx.coverage,
             profile=profile,
-        )
-        report = gpx_verify(
-            route,
-            request,
-            segments=segments,
-            results=results,
-            etas=eta_vector.etas,
-            elevations=elevations,
+            verify=report,
         )
         sheet = render_markdown(
             plan, elevation=elevation, verify=report, pacing_caveats=eta_vector.caveats

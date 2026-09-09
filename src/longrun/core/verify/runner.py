@@ -9,45 +9,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
-
 from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import FlagKind, ScorerResult
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.verification import VerifyReport
 from longrun.core.verify import checks
-from longrun.core.verify.checks import CheckResult
-
-
-class VerifyReport(BaseModel):
-    """The outcome of all ten checks."""
-
-    results: list[CheckResult] = Field(default_factory=list)
-
-    @property
-    def passed(self) -> bool:
-        """True only when nothing failed. Skips do not fail a plan, but are reported."""
-        return not any(r.blocking for r in self.results)
-
-    @property
-    def failures(self) -> list[CheckResult]:
-        return [r for r in self.results if r.status == "failed"]
-
-    @property
-    def skipped(self) -> list[CheckResult]:
-        return [r for r in self.results if r.status == "skipped"]
-
-    def offending_segments(self) -> list[str]:
-        """Everything a failure named, for scope 8.1 step 9 to reroute."""
-        return [o for r in self.failures for o in r.offenders]
-
-    def summary(self) -> str:
-        counts = {"passed": 0, "failed": 0, "skipped": 0}
-        for result in self.results:
-            counts[result.status] += 1
-        return (
-            f"{counts['passed']} passed, {counts['failed']} failed, "
-            f"{counts['skipped']} skipped of {len(self.results)}"
-        )
 
 
 def _offenders_from(
