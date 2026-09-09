@@ -64,6 +64,25 @@ one arrival time per point, so for `sun_exposure` alone the single ray is the ch
 thing by a wide margin, and break-even against `start_time_optimizer` is at **33 start
 times** — a sweep is nearer 8.
 
+### Correction, 2026-09-09: the 22 MB figure is a best case, not an invariant
+
+The measurement above tiles a route that runs along a grid axis, which is what the
+benchmark built. Real geometry does not. A 2 km chunk on a diagonal spans 1414 m in each
+axis, so its north-up bbox is `(1414 + 2x(400 + 500))^2` = 3214^2 cells = **41 MB** — about
+1.9x the figure quoted, and the worst case for a fixed path length. An L-shaped chunk is
+~31 MB; the axis-aligned 22 MB is the best case.
+
+Nothing here threatens the budget, and the bbox-versus-ribbon conclusion is untouched. But
+"22 MB, independent of route length" is stated above as a flat fact and it is not one, so:
+**the tiler budgets by bbox cell count, not by route distance.** A chunk whose bbox exceeds
+the cell cap is bisected until it fits, which makes flat peak residency something the code
+enforces rather than something the geometry happens to grant.
+
+Rotating a tile to the route heading would keep every tile axis-aligned and is **rejected**:
+`horizon_profile` measures azimuths from *grid* north, so a rotated grid silently rotates
+every solar azimuth and returns a plausible wrong answer. North-up is a hard term of the
+contract with `raycast.py`.
+
 ## Decision
 
 **Compute horizon profiles, not per-time rays** — but for the reason the numbers support,
