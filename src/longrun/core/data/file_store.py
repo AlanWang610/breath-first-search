@@ -20,9 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import geopandas as gpd
-from shapely.geometry import box
 
-from longrun.core.geo.projections import transformer_from, transformer_to
+from longrun.core.geo.segments import corridor_polygon
 from longrun.core.models.geometry import BBox, Corridor, Route
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -66,45 +65,19 @@ class FileLayerStore:
         """Whether this fixture carries a layer at all (scope 3.6)."""
         return (self.root / f"{layer}.gpkg").exists()
 
-    def _corridor_geometry(self, corridor: Corridor) -> Any:
-        """The buffered corridor as a WGS84 polygon.
-
-        Buffered in the corridor's local metric CRS and transformed back, never buffered
-        in degrees: 400 m of longitude is not 400 m of latitude.
-        """
-        from pyproj import CRS
-
-        from longrun.core.geo.projections import utm_epsg
-
-        centre_lat = (corridor.bbox.min_lat + corridor.bbox.max_lat) / 2
-        centre_lon = (corridor.bbox.min_lon + corridor.bbox.max_lon) / 2
-        crs = CRS.from_epsg(utm_epsg(centre_lat, centre_lon))
-
-        rect = box(
-            corridor.bbox.min_lon,
-            corridor.bbox.min_lat,
-            corridor.bbox.max_lon,
-            corridor.bbox.max_lat,
-        )
-        to_local, to_wgs = transformer_to(crs), transformer_from(crs)
-        xs, ys = to_local.transform(*rect.exterior.coords.xy)
-        local = box(min(xs), min(ys), max(xs), max(ys)).buffer(corridor.buffer_m)
-        bx, by = to_wgs.transform(*local.exterior.coords.xy)
-        return box(min(bx), min(by), max(bx), max(by))
-
     def ways_in_corridor(self, corridor: Corridor) -> GeoDataFrame:
-        return self._clip("ways", self._corridor_geometry(corridor))
+        return self._clip("ways", corridor_polygon(corridor))
 
     def points_in_corridor(
         self, corridor: Corridor, kinds: list[str], layer: str = "amenities"
     ) -> GeoDataFrame:
-        frame = self._clip(layer, self._corridor_geometry(corridor))
+        frame = self._clip(layer, corridor_polygon(corridor))
         if kinds and "kind" in frame.columns:
             frame = frame[frame["kind"].isin(kinds)]
         return frame
 
     def polygons_intersecting(self, corridor: Corridor, layer: str) -> GeoDataFrame:
-        return self._clip(layer, self._corridor_geometry(corridor))
+        return self._clip(layer, corridor_polygon(corridor))
 
     def lines_crossing(self, route: Route, layer: str) -> GeoDataFrame:
         from shapely.geometry import LineString

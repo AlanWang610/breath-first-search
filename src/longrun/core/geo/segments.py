@@ -17,6 +17,8 @@ last ends at the final point.
 
 from __future__ import annotations
 
+from typing import Any
+
 from longrun.core.geo.projections import bbox_of
 from longrun.core.models.geometry import Corridor, Route, Segment
 from longrun.core.models.request import LockedRange
@@ -109,6 +111,40 @@ def corridor(
 ) -> Corridor:
     """The query window every scorer opens with (scope 5)."""
     return Corridor(route_id=route.id, buffer_m=buffer_m, bbox=bbox_of(route, pad_deg))
+
+
+def corridor_polygon(corridor: Corridor) -> Any:
+    """The corridor as a WGS84 polygon, for a store to query with.
+
+    Defined once, here, because every `LayerStore` implementation must query the *same*
+    geometry: if the file store and PostGIS each built their own, an equivalence test
+    between them would be comparing two different questions and could not tell a query
+    bug from a geometry difference.
+
+    Buffered in the corridor's local metric CRS and transformed back, never buffered in
+    degrees - 400 m of longitude is not 400 m of latitude, and the error grows with
+    latitude until a corridor in Alaska is several times wider than one in Texas.
+    """
+    from pyproj import CRS
+    from shapely.geometry import box
+
+    from longrun.core.geo.projections import transformer_from, transformer_to, utm_epsg
+
+    centre_lat = (corridor.bbox.min_lat + corridor.bbox.max_lat) / 2
+    centre_lon = (corridor.bbox.min_lon + corridor.bbox.max_lon) / 2
+    crs = CRS.from_epsg(utm_epsg(centre_lat, centre_lon))
+
+    rect = box(
+        corridor.bbox.min_lon,
+        corridor.bbox.min_lat,
+        corridor.bbox.max_lon,
+        corridor.bbox.max_lat,
+    )
+    to_local, to_wgs = transformer_to(crs), transformer_from(crs)
+    xs, ys = to_local.transform(*rect.exterior.coords.xy)
+    local = box(min(xs), min(ys), max(xs), max(ys)).buffer(corridor.buffer_m)
+    bx, by = to_wgs.transform(*local.exterior.coords.xy)
+    return box(min(bx), min(by), max(bx), max(by))
 
 
 def position_fraction(segment: Segment, total_m: float) -> float:

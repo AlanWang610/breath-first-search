@@ -7,6 +7,7 @@ policy and the CRS rule, both of which everything downstream depends on.
 from __future__ import annotations
 
 import io
+import math
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from longrun.core.geo.projections import (
 )
 from longrun.core.geo.segments import (
     corridor,
+    corridor_polygon,
     locked_segment_ids,
     position_fraction,
     segment_route,
@@ -240,6 +242,33 @@ def test_way_ids_must_align_with_route_points() -> None:
 def test_max_len_must_be_positive() -> None:
     with pytest.raises(ValueError, match="must be positive"):
         segment_route(_straight_route(), max_len_m=0.0)
+
+
+def test_the_corridor_polygon_is_buffered_in_metres_not_degrees() -> None:
+    """Shared by both `LayerStore` implementations, so getting this wrong is doubly wrong.
+
+    At 37.8 degrees N a degree of longitude spans ~88 km against ~111 km for a degree of
+    latitude. Buffer in degree space and the corridor comes out ~1.26x wider east-west than
+    north-south; buffer in metres and the two grow together, which is what this asserts.
+
+    Both come out slightly over 400 m because the polygon is bounded twice in different
+    CRSs - an axis-aligned box in UTM is not axis-aligned in WGS84, so re-bounding inflates
+    it. That errs toward fetching a few extra ways rather than missing one, which is the
+    right direction for a query window.
+    """
+    window = corridor(_straight_route(), buffer_m=400.0)
+    minx, miny, maxx, maxy = corridor_polygon(window).bounds
+
+    grown_ew_deg = ((maxx - minx) - (window.bbox.max_lon - window.bbox.min_lon)) / 2
+    grown_ns_deg = ((maxy - miny) - (window.bbox.max_lat - window.bbox.min_lat)) / 2
+    grown_ew_m = grown_ew_deg * 111_320 * math.cos(math.radians(37.8))
+    grown_ns_m = grown_ns_deg * 110_540
+
+    # Degree-space buffering would put this ratio at ~1.27 (111.32 / 88.0); the double
+    # re-bounding leaves it at ~1.04, so the margin between right and wrong is wide.
+    assert grown_ew_m / grown_ns_m < 1.10, "east-west skew suggests a buffer applied in degrees"
+    assert 400 <= grown_ew_m < 460
+    assert 400 <= grown_ns_m < 460
 
 
 def test_corridor_uses_the_scope_default_buffer() -> None:
