@@ -197,6 +197,69 @@
       "vintage": "2026-09-01"
     },
     {
+      "checked": true,
+      "kind": "crew_parking",
+      "reason": null,
+      "source": "amenities",
+      "vintage": "2026-09-01"
+    },
+    {
+      "checked": true,
+      "kind": "crew_road_access",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-01"
+    },
+    {
+      "checked": false,
+      "kind": "crew_drive_time",
+      "reason": "no router in repair mode: distances between meet points are along the route, not driving times",
+      "source": "router",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": "2 footprint read(s) across tiles carried no height and were not raised",
+      "source": "overture",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": null,
+      "source": "canopy",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": null,
+      "source": "3dep",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "start_time_sweep",
+      "reason": null,
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "start_time_transit",
+      "reason": "no transit stops layer: the finish is not compared across start times",
+      "source": "transit_stops",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "solar_geometry",
+      "reason": "UTC offset -7 h, stated",
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
       "checked": false,
       "kind": "closures",
       "reason": "needs the jurisdiction adapter registry (M4)",
@@ -225,7 +288,7 @@
     "min_m": 5.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "25f02492fd21e80ceb3f1da90e1e3f597b3a96fa0938c597a9ffe6920511717f",
+  "measurements_sha256": "f87c51bbea123e05ac8b52b1e85a33aad75086efca166651bd3a153a887efb5c",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -425,6 +488,21 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "worst": []
+    },
+    "crew_points": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 1,
+      "summary": {
+        "largest_gap_m": 3954.0,
+        "meet_points": 0,
+        "reach_m": 400.0,
+        "road_access_checked": true
+      },
       "worst": []
     },
     "crossings": {
@@ -654,6 +732,23 @@
         "parks_checked": true,
         "toilet_count": 1,
         "water_count": 2
+      },
+      "worst": []
+    },
+    "start_time_optimizer": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 14,
+      "summary": {
+        "candidates": 13,
+        "coolest_start": "10:00",
+        "requested_start": "07:00",
+        "shadiest_start": "04:00",
+        "step_minutes": 30.0,
+        "window_hours": 3.0
       },
       "worst": []
     },

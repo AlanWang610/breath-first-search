@@ -65,6 +65,10 @@ SCORERS: dict[str, str] = {
     "transit": "longrun.core.scorers.transit",
     # After transit: both read the same stop layer, and `bailouts` reuses its service test.
     "bailouts": "longrun.core.scorers.bailouts",
+    "crew_points": "longrun.core.scorers.crew_points",
+    # Last, and deliberately: it re-evaluates what the time-dependent scorers above
+    # measured, at a dozen other start times, from the horizons they already built.
+    "start_time_optimizer": "longrun.core.scorers.start_time_optimizer",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the

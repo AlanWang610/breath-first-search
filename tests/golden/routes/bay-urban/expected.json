@@ -197,6 +197,62 @@
       "vintage": "2026-09-04"
     },
     {
+      "checked": true,
+      "kind": "crew_parking",
+      "reason": null,
+      "source": "amenities",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "crew_road_access",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": false,
+      "kind": "crew_drive_time",
+      "reason": "no router in repair mode: distances between meet points are along the route, not driving times",
+      "source": "router",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": "568 footprint read(s) across tiles carried no height and were not raised",
+      "source": "overture",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "surface_model",
+      "reason": "no canopy raster in this store",
+      "source": "canopy",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": null,
+      "source": "3dep",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "start_time_sweep",
+      "reason": null,
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "solar_geometry",
+      "reason": "UTC offset -7 h, zone America/Los_Angeles",
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
       "checked": false,
       "kind": "closures",
       "reason": "needs the jurisdiction adapter registry (M4)",
@@ -225,7 +281,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "f9ecf1e30e4637c1cc577014029e419f8be367e2707b4cc77a52134cae1a2f48",
+  "measurements_sha256": "65ffa294b5f3818d1103e70251215fbab7a0a831e9427868b11aa63d4550e69a",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -619,6 +675,21 @@
       "summary": null,
       "worst": []
     },
+    "crew_points": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 29,
+      "summary": {
+        "largest_gap_m": 478.7,
+        "meet_points": 28,
+        "reach_m": 400.0,
+        "road_access_checked": true
+      },
+      "worst": []
+    },
     "crossings": {
       "flags": {
         "hard": 0,
@@ -844,6 +915,23 @@
         "parks_checked": false,
         "toilet_count": 15,
         "water_count": 11
+      },
+      "worst": []
+    },
+    "start_time_optimizer": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 14,
+      "summary": {
+        "candidates": 13,
+        "coolest_start": "14:30",
+        "requested_start": "17:30",
+        "shadiest_start": "19:30",
+        "step_minutes": 30.0,
+        "window_hours": 3.0
       },
       "worst": []
     },

@@ -112,3 +112,25 @@ def test_the_expectation_is_machine_independent(name: str) -> None:
     text = (harness.ROUTES_DIR / name / "expected.json").read_text(encoding="utf-8")
     for pattern in (r"[A-Za-z]:\\\\", r"/home/", r"/Users/", r"\\Users\\\\"):
         assert not re.search(pattern, text), f"{name}: machine-specific path matching {pattern}"
+
+
+@pytest.mark.parametrize("name", ROUTE_NAMES)
+def test_no_scorer_emits_two_measurements_with_the_same_id(name: str, tmp_path: Path) -> None:
+    """A duplicate `segment_id` is a measurement silently lost, and nothing else notices.
+
+    Most scorers cannot produce one: their ids come from the segment list, which partitions
+    the route. Three do not. `ROUTE_SUMMARY_ID` established that a `segment_id` may name
+    something other than a segment, and `crew_points` and `start_time_optimizer` followed —
+    a place beside the route, and the whole route at an hour.
+
+    `crew_points` got it wrong on the first real corridor: three car parks beside a city
+    start all project to 0.0 km along the route, so an id built from the distance was
+    `meet@0.0km` three times and two of them vanished into the sheet and the content hash.
+    This is the check that would have caught it, and it applies to every scorer at once
+    rather than to the one that happened to break.
+    """
+    run = harness.run(harness.ROUTES_DIR / name, tmp_path / "out")
+    for result in run.plan.results:
+        ids = [m.segment_id for m in result.measurements]
+        duplicates = sorted({i for i in ids if ids.count(i) > 1})
+        assert not duplicates, f"{name}: {result.name} repeats {duplicates}"

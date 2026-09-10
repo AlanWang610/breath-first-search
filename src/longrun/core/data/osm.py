@@ -96,6 +96,12 @@ AMENITY_KINDS: dict[str, frozenset[str]] = {
             "fast_food",
             "restaurant",
             "marketplace",
+            # Parking is not resupply, and it shares this layer because it shares the
+            # question asked of it: a point feature near the route. `crew_points` reads it
+            # (scope 7.7); `services.category_of` classifies it as nothing and ignores it.
+            "parking",
+            "parking_space",
+            "parking_entrance",
         }
     ),
     "shop": frozenset(
