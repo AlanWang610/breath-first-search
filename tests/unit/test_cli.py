@@ -161,7 +161,18 @@ def test_plan_json_round_trips(route_file: Path, tmp_path: Path) -> None:
 
 
 def test_repair_is_deterministic_apart_from_the_plan_id(route_file: Path, tmp_path: Path) -> None:
-    """A golden route must produce the same sheet every run."""
+    """A golden route must produce the same sheet every run.
+
+    Two things in a sheet are legitimately not reproducible and are normalised out: the
+    plan id, which is a uuid, and the manifest's wall-clock timings, which M2.7c started
+    recording so the scope 6.4 budget could be measured. A stopwatch reading is not a
+    measurement of the route, which is why `expected.json` has never carried one — and why
+    this failed on CI's slower Windows runner and not on this machine, where both runs
+    happened to round to the same tenth of a second.
+    """
+    import re
+
+    timings = re.compile(r"[\d.]+ s( total)?")
     sheets = []
     for i in range(2):
         out = tmp_path / f"out{i}"
@@ -179,7 +190,7 @@ def test_repair_is_deterministic_apart_from_the_plan_id(route_file: Path, tmp_pa
             ],
         )
         text = (out / "sheet.md").read_text(encoding="utf-8")
-        sheets.append(text.split("\n", 1)[1])  # drop the id line
+        sheets.append(timings.sub("<elapsed>", text.split("\n", 1)[1]))
     assert sheets[0] == sheets[1]
 
 
