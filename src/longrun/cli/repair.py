@@ -57,13 +57,14 @@ SCORERS: dict[str, str] = {
     "sun_exposure": "longrun.core.scorers.sun",
     "heat_stress": "longrun.core.scorers.heat",
     "lighting": "longrun.core.scorers.lighting",
+    "air_quality": "longrun.core.scorers.air_quality",
+    # After heat_stress: scope 8.3 scales the dry-gap thresholds down with WBGT.
+    "resupply_schedule": "longrun.core.scorers.resupply_schedule",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the
 #: coverage manifest can say they were not run, instead of the sheet staying silent.
 NOT_YET_IMPLEMENTED: dict[str, str] = {
-    "air_quality": "needs the AirNow adapter (M2)",
-    "resupply_schedule": "needs opening-hours parsing (M2)",
     "closures": "needs the jurisdiction adapter registry (M4)",
     "trail_status": "needs the jurisdiction adapter registry (M4)",
     "access_hours": "needs the jurisdiction adapter registry (M4)",

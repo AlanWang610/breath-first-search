@@ -113,18 +113,18 @@
       "vintage": null
     },
     {
-      "checked": false,
+      "checked": true,
       "kind": "air_quality",
-      "reason": "needs the AirNow adapter (M2)",
-      "source": "air_quality",
+      "reason": "2 of 2 sites, modelled (CAMS) rather than measured; AirNow needs a key this install does not have",
+      "source": "open_meteo",
       "vintage": null
     },
     {
-      "checked": false,
-      "kind": "resupply_schedule",
-      "reason": "needs opening-hours parsing (M2)",
-      "source": "resupply_schedule",
-      "vintage": null
+      "checked": true,
+      "kind": "opening_hours",
+      "reason": null,
+      "source": "nodes",
+      "vintage": "2026-09-01"
     },
     {
       "checked": false,
@@ -162,7 +162,7 @@
       "vintage": null
     }
   ],
-  "measurements_sha256": "767f5214907cd4ac390b7b13606e181aea5b3191597888da18a3201923eba928",
+  "measurements_sha256": "fca594b56639f6b590f885e961e4804cca8e70cd5eda4ef214c98a2fabbbb5ea",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -311,9 +311,15 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "max_us_aqi": 56.0,
+        "mean_us_aqi": 56.0,
+        "sites": 2,
+        "sites_answered": 2,
+        "source": "open-meteo (CAMS model)"
+      },
       "worst": []
     },
     "bailouts": {
@@ -465,9 +471,19 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "carry_capacity_ml": 500.0,
+        "max_dry_gap_min": 21.37,
+        "max_food_gap_min": 17.256,
+        "max_toilet_gap_min": 21.89,
+        "services_with_unreadable_hours": 0,
+        "suggested_carry_ml": 213.699,
+        "water_hard_threshold_min": 150.0,
+        "water_soft_threshold_min": 90.0,
+        "wbgt_used_c": 18.651
+      },
       "worst": []
     },
     "segment_hostility": {

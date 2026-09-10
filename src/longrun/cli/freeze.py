@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 import typer
 
+from longrun.core.data.air import route_air_quality
 from longrun.core.data.cache import SqliteCache
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore, _resolution_m
 from longrun.core.data.forecast import DEFAULT_SPACING_M, route_forecast
@@ -235,13 +236,18 @@ def freeze_cassette(
             budget=Budget(),
         )
         forecast = route_forecast(route, ctx, date.date(), spacing_m=spacing_m)
+        # Air quality is a second endpoint on its own grid, so it is a second set of keys.
+        # Recorded here rather than in a separate command because a golden needs both, and
+        # a cassette that carries one and not the other is a route that half-scores.
+        air = route_air_quality(route, ctx, date.date())
         recorded = len(cache.keys())
 
     for site in forecast.sites:
         state = site.provider if site.hours else f"none ({site.reason})"
         typer.echo(f"  site {site.site.index} at {site.site.cum_dist_m / 1000:.1f} km: {state}")
+    typer.echo(f"  air quality: {sum(1 for s in air.sites if s.hours)} of {len(air.sites)} site(s)")
     typer.echo(f"wrote {out}: {recorded} key(s), {ctx.budget.api_calls_used} API call(s)")
-    if not forecast.answered:
+    if not forecast.answered and not air.answered:
         typer.echo("error: nothing was recorded", err=True)
         raise typer.Exit(code=1)
 
