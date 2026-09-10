@@ -72,6 +72,9 @@ class PlanRequest(BaseModel):
     via: list[LatLon] = Field(default_factory=list)
     loop: bool = False
     start_time: time | None = None
+    #: Hours from UTC at the route's location. Pinned rather than looked up: there is no
+    #: timezone database in this project's dependencies, and a scorer that guesses says so.
+    utc_offset_hours: float | None = None
     start_window: TimeWindow | None = None
     target_distance_km: float | None = Field(default=None, gt=0)
     distance_tolerance_pct: float = Field(default=10.0, ge=0)

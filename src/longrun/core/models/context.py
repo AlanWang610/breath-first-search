@@ -88,3 +88,8 @@ class ScorerContext:
     profile: PreferenceProfile
     budget: Budget = field(default_factory=Budget)
     snapshot: dict[str, str] = field(default_factory=dict)
+    #: Hours to add to a naive plan time to get UTC. `None` means nobody said, and a
+    #: scorer that needs it derives one from the route's longitude and reports having
+    #: guessed - an hour of error is fifteen degrees of solar azimuth, which moves a
+    #: shadow across the street, so this is not a detail that may be assumed silently.
+    utc_offset_hours: float | None = None

@@ -57,24 +57,59 @@
       "vintage": "2026-09-01"
     },
     {
-      "checked": false,
+      "checked": true,
       "kind": "forecast",
-      "reason": "2 of 2 sites had no forecast: LONGRUN_NWS_USER_AGENT is not set; NWS requires a contact string; not in the cassette",
-      "source": "forecast",
+      "reason": "2 of 2 sites along the route",
+      "source": "open_meteo",
       "vintage": null
     },
     {
-      "checked": false,
-      "kind": "sun_exposure",
-      "reason": "DSM ray-cast lands in M2",
-      "source": "sun_exposure",
+      "checked": true,
+      "kind": "surface_model",
+      "reason": "2 footprint read(s) across tiles carried no height and were not raised",
+      "source": "overture",
       "vintage": null
     },
     {
-      "checked": false,
-      "kind": "heat_stress",
-      "reason": "needs the forecast adapter (M2)",
-      "source": "heat_stress",
+      "checked": true,
+      "kind": "surface_model",
+      "reason": null,
+      "source": "canopy",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": null,
+      "source": "3dep",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "solar_geometry",
+      "reason": "UTC offset -7 h as given",
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "forecast",
+      "reason": "2 of 2 sites along the route",
+      "source": "open_meteo",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "lit_tags",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-01"
+    },
+    {
+      "checked": true,
+      "kind": "solar_geometry",
+      "reason": "UTC offset -7 h as given",
+      "source": "pvlib",
       "vintage": null
     },
     {
@@ -82,13 +117,6 @@
       "kind": "air_quality",
       "reason": "needs the AirNow adapter (M2)",
       "source": "air_quality",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "lighting",
-      "reason": "needs solar geometry wiring (M2)",
-      "source": "lighting",
       "vintage": null
     },
     {
@@ -134,7 +162,7 @@
       "vintage": null
     }
   ],
-  "measurements_sha256": "083b889709abeceae48f027add7c7848049dc863b080581e8317ee643aa70dac",
+  "measurements_sha256": "767f5214907cd4ac390b7b13606e181aea5b3191597888da18a3201923eba928",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -354,9 +382,16 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 0.7,
+      "measured_segments": 20,
+      "summary": {
+        "formula": "ACSM/BoM approximation: temperature and humidity only",
+        "hard_floor_c": 30.0,
+        "max_wbgt_c": 18.651,
+        "mean_wbgt_c": 18.149,
+        "segments_above_soft": 0,
+        "soft_threshold_c": 26.0
+      },
       "worst": []
     },
     "legality": {
@@ -394,9 +429,18 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "dark_m": 0.0,
+        "finishes_in_daylight": true,
+        "starts_in_daylight": true,
+        "twilight_threshold_deg": -6.0,
+        "unknown_lit_dark_m": 0.0,
+        "unlit_dark_m": 0.0,
+        "utc_offset_guessed": false,
+        "utc_offset_hours": -7.0
+      },
       "worst": []
     },
     "microclimate": {
@@ -404,14 +448,14 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.0,
+      "mean_confidence": 1.0,
       "measured_segments": 20,
       "summary": {
-        "max_temp_c": null,
-        "min_temp_c": null,
-        "providers": "none:2",
+        "max_temp_c": 16.4,
+        "min_temp_c": 14.637,
+        "providers": "open-meteo:2",
         "sites": 2,
-        "sites_answered": 0,
+        "sites_answered": 2,
         "spacing_m": 5000.0
       },
       "worst": []
@@ -547,9 +591,17 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "mean_sky_view_factor": 0.908,
+        "peak_irradiance_w_m2": 45.541,
+        "raycast_rung": "full",
+        "shaded_fraction": 0.218,
+        "surface": "shade measured from buildings, canopy and dem",
+        "utc_offset_guessed": false,
+        "utc_offset_hours": -7.0
+      },
       "worst": []
     },
     "surface_profile": {

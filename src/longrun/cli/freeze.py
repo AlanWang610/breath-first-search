@@ -20,16 +20,22 @@ a fixture that agreed with nothing.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import typer
 
-from longrun.core.data.file_store import _resolution_m
+from longrun.core.data.cache import SqliteCache
+from longrun.core.data.file_store import FileLayerStore, FileRasterStore, _resolution_m
+from longrun.core.data.forecast import DEFAULT_SPACING_M, route_forecast
 from longrun.core.data.postgis import DEFAULT_LAYER_TABLES, PostGISLayerStore, dsn_from_env
 from longrun.core.geo.gpx import GpxError, gpx_read
 from longrun.core.geo.segments import corridor
+from longrun.core.models.context import Budget, FrozenClock, ScorerContext
+from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.plan import SnapshotPins
+from longrun.core.models.profile import PreferenceProfile
 
 if TYPE_CHECKING:  # pragma: no cover
     from geopandas import GeoDataFrame
@@ -193,5 +199,53 @@ def freeze_fixture(
     typer.echo(f"wrote {snapshot}")
 
 
+def freeze_cassette(
+    gpx_path: Path = typer.Argument(..., help="Route whose forecast to record."),
+    date: datetime = typer.Option(..., "--date", formats=["%Y-%m-%d"], help="Run date."),
+    out: Path = typer.Option(..., "--out", help="Cassette file to write (cache.sqlite)."),
+    spacing_m: float = typer.Option(
+        DEFAULT_SPACING_M, "--spacing-m", help="Distance between forecast sites."
+    ),
+) -> None:
+    """Record a route's forecast into a cassette a golden run can replay.
+
+    The same argument as `freeze-fixture`: this calls the *same* `route_forecast` a scorer
+    calls, so the cassette is literally what the API answered and holds exactly the keys a
+    scorer will ask for. A hand-written one would be a second implementation of the key
+    derivation and would drift the first time a rounding rule changed.
+
+    A forecast for a past date can never be re-fetched, so record before the day arrives
+    and treat the file as permanent. That is also why a golden pins an absolute date.
+    """
+    try:
+        route = gpx_read(gpx_path, route_id=gpx_path.stem)
+    except GpxError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with SqliteCache(out, offline=False) as cache:
+        ctx = ScorerContext(
+            layers=FileLayerStore(gpx_path.parent),
+            rasters=FileRasterStore(gpx_path.parent),
+            cache=cache,
+            clock=FrozenClock(date),
+            coverage=CoverageManifest(),
+            profile=PreferenceProfile(),
+            budget=Budget(),
+        )
+        forecast = route_forecast(route, ctx, date.date(), spacing_m=spacing_m)
+        recorded = len(cache.keys())
+
+    for site in forecast.sites:
+        state = site.provider if site.hours else f"none ({site.reason})"
+        typer.echo(f"  site {site.site.index} at {site.site.cum_dist_m / 1000:.1f} km: {state}")
+    typer.echo(f"wrote {out}: {recorded} key(s), {ctx.budget.api_calls_used} API call(s)")
+    if not forecast.answered:
+        typer.echo("error: nothing was recorded", err=True)
+        raise typer.Exit(code=1)
+
+
 def register(app: typer.Typer) -> None:
     app.command("freeze-fixture")(freeze_fixture)
+    app.command("freeze-cassette")(freeze_cassette)

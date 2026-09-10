@@ -70,6 +70,10 @@ LICENCES: dict[str, SourceLicence] = {
     ),
     "purpleair": SourceLicence(source="purpleair", licence="PurpleAir API terms"),
     "gtfs": SourceLicence(source="gtfs", licence="per agency"),
+    # Not a data source: solar position and clear-sky irradiance are computed, not
+    # fetched. It appears in coverage because a plan must be able to say the UTC
+    # offset was guessed, and every coverage source needs a licence line.
+    "pvlib": SourceLicence(source="pvlib", licence="BSD-3 (computation, not data)"),
 }
 
 

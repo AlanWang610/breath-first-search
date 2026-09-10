@@ -28,9 +28,20 @@ ROUTES_DIR = Path(__file__).parent / "routes"
 
 #: Every file a golden route directory must carry. `route.gpx` is the geometry,
 #: `request.yaml` the pinned request, `profile.yaml` the preferences in force,
-#: `snapshot.json` the source vintages, `expected.json` the record of what the scorers
-#: used to say.
-REQUIRED_FILES = ("route.gpx", "request.yaml", "profile.yaml", "snapshot.json", "expected.json")
+#: `snapshot.json` the source vintages, `cache.sqlite` the recorded forecast, and
+#: `expected.json` the record of what the scorers used to say.
+#:
+#: The cassette is required, not optional. "This route was run against a recorded
+#: forecast" is exactly the pin scope 6.4 asks for, and an optional file is one that
+#: quietly stops existing.
+REQUIRED_FILES = (
+    "route.gpx",
+    "request.yaml",
+    "profile.yaml",
+    "snapshot.json",
+    "cache.sqlite",
+    "expected.json",
+)
 
 
 class GoldenError(RuntimeError):
@@ -74,11 +85,15 @@ def run(directory: Path, out_dir: Path) -> GoldenRun:
         str(directory / "profile.yaml"),
         "--snapshot",
         str(directory / "snapshot.json"),
+        "--cache",
+        str(directory / "cache.sqlite"),
         "--out",
         str(out_dir),
     ]
     if request.get("target_km") is not None:
         args += ["--target-km", str(request["target_km"])]
+    if request.get("utc_offset_hours") is not None:
+        args += ["--utc-offset", str(request["utc_offset_hours"])]
 
     result = CliRunner().invoke(app, args, env={"LONGRUN_OFFLINE": "1"})
     if result.exit_code != 0:

@@ -564,9 +564,12 @@ class DsmCoverage(BaseModel):
         for layer, contribution in sorted(self.layers.items()):
             reason = contribution.reason
             if contribution.available and contribution.rows_without_height:
+                # Counted per tile, and tiles overlap by their ray margins, so a footprint
+                # near a boundary is seen twice. Said plainly rather than presented as a
+                # count of distinct buildings, which it is not.
                 reason = (
-                    f"{contribution.rows_without_height} building footprint(s) carried no "
-                    "height and were not raised"
+                    f"{contribution.rows_without_height} footprint read(s) across tiles "
+                    "carried no height and were not raised"
                 )
             out.append(
                 CoverageEntry(
@@ -597,26 +600,37 @@ def accumulate_coverage(
     coverage. Collapsing those to a boolean would lose the only distinction that matters
     to a reader deciding whether to trust the shade figure.
     """
-    merged: dict[str, LayerContribution] = {}
+    # Accumulated as plain floats, not into `LayerContribution.valid_fraction`, which the
+    # model constrains to [0, 1]: summing two full tiles into it fails validation before the
+    # divide ever happens. Found by the scorer error boundary turning it into an honest
+    # `unavailable`, which is what that boundary is for.
+    totals: dict[str, float] = {}
     counts: dict[str, int] = {}
+    available: dict[str, bool] = {}
+    native: dict[str, float | None] = {}
+    reasons: dict[str, str | None] = {}
+    missing_heights: dict[str, int] = {}
+
     for contribution in contributions:
-        counts[contribution.layer] = counts.get(contribution.layer, 0) + 1
-        existing = merged.get(contribution.layer)
-        if existing is None:
-            merged[contribution.layer] = contribution
-            continue
-        merged[contribution.layer] = LayerContribution(
-            layer=contribution.layer,
-            available=existing.available or contribution.available,
-            valid_fraction=existing.valid_fraction + contribution.valid_fraction,
-            native_res_m=existing.native_res_m or contribution.native_res_m,
-            reason=existing.reason or contribution.reason,
-            rows_without_height=existing.rows_without_height + contribution.rows_without_height,
+        layer = contribution.layer
+        counts[layer] = counts.get(layer, 0) + 1
+        totals[layer] = totals.get(layer, 0.0) + contribution.valid_fraction
+        available[layer] = available.get(layer, False) or contribution.available
+        native[layer] = native.get(layer) or contribution.native_res_m
+        reasons[layer] = reasons.get(layer) or contribution.reason
+        missing_heights[layer] = missing_heights.get(layer, 0) + contribution.rows_without_height
+
+    merged = {
+        layer: LayerContribution(
+            layer=layer,
+            available=available[layer],
+            valid_fraction=min(1.0, totals[layer] / max(1, counts[layer])),
+            native_res_m=native[layer],
+            reason=reasons[layer],
+            rows_without_height=missing_heights[layer],
         )
-    for layer, contribution in merged.items():
-        merged[layer] = contribution.model_copy(
-            update={"valid_fraction": min(1.0, contribution.valid_fraction / max(1, counts[layer]))}
-        )
+        for layer in counts
+    }
     return DsmCoverage(cell_m=cell_m, tiles=tiles_seen, layers=merged)
 
 

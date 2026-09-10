@@ -14,12 +14,13 @@ clean when it does not exist.
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
 import uuid
 from datetime import datetime
 from datetime import time as time_type
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import typer
 
@@ -51,15 +52,17 @@ SCORERS: dict[str, str] = {
     "surface_profile": "longrun.core.scorers.surface",
     "services_along": "longrun.core.scorers.services",
     "microclimate": "longrun.core.scorers.microclimate",
+    # Order is dependency order: `sun_exposure` before `heat_stress`, which reads the
+    # sunlit fraction back out of it (scope 7.4: "from sun exposure + temp + ...").
+    "sun_exposure": "longrun.core.scorers.sun",
+    "heat_stress": "longrun.core.scorers.heat",
+    "lighting": "longrun.core.scorers.lighting",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the
 #: coverage manifest can say they were not run, instead of the sheet staying silent.
 NOT_YET_IMPLEMENTED: dict[str, str] = {
-    "sun_exposure": "DSM ray-cast lands in M2",
-    "heat_stress": "needs the forecast adapter (M2)",
     "air_quality": "needs the AirNow adapter (M2)",
-    "lighting": "needs solar geometry wiring (M2)",
     "resupply_schedule": "needs opening-hours parsing (M2)",
     "closures": "needs the jurisdiction adapter registry (M4)",
     "trail_status": "needs the jurisdiction adapter registry (M4)",
@@ -77,6 +80,30 @@ def _load_scorer(module_path: str) -> Any | None:
     return getattr(module, "score", None)
 
 
+def _call(
+    func: Any,
+    route: Any,
+    segments: list[Any],
+    ctx: ScorerContext,
+    etas: list[datetime],
+    prior: list[ScorerResult],
+) -> ScorerResult:
+    """Invoke a scorer, handing it earlier results only if it asks for them.
+
+    Two scope 7.4/7.5 tools are defined in terms of another scorer's output rather than of
+    raw data: `heat_stress` is "WBGT ... from **sun exposure** + temp + humidity + wind",
+    and scope 8.3's dry-gap thresholds "both scale down with WBGT". So the dependency is
+    the scope's, not an implementation shortcut.
+
+    Inspected rather than passed to everything, so the six scorers that are pure functions
+    of `(route, segments, ctx, etas)` stay that way and cannot quietly grow a dependency on
+    execution order. `SCORERS` is an ordered dict, and that order is the dependency order.
+    """
+    if "prior" in inspect.signature(func).parameters:
+        return cast("ScorerResult", func(route, segments, ctx, etas, prior=prior))
+    return cast("ScorerResult", func(route, segments, ctx, etas))
+
+
 def _run_scorers(
     route: Any, segments: list[Any], ctx: ScorerContext, etas: list[datetime]
 ) -> list[ScorerResult]:
@@ -89,7 +116,7 @@ def _run_scorers(
             results.append(unavailable(name, "scorer not implemented yet"))
             continue
         try:
-            results.append(func(route, segments, ctx, etas))
+            results.append(_call(func, route, segments, ctx, etas, results))
         except Exception as exc:  # a scorer must never take the whole plan down
             results.append(unavailable(name, f"scorer failed: {type(exc).__name__}: {exc}"))
 
@@ -113,7 +140,13 @@ def repair(
     ),
     out: Path | None = typer.Option(None, "--out", help="Directory for outputs."),
     offline: bool = typer.Option(False, "--offline", help="Fail on a cache miss."),
+    cache_path: Path | None = typer.Option(
+        None, "--cache", help="Cache/cassette file. Overrides LONGRUN_CACHE_DIR."
+    ),
     target_km: float | None = typer.Option(None, "--target-km", help="Target distance."),
+    utc_offset: float | None = typer.Option(
+        None, "--utc-offset", help="Hours from UTC at the route, e.g. -7 for PDT."
+    ),
 ) -> None:
     """Score an existing route and write a plan sheet."""
     try:
@@ -134,6 +167,7 @@ def repair(
         date=date.date(),
         start_time=start_at.time(),
         target_distance_km=target_km,
+        utc_offset_hours=utc_offset,
     )
     profile = load_profile(profile_path)
     root = fixtures or Path("data")
@@ -151,7 +185,12 @@ def repair(
     # Held open with `with`: the connection is otherwise left to the garbage collector, and
     # on Windows an unclosed SQLite handle keeps a file lock, so a leaked one can stop the
     # next run - or a test's tmp_path cleanup - from removing the file.
-    with SqliteCache(cache_path_from_env(), offline=offline) as cache:
+    # Precedence: --cache, then LONGRUN_CACHE_DIR, then in-memory. A golden route pins
+    # its cassette in the route directory and passes it here, because the autouse
+    # fixture that clears LONGRUN_* would otherwise leave the env var with nothing in
+    # it and every forecast key would miss.
+    store = cache_path or cache_path_from_env()
+    with SqliteCache(store, offline=offline) as cache:
         layers = FileLayerStore(root)
         # Scope 6.4: every source in the manifest carries a vintage. The store is what the
         # scorers ask, so the pins go in here rather than being stitched on afterwards -
@@ -167,6 +206,7 @@ def repair(
             coverage=CoverageManifest(),
             profile=profile,
             budget=Budget(),
+            utc_offset_hours=utc_offset,
         )
 
         # Repair mode has no router, so nothing has told us which way each point lies on.

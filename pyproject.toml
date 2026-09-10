@@ -101,5 +101,14 @@ strict = false
 
 [[tool.mypy.overrides]]
 # No type stubs published for the geospatial stack.
-module = ["geopandas.*", "rasterio.*", "shapely.*", "pvlib.*", "gpxpy.*", "pyproj.*"]
+module = [
+  "geopandas.*",
+  "rasterio.*",
+  "shapely.*",
+  "pvlib.*",
+  "gpxpy.*",
+  "pyproj.*",
+  "pandas.*",
+  "duckdb.*",
+]
 ignore_missing_imports = true

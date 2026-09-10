@@ -362,7 +362,7 @@ def test_buildings_without_heights_are_named_in_coverage() -> None:
     entry = coverage.entries()[0]
     assert entry.source == "overture"
     assert entry.checked
-    assert "7 building footprint(s) carried no height" in (entry.reason or "")
+    assert "7 footprint read(s) across tiles" in (entry.reason or "")
 
 
 # --- corridor horizons ------------------------------------------------------
@@ -417,3 +417,21 @@ def test_the_surface_sources_are_reported_on_the_corridor(tmp_path: Path, ctx: A
     assert result.coverage.answered == frozenset({DEM_LAYER})
     assert result.coverage.confidence == 0.5
     assert "canopy" in result.coverage.describe()
+
+
+def test_two_fully_covered_tiles_average_to_one_rather_than_overflowing() -> None:
+    """The regression: `valid_fraction` is constrained to [0, 1] on the model.
+
+    Accumulating into it before dividing raised a ValidationError on any route long enough
+    to need two tiles — which the existing averaging test missed, because its two
+    contributions happened to sum to exactly 1.0.
+    """
+    coverage = accumulate_coverage(
+        2,
+        [
+            LayerContribution(layer=DEM_LAYER, available=True, valid_fraction=1.0),
+            LayerContribution(layer=DEM_LAYER, available=True, valid_fraction=1.0),
+        ],
+        cell_m=1.0,
+    )
+    assert coverage.layers[DEM_LAYER].valid_fraction == pytest.approx(1.0)

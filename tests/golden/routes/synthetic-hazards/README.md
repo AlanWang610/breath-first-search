@@ -60,7 +60,7 @@ inside the 200 m service buffer. The long water gap is between the two water poi
 
 One park polygon covers points 2-18.
 
-## Elevation
+## Elevation and the surface model
 
 `dem.tif` is a plane: elevation rises linearly with longitude from **5 m** at the west end
 to **65 m** at the east, on a 0.0002° grid (≈22 m). Uniform 1.5 % grade, no spikes, so
@@ -68,12 +68,45 @@ verification check 4 passes and the pacing figure is a clean function of distanc
 climb. Regenerate with the same linear ramp if it is ever lost; do not substitute real
 terrain, which would make the pacing number unreviewable.
 
+It extends **±0.011° of longitude and ±0.010° of latitude beyond the route**, which is not
+slack: a DSM tile pads the route by the corridor half-width (400 m) plus the ray-cast
+search radius (500 m), and a raster that stopped at the route would leave those margins as
+nodata and drag the shade confidence down for a reason that has nothing to do with the
+route.
+
+`canopy.tif` is 12 m of tree over points 40–60 — the gravel track — and zero elsewhere.
+
+`buildings.geojson` is 25 m tall throughout: a **canyon** lining both sides of points 0–20
+at 20 m from the line, then a **single row on the south side only** over points 22–30, so
+one stretch is half-open rather than enclosed. One footprint near point 32 carries **no
+height at all**, because Overture records frequently lack the attribute and the coverage
+manifest has to be able to say so.
+
+Two properties this fixture is built to demonstrate, both visible in `expected.json`:
+
+- The canyon does **not** shade the route at 07:00. The sun is barely up and almost due
+  east, the street runs east–west, and a canyon parallel to the sun's azimuth is lit down
+  its axis. Shade appears where geometry puts it, not where buildings are.
+- `heat_stress` reports WBGT around **18 °C** at 15–16 °C and high humidity, well under the
+  26 °C soft threshold — so the flag path stays untested here on purpose. A hot-region
+  golden is what would exercise it (scope §11 test region 2).
+
+## The forecast cassette
+
+`cache.sqlite` is a recorded Open-Meteo forecast for 2026-09-12 at the route's two sample
+sites, written by `longrun freeze-cassette` — the same `route_forecast` a scorer calls, so
+it holds exactly the keys a scorer will ask for. It is permanent: a forecast for a past
+date can never be re-fetched, which is also why `request.yaml` pins an absolute date.
+
+`request.yaml` pins `utc_offset_hours: -7`. Longitude alone gives −8, and 12 September is
+Pacific Daylight Time; an hour of error is fifteen degrees of solar azimuth.
+
 ## What this route does not cover
 
-Sun, heat, microclimate, air quality, lighting, resupply schedules, closures, trail
-status, access hours, hazards and bailouts all report `unavailable` here, because their
-scorers do not exist yet. They appear in the coverage manifest with a reason, which is the
-scope 3.6 behaviour under test — not an omission from this fixture.
+Air quality, resupply schedules, closures, trail status, access hours, hazards and bailouts
+all report `unavailable` here, because their scorers do not exist yet. They appear in the
+coverage manifest with a reason, which is the scope 3.6 behaviour under test — not an
+omission from this fixture.
 
 Way matching is geometric (repair mode has no router), so verification check 2
 (`on_network`) reports `skipped`. It is not a pass.
