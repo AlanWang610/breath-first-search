@@ -44,8 +44,7 @@ from longrun.core.models.measurement import (
 )
 from longrun.core.preferences.floors import CROSSING_HARD_SPEED_KPH
 from longrun.core.routing.lts import parse_maxspeed
-from longrun.core.scorers.base import record_coverage, unavailable
-from longrun.core.scorers.hostility import (
+from longrun.core.scorers._common import (
     ROUTE_SUMMARY_ID,
     WAYS_LAYER,
     RouteFrame,
@@ -53,6 +52,7 @@ from longrun.core.scorers.hostility import (
     row_tags,
     segment_at,
 )
+from longrun.core.scorers.base import record_coverage, unavailable
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.context import ScorerContext

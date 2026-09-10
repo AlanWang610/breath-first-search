@@ -302,6 +302,82 @@ def test_file_raster_store_satisfies_the_protocol(tmp_path: Path) -> None:
     assert isinstance(FileRasterStore(tmp_path), RasterStore)
 
 
+def test_a_projected_raster_is_windowed_in_its_own_crs(tmp_path: Path, sf_route: Route) -> None:
+    """The bbox is WGS84; the raster may not be. Transform before cutting the window.
+
+    This is the regression test for a silent wrong answer: feeding degrees to a projected
+    raster's transform cuts a window a few pixels wide, and because the read is
+    `boundless=True` it comes back as a full-size array of nodata rather than as an error.
+    3DEP at 1 m is projected and the Meta/WRI canopy is Web Mercator, so before this fix
+    every DSM source except the 10 m DEM would have read as empty ground.
+    """
+    import numpy as np
+    import rasterio
+    from pyproj import Transformer
+    from rasterio.transform import from_origin
+
+    to_utm = Transformer.from_crs("EPSG:4326", "EPSG:32610", always_xy=True)
+    centre_x, centre_y = to_utm.transform(-122.40, 37.775)
+    size, cell = 400, 10.0
+    with rasterio.open(
+        tmp_path / "dem.tif",
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:32610",
+        transform=from_origin(centre_x - size * cell / 2, centre_y + size * cell / 2, cell, cell),
+        nodata=-9999.0,
+    ) as dst:
+        dst.write(np.full((size, size), 42.0, dtype="float32"), 1)
+
+    window = FileRasterStore(tmp_path).read_window_meta("dem", corridor(sf_route).bbox)
+    assert window is not None
+    assert window.crs.to_epsg() == 32610
+    assert window.nodata == -9999.0
+    assert float(np.nanmax(window.array)) == 42.0, "the window missed the data entirely"
+    assert float(np.min(window.array)) == 42.0, "the window ran off the raster"
+
+
+def test_resolution_is_reported_in_metres_not_degrees(fixture_dir: Path, tmp_path: Path) -> None:
+    """A 1/3-arcsec DEM is 10 m, not 0.0000926.
+
+    The manifest pin is compared against a 1 m LiDAR figure, so a raw `transform.a` from a
+    geographic raster would make the two look like different products by five orders of
+    magnitude.
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    arcsec_third = 1.0 / 3600.0 / 3.0
+    with rasterio.open(
+        tmp_path / "dem.tif",
+        "w",
+        driver="GTiff",
+        height=10,
+        width=10,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(-122.4, 37.8, arcsec_third, arcsec_third),
+    ) as dst:
+        dst.write(np.zeros((10, 10), dtype="float32"), 1)
+
+    resolution = FileRasterStore(tmp_path).resolution_m("dem")
+    assert resolution is not None
+    assert 7.0 < resolution < 9.0, resolution
+
+
+def test_a_missing_raster_is_distinct_from_no_coverage(tmp_path: Path, sf_route: Route) -> None:
+    """Scope 3.6 for rasters: "nobody loaded canopy" is not "no canopy here"."""
+    store = FileRasterStore(tmp_path, remote={"canopy": "https://example.invalid/c.tif"})
+    assert not store.has_layer("dem")
+    assert store.has_layer("canopy")
+
+
 def test_absent_raster_reads_as_no_coverage(tmp_path: Path, sf_route: Route) -> None:
     """No DEM is unknown elevation, not zero elevation (scope 12)."""
     store = FileRasterStore(tmp_path)

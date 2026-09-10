@@ -44,13 +44,9 @@ from longrun.core.scorers import legality as legality_mod
 from longrun.core.scorers import services as services_mod
 from longrun.core.scorers import stop_density as stop_density_mod
 from longrun.core.scorers import surface as surface_mod
+from longrun.core.scorers._common import ROUTE_SUMMARY_ID, UNKNOWN_WAY_CONFIDENCE
 from longrun.core.scorers.crossings import classify, crossings, grade_separated
-from longrun.core.scorers.hostility import (
-    ROUTE_SUMMARY_ID,
-    UNKNOWN_WAY_CONFIDENCE,
-    segment_hostility,
-    severity_for_level,
-)
+from longrun.core.scorers.hostility import segment_hostility, severity_for_level
 from longrun.core.scorers.legality import legality, violation_of
 from longrun.core.scorers.services import max_gap_m, services_along
 from longrun.core.scorers.stop_density import stop_density, window_density

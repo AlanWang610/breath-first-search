@@ -11,7 +11,7 @@ Nothing above this module knows which one it has.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # pragma: no cover
     from geopandas import GeoDataFrame
@@ -47,9 +47,35 @@ class LayerStore(Protocol):
         """Features the route line actually crosses: rail, hydrography, boundaries."""
         ...
 
+    def has_layer(self, layer: str) -> bool:
+        """Whether this store carries the layer at all (scope 3.6).
+
+        On the protocol rather than only on the implementations, because it is the
+        difference between "nobody loaded this" and "this corridor has none of it" — and
+        both stores already implement it.
+        """
+        ...
+
     def vintage(self, layer: str) -> str | None:
         """Source vintage for the manifest's data-snapshot pins (scope 6.4)."""
         ...
+
+
+class RasterWindow(NamedTuple):
+    """A raster read, with the metadata needed to place it on the ground.
+
+    `read_window` returns the array and transform alone, which is enough for `dem.py`
+    because it samples in the raster's own coordinates. Assembling a DSM is not: three
+    sources arrive in three CRSs at three resolutions and have to be warped onto one
+    metric grid, and doing that needs to know what CRS each one was in and what its
+    nodata value is.
+    """
+
+    array: Any
+    transform: Any
+    crs: Any
+    nodata: float | None
+    res_m: float | None
 
 
 @runtime_checkable
@@ -58,6 +84,14 @@ class RasterStore(Protocol):
 
     def read_window(self, layer: str, bbox: BBox) -> Any:
         """A numpy array plus affine transform for the requested window."""
+        ...
+
+    def read_window_meta(self, layer: str, bbox: BBox) -> RasterWindow | None:
+        """The same window, with CRS, nodata and metric resolution attached."""
+        ...
+
+    def has_layer(self, layer: str) -> bool:
+        """Whether the raster exists at all, distinct from having no coverage here."""
         ...
 
     def resolution_m(self, layer: str) -> float | None:

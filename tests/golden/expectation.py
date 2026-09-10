@@ -67,7 +67,7 @@ def _round(value: Any, places: int) -> Any:
 
 def _scorer_digest(result: ScorerResult) -> dict[str, Any]:
     from longrun.core.models.measurement import FlagKind
-    from longrun.core.scorers.hostility import ROUTE_SUMMARY_ID
+    from longrun.core.scorers._common import ROUTE_SUMMARY_ID
 
     summary = next((m for m in result.measurements if m.segment_id == ROUTE_SUMMARY_ID), None)
 

@@ -50,6 +50,14 @@ LICENCES: dict[str, SourceLicence] = {
     "padus": SourceLicence(source="padus", licence="US public domain"),
     "tiger": SourceLicence(source="tiger", licence="US public domain"),
     "nws": SourceLicence(source="nws", licence="US public domain"),
+    # Scope 14's table has no Open-Meteo row, although scope 7.4 names it as the
+    # microclimate fallback and a cloud-cover source. The omission is the scope's, not a
+    # statement that nothing is owed: Open-Meteo is CC-BY 4.0 and attribution is required.
+    "open_meteo": SourceLicence(
+        source="open_meteo",
+        licence="CC-BY 4.0",
+        attribution="Weather and air quality: Open-Meteo.com",
+    ),
     "noaa_coops": SourceLicence(source="noaa_coops", licence="US public domain"),
     "fcc_bdc": SourceLicence(source="fcc_bdc", licence="US public domain"),
     "canopy": SourceLicence(

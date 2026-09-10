@@ -10,3 +10,6 @@
 *.pbf  binary
 *.fit  binary
 *.zip  binary
+# Golden-route forecast cassettes: the production cache, committed. Newline
+# normalisation would corrupt the SQLite header.
+*.sqlite binary

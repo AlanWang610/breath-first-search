@@ -16,11 +16,13 @@ live database, so the committed GeoPackage is literally the answer PostGIS gave.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import geopandas as gpd
 
+from longrun.core.data.base import RasterWindow
 from longrun.core.geo.segments import corridor_polygon
 from longrun.core.models.geometry import BBox, Corridor, Route
 
@@ -140,32 +142,78 @@ class FileRasterStore:
             return f"/vsicurl/{self.remote[layer]}"
         raise LayerNotFound(f"no raster {layer!r} under {self.root} or in remote map")
 
+    def has_layer(self, layer: str) -> bool:
+        """Whether the raster exists at all (scope 3.6).
+
+        Distinct from `read_window` returning None, which today means any of "no such
+        raster", "the read failed" and "no coverage at this bbox". Only the first is a
+        statement about the *store*, and only this method makes it.
+        """
+        if (self.root / f"{layer}.tif").exists():
+            return True
+        return layer in self.remote
+
     def read_window(self, layer: str, bbox: BBox) -> tuple[Any, Any] | None:
         """An (array, affine transform) window, or None where there is no coverage."""
+        window = self.read_window_meta(layer, bbox)
+        return None if window is None else (window.array, window.transform)
+
+    def read_window_meta(self, layer: str, bbox: BBox) -> RasterWindow | None:
+        """The window plus the metadata a reprojection needs.
+
+        The bbox arrives in WGS84 and the raster is in whatever CRS it was published in,
+        so the bounds are transformed into the source CRS before the window is cut. That
+        transform is not optional and its absence was a silent wrong answer: feeding
+        degrees to a projected raster's transform produces a window a few pixels wide, and
+        because the read is `boundless=True` it comes back as a full-size array of nodata
+        rather than as an error. 3DEP at 1 m is projected and the Meta/WRI canopy is Web
+        Mercator, so every source this store exists to read except the 10 m DEM would have
+        been quietly empty.
+        """
         import rasterio
         from rasterio.errors import RasterioIOError
+        from rasterio.warp import transform_bounds
         from rasterio.windows import from_bounds
 
         try:
             with rasterio.open(self._source(layer)) as src:
-                window = from_bounds(
-                    bbox.min_lon,
-                    bbox.min_lat,
-                    bbox.max_lon,
-                    bbox.max_lat,
-                    transform=src.transform,
-                )
+                bounds = (bbox.min_lon, bbox.min_lat, bbox.max_lon, bbox.max_lat)
+                if src.crs is not None and src.crs.to_string() != WGS84:
+                    bounds = transform_bounds(WGS84, src.crs, *bounds)
+                window = from_bounds(*bounds, transform=src.transform)
                 array = src.read(1, window=window, boundless=True, fill_value=src.nodata)
-                return array, src.window_transform(window)
+                return RasterWindow(
+                    array=array,
+                    transform=src.window_transform(window),
+                    crs=src.crs,
+                    nodata=None if src.nodata is None else float(src.nodata),
+                    res_m=_resolution_m(src),
+                )
         except (LayerNotFound, RasterioIOError):
             return None
 
     def resolution_m(self, layer: str) -> float | None:
-        """Ground resolution, recorded in the manifest (1 m LiDAR vs 10 m 3DEP)."""
+        """Ground resolution in **metres**, recorded in the manifest (1 m vs 10 m 3DEP)."""
         import rasterio
 
         try:
             with rasterio.open(self._source(layer)) as src:
-                return abs(float(src.transform.a))
+                return _resolution_m(src)
         except Exception:
             return None
+
+
+def _resolution_m(src: Any) -> float | None:
+    """Pixel size in metres, whatever the raster's CRS.
+
+    `transform.a` is degrees for a geographic raster and metres for a projected one, and
+    returning the raw number would mean a 10 m DEM reporting `0.0000926`. Converted at the
+    window's own latitude rather than at the equator, because the manifest pin is compared
+    against a 1 m LiDAR figure and a 15% error would make the two look like different
+    products.
+    """
+    size = abs(float(src.transform.a))
+    if src.crs is None or src.crs.is_projected:
+        return size
+    centre_lat = (src.bounds.bottom + src.bounds.top) / 2.0
+    return size * 111320.0 * math.cos(math.radians(centre_lat))

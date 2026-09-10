@@ -34,9 +34,9 @@ from longrun.core.geo.segments import corridor
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import ScorerResult, SegmentMeasurement
+from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, row_tags
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.crossings import NODES_LAYER
-from longrun.core.scorers.hostility import ROUTE_SUMMARY_ID, RouteFrame, row_tags
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.context import ScorerContext

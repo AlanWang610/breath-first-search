@@ -18,10 +18,13 @@ import hashlib
 import json
 import os
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover
+    from longrun.core.data.base import Cache
 
 #: Set to 1 to make a cache miss an error. Golden and contract tests run this way.
 OFFLINE_ENV_VAR = "LONGRUN_OFFLINE"
@@ -149,19 +152,8 @@ class SqliteCache:
         day: date | str,
         producer: Any,
     ) -> Any:
-        """Return a cached value, calling `producer()` only on a miss.
-
-        The single path every external call should take, so that the offline guarantee
-        holds without each adapter remembering to check.
-        """
-        key = args_hash(args)
-        day_str = day.isoformat() if isinstance(day, date) else day
-        hit = self.get(tool, key, day_str)
-        if hit is not None:
-            return hit
-        value = producer()
-        self.put(tool, key, day_str, value)
-        return value
+        """Convenience wrapper over the module-level `fetch`; see its docstring."""
+        return fetch(self, tool, args, day, producer)
 
     def keys(self) -> list[tuple[str, str, str]]:
         """Every key held, for inspecting a cassette."""
@@ -180,3 +172,33 @@ class SqliteCache:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+def fetch(cache: Cache, tool: str, args: Any, day: date | str, producer: Callable[[], Any]) -> Any:
+    """Return a cached value, calling `producer()` only on a miss.
+
+    **The single path every external call takes.** A free function rather than a method on
+    the `Cache` protocol, because this is where the offline guarantee lives: a second
+    implementation that had to write its own `fetch` could forget to let `CacheMiss` escape,
+    and the failure would be a golden test quietly reaching the network instead of failing.
+    One implementation, one guarantee, and any two-method `Cache` gets it.
+
+    A producer returning `None` is an error rather than a cached nothing. SQLite stores the
+    value as JSON, so `None` round-trips to a value indistinguishable from a miss and the
+    producer would be re-called on every subsequent request — spending budget and, offline,
+    raising `CacheMiss` for a key that was recorded. Callers that mean "no data here" return
+    a structured empty payload, which is also what makes the absence reportable.
+    """
+    key = args_hash(args)
+    day_str = day.isoformat() if isinstance(day, date) else str(day)
+    hit = cache.get(tool, key, day_str)
+    if hit is not None:
+        return hit
+    value = producer()
+    if value is None:
+        raise ValueError(
+            f"{tool} producer returned None; return a structured empty payload instead, "
+            "or None will read as a cache miss on every later call"
+        )
+    cache.put(tool, key, day_str, value)
+    return value

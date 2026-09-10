@@ -36,14 +36,14 @@ from longrun.core.models.measurement import (
     SegmentMeasurement,
     Tier,
 )
-from longrun.core.scorers.base import record_coverage, unavailable
-from longrun.core.scorers.hostility import (
+from longrun.core.scorers._common import (
     ROUTE_SUMMARY_ID,
     UNKNOWN_WAY_CONFIDENCE,
     WAYS_LAYER,
     segment_tags,
     way_tags_in_corridor,
 )
+from longrun.core.scorers.base import record_coverage, unavailable
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.context import ScorerContext

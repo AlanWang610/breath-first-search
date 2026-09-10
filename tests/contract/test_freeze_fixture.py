@@ -244,7 +244,7 @@ def test_the_tags_survive_the_freeze(
     postgis_store: PostGISLayerStore, file_store: FileLayerStore, route: Route
 ) -> None:
     """Flattened `jsonb` reaches the GeoPackage as the columns a scorer reads."""
-    from longrun.core.scorers.hostility import frame_tags_by_way
+    from longrun.core.scorers._common import frame_tags_by_way
 
     window = corridor(route)
     from_db = frame_tags_by_way(postgis_store.ways_in_corridor(window))
@@ -265,7 +265,7 @@ def test_a_scorer_reads_the_same_lts_from_the_frozen_fixture(
     the row counts match.
     """
     from longrun.core.routing.lts import lts_from_tags
-    from longrun.core.scorers.hostility import frame_tags_by_way
+    from longrun.core.scorers._common import frame_tags_by_way
 
     window = corridor(route)
     db_tags = frame_tags_by_way(postgis_store.ways_in_corridor(window))

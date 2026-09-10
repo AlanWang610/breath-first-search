@@ -209,7 +209,7 @@ def _ids(frame: Any, column: str) -> set[int]:
 
 def _tags_by_way(frame: Any) -> dict[int, dict[str, Any]]:
     """What `hostility.frame_tags_by_way` will see, so the comparison is the real contract."""
-    from longrun.core.scorers.hostility import frame_tags_by_way
+    from longrun.core.scorers._common import frame_tags_by_way
 
     return frame_tags_by_way(frame)
 

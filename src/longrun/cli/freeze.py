@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import typer
 
+from longrun.core.data.file_store import _resolution_m
 from longrun.core.data.postgis import DEFAULT_LAYER_TABLES, PostGISLayerStore, dsn_from_env
 from longrun.core.geo.gpx import GpxError, gpx_read
 from longrun.core.geo.segments import corridor
@@ -105,9 +106,9 @@ def _clip_dem(source: str, box: Corridor, path: Path) -> float:
         }
         with rasterio.open(path, "w", **profile) as dst:
             dst.write(array, 1)
-        # Degrees of longitude to metres at the equator. Good enough for a manifest pin
-        # and deliberately not used for any measurement.
-        return abs(float(src.transform.a)) * 111320.0
+        # Shared with FileRasterStore so a frozen fixture's recorded resolution and the
+        # one a later run reads back are the same number, converted the same way.
+        return _resolution_m(src) or 0.0
 
 
 def freeze_fixture(

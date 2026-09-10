@@ -34,14 +34,9 @@ from longrun.core.models.measurement import (
     SegmentMeasurement,
     Tier,
 )
+from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, row_tags, segment_at
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.crossings import NODES_LAYER, SIGNAL_KINDS, is_signalized
-from longrun.core.scorers.hostility import (
-    ROUTE_SUMMARY_ID,
-    RouteFrame,
-    row_tags,
-    segment_at,
-)
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.context import ScorerContext
