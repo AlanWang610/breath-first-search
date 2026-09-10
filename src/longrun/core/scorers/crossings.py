@@ -209,8 +209,8 @@ def crossings(
     """At-grade crossings of roads at or above secondary, with count per km (scope 7.2)."""
     try:
         frame = ctx.layers.lines_crossing(route, WAYS_LAYER)
-    except LayerNotFound as exc:
-        return unavailable(name, f"ways layer unavailable: {exc}")
+    except LayerNotFound:
+        return unavailable(name, "no ways layer: crossings not established")
 
     route_frame = RouteFrame(route)
     route_line = wgs84_line(route)

@@ -83,6 +83,24 @@ Rotating a tile to the route heading would keep every tile axis-aligned and is *
 every solar azimuth and returns a plausible wrong answer. North-up is a hard term of the
 contract with `raycast.py`.
 
+
+### Correction, 2026-09-10: the budget was blown by rasterizing, not by ray-casting
+
+The first real corridor — 8,480 Overture footprints over downtown San Francisco — took
+**over five minutes** for a 2 km route. None of it was the ray-cast.
+
+`dsm.rasterize_buildings` was calling `rasterio.features.geometry_mask` once per footprint,
+which is `O(buildings x tile cells)`: 8,480 footprints against 5.4 million cells. Replaced
+with a single `rasterize` call over shapes sorted by height ascending — later shapes
+overwrite earlier ones, so the tallest wins and the `max` semantics survive — the same two
+routes now score in **5.9 seconds**, a factor of roughly a hundred.
+
+Two things worth keeping from that. The ADR's conclusion is unchanged and was arguably
+proved twice: the expensive thing was never the horizon computation, it was getting the
+surface ready. And a per-feature loop inside a per-tile loop is the shape to watch for —
+it is invisible on the synthetic fixture, which has 27 footprints, and only appears on real
+data.
+
 ## Decision
 
 **Compute horizon profiles, not per-time rays** — but for the reason the numbers support,

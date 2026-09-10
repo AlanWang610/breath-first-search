@@ -1,0 +1,448 @@
+{
+  "coverage": [
+    {
+      "checked": false,
+      "kind": "osm_tags",
+      "reason": "no ways layer available to match the route against",
+      "source": "way_matching",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "legality",
+      "reason": "no ways layer: pedestrian access not established",
+      "source": "legality",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "segment_hostility",
+      "reason": "no ways layer: traffic stress not established",
+      "source": "segment_hostility",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "crossings",
+      "reason": "no ways layer: crossings not established",
+      "source": "crossings",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "stop_density",
+      "reason": "no nodes layer: stops not established",
+      "source": "stop_density",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "surface_profile",
+      "reason": "no ways layer: surface not established",
+      "source": "surface_profile",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "services_along",
+      "reason": "no amenities layer: services not established",
+      "source": "services_along",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "forecast",
+      "reason": "2 of 2 sites along the route",
+      "source": "open_meteo",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": "569 footprint read(s) across tiles carried no height and were not raised",
+      "source": "overture",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "surface_model",
+      "reason": "no canopy raster in this store",
+      "source": "canopy",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "surface_model",
+      "reason": null,
+      "source": "3dep",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "solar_geometry",
+      "reason": "UTC offset -7 h as given",
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "forecast",
+      "reason": "2 of 2 sites along the route",
+      "source": "open_meteo",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "lit_tags",
+      "reason": "no ways layer: street lighting not established",
+      "source": "ways",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "solar_geometry",
+      "reason": "UTC offset -7 h as given",
+      "source": "pvlib",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "air_quality",
+      "reason": "2 of 2 sites, modelled (CAMS) rather than measured; AirNow needs a key this install does not have",
+      "source": "open_meteo",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "resupply_schedule",
+      "reason": "no amenities layer: opening hours not established",
+      "source": "resupply_schedule",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "closures",
+      "reason": "needs the jurisdiction adapter registry (M4)",
+      "source": "closures",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "trail_status",
+      "reason": "needs the jurisdiction adapter registry (M4)",
+      "source": "trail_status",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "access_hours",
+      "reason": "needs the jurisdiction adapter registry (M4)",
+      "source": "access_hours",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "hazards",
+      "reason": "needs NHD and NWS alerts (M3)",
+      "source": "hazards",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "bailouts",
+      "reason": "needs GTFS (M3)",
+      "source": "bailouts",
+      "vintage": null
+    }
+  ],
+  "elevation": {
+    "gain_m": 32.6,
+    "loss_m": 31.7,
+    "max_m": 5.7,
+    "min_m": -1.1,
+    "samples_missing": 0
+  },
+  "measurements_sha256": "d1f76df294d606806c0addcca58754a8c63cdd25413761b6ebecc2485e6a8ec5",
+  "pacing": {
+    "duration_s": 763.6,
+    "finish": "2026-09-12T17:42:43"
+  },
+  "residual_flags": [],
+  "route": {
+    "length_m": 2026.6,
+    "point_count": 126,
+    "segment_count": 9,
+    "segments_matched_to_a_way": 0
+  },
+  "scorers": {
+    "access_hours": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "air_quality": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 10,
+      "summary": {
+        "max_us_aqi": 57.0,
+        "mean_us_aqi": 54.222,
+        "sites": 2,
+        "sites_answered": 2,
+        "source": "open-meteo (CAMS model)"
+      },
+      "worst": []
+    },
+    "bailouts": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "closures": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "crossings": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "hazards": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "heat_stress": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 0.64,
+      "measured_segments": 10,
+      "summary": {
+        "formula": "ACSM/BoM approximation: temperature and humidity only",
+        "hard_floor_c": 30.0,
+        "max_wbgt_c": 19.158,
+        "mean_wbgt_c": 19.128,
+        "segments_above_soft": 0,
+        "soft_threshold_c": 26.0
+      },
+      "worst": []
+    },
+    "legality": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "lighting": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 10,
+      "summary": {
+        "dark_m": 0.0,
+        "finishes_in_daylight": true,
+        "starts_in_daylight": true,
+        "twilight_threshold_deg": -6.0,
+        "unknown_lit_dark_m": 0.0,
+        "unlit_dark_m": 0.0,
+        "utc_offset_guessed": false,
+        "utc_offset_hours": -7.0
+      },
+      "worst": []
+    },
+    "microclimate": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 10,
+      "summary": {
+        "max_temp_c": 17.822,
+        "min_temp_c": 17.7,
+        "providers": "open-meteo:2",
+        "sites": 2,
+        "sites_answered": 2,
+        "spacing_m": 5000.0
+      },
+      "worst": []
+    },
+    "resupply_schedule": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "segment_hostility": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "services_along": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "stop_density": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "sun_exposure": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": 0.7,
+      "measured_segments": 10,
+      "summary": {
+        "mean_sky_view_factor": 0.922,
+        "peak_irradiance_w_m2": 279.008,
+        "raycast_rung": "full",
+        "shaded_fraction": 0.143,
+        "surface": "shade measured from buildings and dem; canopy unavailable",
+        "utc_offset_guessed": false,
+        "utc_offset_hours": -7.0
+      },
+      "worst": []
+    },
+    "surface_profile": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "trail_status": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    }
+  },
+  "verify": [
+    {
+      "name": "valid_gpx",
+      "number": 1,
+      "offenders": 0,
+      "status": "passed"
+    },
+    {
+      "name": "on_network",
+      "number": 2,
+      "offenders": 0,
+      "status": "skipped"
+    },
+    {
+      "name": "no_gaps",
+      "number": 3,
+      "offenders": 0,
+      "status": "passed"
+    },
+    {
+      "name": "elevation_sane",
+      "number": 4,
+      "offenders": 0,
+      "status": "passed"
+    },
+    {
+      "name": "no_illegal_ways",
+      "number": 5,
+      "offenders": 0,
+      "status": "skipped"
+    },
+    {
+      "name": "no_active_closures",
+      "number": 6,
+      "offenders": 0,
+      "status": "skipped"
+    },
+    {
+      "name": "distance_in_tolerance",
+      "number": 7,
+      "offenders": 0,
+      "status": "skipped"
+    },
+    {
+      "name": "no_dangerous_crossings",
+      "number": 8,
+      "offenders": 0,
+      "status": "skipped"
+    },
+    {
+      "name": "time_constraints",
+      "number": 9,
+      "offenders": 0,
+      "status": "skipped"
+    },
+    {
+      "name": "locks_intact",
+      "number": 10,
+      "offenders": 0,
+      "status": "skipped"
+    }
+  ]
+}

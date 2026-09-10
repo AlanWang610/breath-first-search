@@ -115,8 +115,8 @@ def stop_density(
     frame = RouteFrame(route)
     try:
         stops = _stops_on_route(route, ctx, frame)
-    except LayerNotFound as exc:
-        return unavailable(name, f"node layer unavailable: {exc}")
+    except LayerNotFound:
+        return unavailable(name, "no nodes layer: stops not established")
 
     tolerance = float(ctx.profile.stops_tolerance.value)
     positions = [cum for cum, _ in stops]

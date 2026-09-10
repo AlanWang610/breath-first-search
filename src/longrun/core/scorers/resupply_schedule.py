@@ -172,8 +172,8 @@ def resupply_schedule(
         points = ctx.layers.points_in_corridor(
             corridor(route, buffer_m=DEFAULT_BUFFER_M), all_kinds()
         )
-    except (LayerNotFound, FileNotFoundError) as exc:
-        return unavailable(name, f"amenity layer unavailable: {exc}")
+    except (LayerNotFound, FileNotFoundError):
+        return unavailable(name, "no amenities layer: opening hours not established")
 
     frame = RouteFrame(route)
     open_at: dict[str, list[float]] = {"water": [], "toilet": [], "food": []}

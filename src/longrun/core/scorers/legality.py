@@ -156,8 +156,8 @@ def legality(
     """Hard flags for every segment a pedestrian may not legally be on (scope 7.6)."""
     try:
         by_way = way_tags_in_corridor(route, ctx)
-    except LayerNotFound as exc:
-        return unavailable(name, f"ways layer unavailable: {exc}")
+    except LayerNotFound:
+        return unavailable(name, "no ways layer: pedestrian access not established")
 
     result = ScorerResult(name=name)
     prohibited_m = 0.0

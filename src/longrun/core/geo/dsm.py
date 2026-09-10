@@ -355,12 +355,18 @@ def _finite(value: Any) -> float | None:
 def rasterize_buildings(frame: Any, spec: TileSpec) -> tuple[NDArray[np.float32], int]:
     """Building heights above ground on the tile grid, and how many rows had no height.
 
-    Overlapping footprints take a max, for the same reason `surface` does: two claims
-    about one column of air, and the taller is the one that blocks the sun.
+    **One `rasterize` call, not one per footprint.** A per-building mask is
+    `O(buildings x tile cells)`, which on a downtown corridor is 8,000 footprints against
+    5 million cells and turns a two-second plan into a twenty-minute one. Sorting by height
+    ascending and letting later shapes overwrite earlier ones gives the same `max` semantics
+    in a single pass: where two footprints overlap, the taller was drawn last.
+
+    Taller wins for the same reason `surface` takes a max — two claims about one column of
+    air, and the sun is blocked by the higher one.
     """
     from pyproj import CRS
     from pyproj import Transformer as PyprojTransformer
-    from rasterio.features import geometry_mask
+    from rasterio.features import rasterize
     from shapely.ops import transform as shapely_transform
 
     heights = np.zeros(spec.shape, dtype=np.float32)
@@ -371,6 +377,7 @@ def rasterize_buildings(frame: Any, spec: TileSpec) -> tuple[NDArray[np.float32]
         CRS.from_epsg(4326), CRS.from_epsg(spec.epsg), always_xy=True
     ).transform
 
+    shapes: list[tuple[Any, float]] = []
     missing = 0
     for _, row in frame.iterrows():
         geometry = row.geometry
@@ -380,11 +387,17 @@ def rasterize_buildings(frame: Any, spec: TileSpec) -> tuple[NDArray[np.float32]
         if height is None:
             missing += 1
             continue
-        projected = shapely_transform(to_local, geometry)
-        inside = ~geometry_mask(
-            [projected], out_shape=spec.shape, transform=spec.transform, invert=False
+        shapes.append((shapely_transform(to_local, geometry), float(height)))
+
+    if shapes:
+        shapes.sort(key=lambda pair: pair[1])
+        rasterize(
+            shapes,
+            out=heights,
+            transform=spec.transform,
+            all_touched=False,
+            default_value=0.0,
         )
-        np.maximum(heights, np.where(inside, np.float32(height), np.float32(0.0)), out=heights)
     return heights, missing
 
 
@@ -469,12 +482,15 @@ def build_tile(
             frame = ctx.layers.polygons_intersecting(
                 Corridor(route_id=route.id, buffer_m=0.0, bbox=bbox), BUILDINGS_LAYER
             )
-        except (LayerNotFound, FileNotFoundError) as exc:
+        except (LayerNotFound, FileNotFoundError):
+            # Deliberately without the exception text: a LayerNotFound names an absolute
+            # path, and a coverage reason is both a user-facing sentence and a value a
+            # golden expectation pins. Neither can carry a machine-specific path.
             contributions.append(
                 LayerContribution(
                     layer=BUILDINGS_LAYER,
                     available=False,
-                    reason=f"no buildings layer: {exc}",
+                    reason="no buildings layer in this store",
                 )
             )
         else:

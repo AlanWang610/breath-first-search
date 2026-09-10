@@ -5,6 +5,7 @@ One directory per route under `routes/`:
 ```
 routes/<name>/
   route.gpx         the geometry
+  cache.sqlite      the recorded forecast, replayed offline
   request.yaml      the plan request: an absolute date and a pinned start time
   profile.yaml      the preference profile in force, pinned
   snapshot.json     data-snapshot pins, so the expectation is reproducible
@@ -43,6 +44,12 @@ GeoPackages, because that is what the database gave.
 
 Start with one of each and resist adding more until scorer semantics stop churning. A
 golden suite grown too early becomes a tax that discourages fixing scorers.
+
+There are now exactly two: `synthetic-hazards` (hand-written, every figure checkable)
+and `bay-urban` (real 3DEP terrain and 8,480 Overture buildings). Each caught a class of
+bug the other could not — the synthetic one an azimuth convention and a nodata policy,
+the real one a rasterizing loop that was a hundred times too slow and an absolute path
+in a coverage reason that would have failed on CI.
 
 ## What `expected.json` holds
 

@@ -144,6 +144,9 @@ def repair(
     cache_path: Path | None = typer.Option(
         None, "--cache", help="Cache/cassette file. Overrides LONGRUN_CACHE_DIR."
     ),
+    remote_rasters: bool = typer.Option(
+        False, "--remote-rasters", help="Read 3DEP and canopy over the network."
+    ),
     target_km: float | None = typer.Option(None, "--target-km", help="Target distance."),
     utc_offset: float | None = typer.Option(
         None, "--utc-offset", help="Hours from UTC at the route, e.g. -7 for PDT."
@@ -199,9 +202,13 @@ def repair(
         for layer, vintage in snapshot.layer_vintages.items():
             layers.set_vintage(layer, vintage)
 
+        # Off unless asked. A local fixture of the same name still wins, so this only
+        # fills gaps - and a GDAL /vsicurl/ read bypasses the cache, the budget and
+        # LONGRUN_OFFLINE, which is a hole worth keeping deliberate.
+        remote = _remote_map(route, remote_rasters)
         ctx = ScorerContext(
             layers=layers,
-            rasters=FileRasterStore(root),
+            rasters=FileRasterStore(root, remote=remote),
             cache=cache,
             clock=FrozenClock(start_at),
             coverage=CoverageManifest(),
@@ -285,6 +292,17 @@ def repair(
             typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
         else:
             _echo_utf8(sheet)
+
+
+def _remote_map(route: Any, enabled: bool) -> dict[str, str]:
+    """National raster URLs, or nothing at all when `--remote-rasters` was not given."""
+    if not enabled:
+        return {}
+    from longrun.core.data.rasters import three_dep_url
+    from longrun.core.geo.projections import centroid
+
+    middle = centroid(route)
+    return {"dem": three_dep_url(middle.lat, middle.lon)}
 
 
 def _load_snapshot(path: Path | None) -> SnapshotPins:

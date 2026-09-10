@@ -74,8 +74,8 @@ def segment_hostility(
     """
     try:
         by_way = way_tags_in_corridor(route, ctx)
-    except LayerNotFound as exc:
-        return unavailable(name, f"ways layer unavailable: {exc}")
+    except LayerNotFound:
+        return unavailable(name, "no ways layer: traffic stress not established")
 
     tolerance = int(ctx.profile.traffic_tolerance.value)
     result = ScorerResult(name=name)

@@ -115,8 +115,8 @@ def services_along(
     frame = RouteFrame(route)
     try:
         points = ctx.layers.points_in_corridor(corridor(route, buffer_m=buffer_m), all_kinds())
-    except LayerNotFound as exc:
-        return unavailable(name, f"amenity layer unavailable: {exc}")
+    except LayerNotFound:
+        return unavailable(name, "no amenities layer: services not established")
 
     positions: dict[str, list[float]] = {category: [] for category in SERVICE_CATEGORIES}
     for _, row in points.iterrows():

@@ -1,0 +1,12 @@
+# A real Bay Area corridor, scored against real DEM and real Overture building heights.
+# This is the route that answers M2's exit criterion — "shaded fraction and WBGT per
+# segment from real DSM geometry" — where synthetic-hazards answers whether the numbers
+# are arithmetically right.
+#
+# Late afternoon on purpose. At 07:00 the sun is barely up and a street canyon running
+# with the sun's azimuth is lit down its axis, which is what synthetic-hazards shows. At
+# 17:30 in September the sun is low in the west and San Francisco's downtown blocks put
+# real shadows across real streets, so the shade figure has something to measure.
+date: 2026-09-12
+start: "17:30"
+utc_offset_hours: -7

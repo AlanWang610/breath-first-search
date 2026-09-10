@@ -99,3 +99,16 @@ def test_the_sheet_reports_what_was_not_checked(name: str, tmp_path: Path) -> No
     assert "Coverage" in run.sheet
     for entry in run.plan.coverage.unchecked()[:3]:
         assert entry.source in run.sheet
+
+
+@pytest.mark.parametrize("name", ROUTE_NAMES)
+def test_the_expectation_is_machine_independent(name: str) -> None:
+    """No absolute paths, no home directories, no drive letters.
+
+    A `LayerNotFound` names the directory it looked in, and interpolating one into a
+    coverage reason puts an absolute path into `expected.json` — which passes on the
+    machine that wrote it and fails on every other, CI included. Found exactly that way.
+    """
+    text = (harness.ROUTES_DIR / name / "expected.json").read_text(encoding="utf-8")
+    for pattern in (r"[A-Za-z]:\\\\", r"/home/", r"/Users/", r"\\Users\\\\"):
+        assert not re.search(pattern, text), f"{name}: machine-specific path matching {pattern}"

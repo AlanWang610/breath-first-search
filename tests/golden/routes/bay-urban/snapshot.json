@@ -1,0 +1,13 @@
+{
+  "canopy_version": null,
+  "dem_resolution_m": 10.0,
+  "extra": {
+    "buildings": "Overture 2026-08-19.0 buildings theme, via duckdb over S3",
+    "canopy": "not fetched: the Meta/WRI tile index is 15 MB and this corridor is downtown",
+    "dem": "USGS 3DEP 1/3 arc-second, tile n38w123, clipped to the corridor"
+  },
+  "layer_vintages": {
+    "buildings": "overture-2026-08-19.0"
+  },
+  "osm_extract_date": null
+}

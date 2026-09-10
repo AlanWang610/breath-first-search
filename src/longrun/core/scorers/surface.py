@@ -187,8 +187,8 @@ def surface_profile(
     """Fraction by surface type, with sustained-run and shoulder flags (scope 7.2)."""
     try:
         by_way = way_tags_in_corridor(route, ctx)
-    except LayerNotFound as exc:
-        return unavailable(name, f"ways layer unavailable: {exc}")
+    except LayerNotFound:
+        return unavailable(name, "no ways layer: surface not established")
 
     result = ScorerResult(name=name)
     classes: dict[str, str | None] = {}
