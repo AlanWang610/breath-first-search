@@ -1088,8 +1088,8 @@
     {
       "name": "on_network",
       "number": 2,
-      "offenders": 0,
-      "status": "skipped"
+      "offenders": 64,
+      "status": "failed"
     },
     {
       "name": "no_gaps",

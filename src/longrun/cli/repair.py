@@ -207,6 +207,48 @@ def repair(
         typer.echo(f"error: could not read --snapshot {snapshot_path}: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 
+    score_route(
+        route,
+        request,
+        start_at=start_at,
+        profile=profile,
+        root=root,
+        snapshot=snapshot,
+        offline=offline,
+        cache_path=cache_path,
+        remote_rasters=remote_rasters,
+        utc_offset=utc_offset,
+        out=out,
+    )
+
+
+def score_route(
+    route: Any,
+    request: PlanRequest,
+    *,
+    start_at: datetime,
+    profile: Any,
+    root: Path,
+    snapshot: SnapshotPins,
+    offline: bool = False,
+    cache_path: Path | None = None,
+    remote_rasters: bool = False,
+    utc_offset: float | None = None,
+    out: Path | None = None,
+    router: Any = None,
+) -> Plan:
+    """Score a route and render its sheet. The one pipeline both modes run through.
+
+    Extracted from `repair` when `plan` arrived, so generate mode and repair mode are the
+    same code from the route onwards. Two entry points that each scored a route their own
+    way would drift, and the golden suite only watches one of them.
+
+    `router` is the only difference between the modes and it changes exactly one thing:
+    where way ids come from. Repair mode has none and snaps geometrically
+    (`core.geo.matching`); generate mode has the router that drew the route, so
+    `POST /match` returns real `osm_way_id` values per edge - risk R4's finding, and what
+    scope 6.2's accepted-road set is built from.
+    """
     # Held open with `with`: the connection is otherwise left to the garbage collector, and
     # on Windows an unclosed SQLite handle keeps a file lock, so a leaked one can stop the
     # next run - or a test's tmp_path cleanup - from removing the file.
@@ -239,13 +281,47 @@ def repair(
             utc_offset_hours=utc_offset,
         )
 
-        # Repair mode has no router, so nothing has told us which way each point lies on.
-        # Snap geometrically instead, or every way-tag scorer reads `unknown` for the whole
-        # route and the commonest entry mode becomes the least useful one.
-        match = _match_ways(route, ctx)
-        segments = segment_route(route, way_ids=match.way_ids if match else None)
-        if match is not None:
-            ctx.coverage.record(_matching_coverage(match))
+        # Where way ids come from is the one thing the two modes do differently.
+        #
+        # Generate mode has the router that drew the route, so `POST /match` gives real
+        # `osm_way_id` values per edge - risk R4's finding, and the only source scope 6.2's
+        # accepted-road set can be built from. Repair mode has no router by design (scope
+        # 6.1), so it snaps geometrically instead; without that every way-tag scorer reads
+        # `unknown` for the whole route and the commonest entry mode is the least useful.
+        matched = _matched_way_ids(route, router) if router is not None else None
+        if matched is not None:
+            # The matcher returns the route **snapped to the graph**, which is a different
+            # point list from the one it was given - 268 points for 228 in, on a route the
+            # same router had just drawn. That snapped geometry is the answer, not a
+            # by-product: it is the one that is provably on the network, which is what
+            # check 2 asks and what scope 6.2's accepted-road set is built from.
+            route, way_ids = matched
+            known = sum(1 for w in way_ids if w is not None)
+            segments = segment_route(route, way_ids=way_ids)
+            ctx.coverage.record(
+                CoverageEntry(
+                    source="way_matching",
+                    kind="osm_tags",
+                    checked=True,
+                    reason=f"{known} of {len(way_ids)} points matched by the router",
+                    confidence=round(known / len(way_ids), 3),
+                )
+            )
+            # Zero for **every** point, including the ones with no way id. The matched
+            # geometry is edge geometry: `/match` returns the path *through the graph*, so
+            # each of its points lies on a way whether or not an `osm_way_id` detail range
+            # happened to cover it - the ranges are half-open and leave gaps at junctions.
+            #
+            # Encoding those gaps as `inf` instead made 88 of 268 points check-2 offenders
+            # on a route the router had just drawn, which is scope 12's mistake in
+            # miniature: unknown reported as bad.
+            snapped: list[float] | None = [0.0] * len(route.points)
+        else:
+            match = _match_ways(route, ctx)
+            segments = segment_route(route, way_ids=match.way_ids if match else None)
+            snapped = list(match.distances_m) if match is not None else None
+            if match is not None:
+                ctx.coverage.record(_matching_coverage(match))
 
         # sample_elevation already returns all-None where the DEM has no coverage, which is
         # what "unknown elevation" looks like downstream (scope 12).
@@ -278,6 +354,11 @@ def repair(
             results=results,
             etas=eta_vector.etas,
             elevations=elevations,
+            # Check 2 has skipped on every plan since M1.7, and not for want of the data:
+            # `assign_way_ids` has returned a per-point snap distance all along and nobody
+            # passed it here. "No map-matching result available" was true of the argument,
+            # not of the run.
+            snapped_distances_m=snapped,
         )
         plan = Plan(
             id=f"{route.id}-{uuid.uuid4().hex[:8]}",
@@ -304,6 +385,8 @@ def repair(
             typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
         else:
             _echo_utf8(sheet)
+
+    return plan
 
 
 def _remote_map(route: Any, enabled: bool) -> dict[str, str]:
@@ -405,3 +488,23 @@ def register(app: typer.Typer) -> None:
 
 
 __all__ = ["register", "repair"]
+
+
+def _matched_way_ids(route: Any, router: Any) -> tuple[Any, list[int | None]] | None:
+    """The snapped route and its per-point way ids, or None when the matcher could not say.
+
+    Returns both, because the matcher's answer is a *different route*: it snaps each point
+    onto the graph and returns the resulting geometry, which has its own point count. Using
+    the ids against the original points would put every tag on the wrong point.
+
+    None rather than a list of Nones, so the caller falls back to geometric snapping: a
+    matcher that returned nothing is a reason to use the fallback, not a reason to score a
+    route with no tags at all.
+    """
+    try:
+        matched, way_ids = router.map_match(route)
+    except Exception:  # noqa: BLE001 - matching is optional; the route is not
+        return None
+    if not way_ids or len(way_ids) != len(matched.points) or not any(way_ids):
+        return None
+    return matched, list(way_ids)

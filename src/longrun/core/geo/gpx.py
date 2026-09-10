@@ -84,6 +84,55 @@ def normalize(
     return out
 
 
+#: Longest gap between consecutive route points before `densify` fills it in.
+#:
+#: Scope 7.4 integrates irradiance at arrival times and a plan samples roughly every 100 m,
+#: so 50 m is comfortably under what the scorers assume. A router emits points at junctions
+#: only - GraphHopper put 133 m between two of them on a straight San Francisco street -
+#: and every per-point measurement in the system is that much coarser without this.
+DEFAULT_MAX_SPACING_M = 50.0
+
+
+def densify(
+    points: list[RoutePoint], max_spacing_m: float = DEFAULT_MAX_SPACING_M
+) -> list[RoutePoint]:
+    """Insert points so no two consecutive ones are more than `max_spacing_m` apart.
+
+    `normalize`'s opposite number, and its complement: that one drops points too close
+    together to mean anything, this one fills gaps too large to sample through. Both exist
+    because the two sources of a route have opposite defects - a GPS track is dense and
+    noisy, and a routed path is sparse and exact.
+
+    Interpolated linearly in degrees. Over 50 m that is indistinguishable from a great
+    circle at any latitude this project runs at, and the inserted points are *sampling*
+    positions rather than claims about where the path went - the router already said that
+    with the two points either side.
+
+    Elevation is not interpolated. It comes from the terrain model (scope 7.1), never from
+    the route, and `sample_elevation` reads the new points like any other.
+    """
+    if len(points) < 2 or max_spacing_m <= 0:
+        return list(points)
+
+    out: list[RoutePoint] = [points[0]]
+    for previous, current in zip(points[:-1], points[1:], strict=True):
+        gap = haversine_m(previous.lat, previous.lon, current.lat, current.lon)
+        steps = int(gap // max_spacing_m)
+        for step in range(1, steps + 1):
+            fraction = step / (steps + 1)
+            out.append(
+                RoutePoint(
+                    lat=previous.lat + (current.lat - previous.lat) * fraction,
+                    lon=previous.lon + (current.lon - previous.lon) * fraction,
+                )
+            )
+        out.append(current)
+
+    # Distances are recomputed rather than adjusted: the inserted points change every
+    # cumulative distance after them, and `cum_dist_m` is what every scorer keys off.
+    return normalize([(p.lat, p.lon, p.ele_m) for p in out], dedupe_m=0.0)
+
+
 def gpx_read(
     source: str | Path | IO[str],
     route_id: str = "route",
@@ -111,12 +160,32 @@ def gpx_read(
     return Route(id=route_id, points=points, name=name, source="imported")
 
 
+def gpx_string(
+    route: Route, waypoints: list[tuple[LatLon, str, WaypointKind]] | None = None
+) -> str:
+    """The same GPX 1.1 `gpx_write` writes, as a string.
+
+    Split out because GraphHopper's `/match` takes a GPX **body** rather than JSON, and
+    routing a route through a temporary file to post it would be a second serialiser with
+    a filesystem in the middle of it.
+    """
+    return _build(route, waypoints).to_xml(version="1.1")
+
+
 def gpx_write(
     route: Route,
     destination: str | Path,
     waypoints: list[tuple[LatLon, str, WaypointKind]] | None = None,
 ) -> Path:
     """Emit GPX 1.1 with the route as a track, plus typed waypoints (scope 9)."""
+    path = Path(destination)
+    path.write_text(gpx_string(route, waypoints), encoding="utf-8")
+    return path
+
+
+def _build(
+    route: Route, waypoints: list[tuple[LatLon, str, WaypointKind]] | None = None
+) -> gpxpy.gpx.GPX:
     gpx = gpxpy.gpx.GPX()
     gpx.creator = "longrun"
 
@@ -136,6 +205,4 @@ def gpx_write(
             )
         )
 
-    path = Path(destination)
-    path.write_text(gpx.to_xml(version="1.1"), encoding="utf-8")
-    return path
+    return gpx

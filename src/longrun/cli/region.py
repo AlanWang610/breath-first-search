@@ -193,8 +193,57 @@ def load_gtfs(
         raise typer.Exit(code=1)
 
 
+def build_region(
+    spec_path: Path = typer.Argument(
+        ..., help="Region spec YAML, e.g. deploy/regions/bayarea.yaml."
+    ),
+    dsn: str | None = typer.Option(None, "--dsn", help="PostGIS connection string."),
+    manifest: Path | None = typer.Option(
+        None, "--manifest", help="Where the build manifest is written. Defaults beside the spec."
+    ),
+    force: bool = typer.Option(False, "--force", help="Re-run steps a previous build finished."),
+    only: str | None = typer.Option(
+        None, "--only", help="Comma-separated step names to run, e.g. layers,coverage_report."
+    ),
+) -> None:
+    """Build a region: the five idempotent steps of scope 13.
+
+    Resumable. A run that dies in step 2 picks up in step 2 rather than re-fetching a
+    hundred megabytes of TIGER to get there, and a step whose input does not exist is
+    recorded as `blocked` with the reason rather than skipped silently.
+    """
+    from longrun.regions.build import RegionSpec
+    from longrun.regions.build import build_region as run
+
+    if not spec_path.exists():
+        typer.echo(f"error: no such region spec: {spec_path}", err=True)
+        raise typer.Exit(code=2)
+
+    try:
+        spec = RegionSpec.load(spec_path)
+    except (ValueError, OSError) as exc:
+        typer.echo(f"error: could not read {spec_path}: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    target = manifest or spec_path.with_suffix(".build.json")
+    steps = [s.strip() for s in only.split(",")] if only else None
+    typer.echo(f"building region {spec.name!r} from {spec_path}")
+
+    with _connect(dsn) as connection:
+        report = run(spec, connection, target, force=force, only=steps, log=typer.echo)
+
+    typer.echo(f"manifest: {target}")
+    failed = [name for name, record in report.steps.items() if record.status == "failed"]
+    if failed:
+        typer.echo(f"error: {', '.join(failed)} failed", err=True)
+        raise typer.Exit(code=1)
+    if not report.complete:
+        typer.echo("incomplete: some steps have not run")
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
     app.command("load-tiger")(load_tiger)
     app.command("load-nhd")(load_nhd)
     app.command("load-gtfs")(load_gtfs)
+    app.command("build-region")(build_region)

@@ -80,8 +80,25 @@ def _everything_in_corridor(store: PostGISLayerStore, layer: str, box: Corridor)
 
 
 def _write_layer(frame: GeoDataFrame, path: Path) -> int:
-    """Write one layer, dropping columns GeoPackage cannot carry."""
-    keep = [c for c in frame.columns if c == frame.geometry.name or _is_simple(frame[c])]
+    """Write one layer, dropping columns GeoPackage cannot carry.
+
+    Two kinds of column go: values GDAL cannot hold (below), and **names that differ only
+    in case**. A GeoPackage is SQLite and its column names are case-insensitive, so a
+    corridor carrying both OSM's `fixme` and `FIXME` - which a wide one always does -
+    fails the whole write with `FieldError: Error adding field 'FIXME'`. The first spelling
+    wins, which is the one a scorer asking `tags.get("fixme")` would have read anyway.
+    """
+    seen: set[str] = set()
+    keep: list[str] = []
+    for column in frame.columns:
+        if column == frame.geometry.name:
+            keep.append(column)
+            continue
+        lowered = column.lower()
+        if lowered in seen or not _is_simple(frame[column]):
+            continue
+        seen.add(lowered)
+        keep.append(column)
     trimmed = frame[keep]
     if path.exists():
         path.unlink()
