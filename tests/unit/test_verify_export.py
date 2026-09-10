@@ -302,6 +302,33 @@ def test_qualified_source_names_resolve() -> None:
     assert attribution.licence_for("osm_ways") is not None
 
 
+def test_every_layer_a_scorer_can_read_has_a_licence() -> None:
+    """Scope 14 is a licence obligation, and a scorer reports the *layer* it read.
+
+    A scorer's coverage entry says `ways`, not `osm` — that is what it asked the store for.
+    Until the M3 loader existed no real plan had an OSM layer in its coverage, so every
+    sheet's attribution block was accidentally complete; the first corridor with ways in it
+    printed three `LICENCE NOT RECORDED` lines for data that is ODbL and share-alike.
+
+    This walks the store's own table map, so a layer added there without a licence entry
+    fails here rather than on someone's sheet.
+    """
+    from longrun.core.data.postgis import DEFAULT_LAYER_TABLES
+
+    missing = [layer for layer in DEFAULT_LAYER_TABLES if attribution.licence_for(layer) is None]
+    assert not missing, f"layers with no licence entry: {missing}"
+
+
+def test_the_osm_layers_are_attributed_to_openstreetmap() -> None:
+    """Not merely *a* licence: the right one. `ways` resolving to a public-domain row
+    would pass the test above and still be a licence violation."""
+    for layer in ("ways", "nodes", "amenities", "railways", "way_matching"):
+        licence = attribution.licence_for(layer)
+        assert licence is not None and licence.source == "osm", (layer, licence)
+    assert "OpenStreetMap" in attribution.render(["ways", "nodes"])
+    assert attribution.unattributed(["ways", "nodes", "way_matching"]) == []
+
+
 def test_an_unknown_source_is_surfaced_not_hidden() -> None:
     """An unattributed source is a licence bug and should be visible immediately."""
     assert attribution.unattributed(["some_new_feed"]) == ["some_new_feed"]

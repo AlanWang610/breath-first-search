@@ -2,6 +2,13 @@
   "coverage": [
     {
       "checked": true,
+      "kind": "osm_tags",
+      "reason": null,
+      "source": "way_matching",
+      "vintage": null
+    },
+    {
+      "checked": true,
       "kind": "osm_access_tags",
       "reason": null,
       "source": "ways",

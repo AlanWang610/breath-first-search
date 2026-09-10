@@ -1,52 +1,66 @@
 {
   "coverage": [
     {
-      "checked": false,
+      "checked": true,
       "kind": "osm_tags",
-      "reason": "no ways layer available to match the route against",
+      "reason": "62% of route points snapped to a way within 25 m; 48 point(s) carry no way tags",
       "source": "way_matching",
       "vintage": null
     },
     {
-      "checked": false,
-      "kind": "legality",
-      "reason": "no ways layer: pedestrian access not established",
-      "source": "legality",
-      "vintage": null
+      "checked": true,
+      "kind": "osm_access_tags",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "osm_tags",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "osm_crossings",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "traffic_signals",
+      "reason": null,
+      "source": "nodes",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "osm_stops",
+      "reason": null,
+      "source": "nodes",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "osm_surface",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "services",
+      "reason": null,
+      "source": "nodes",
+      "vintage": "2026-09-04"
     },
     {
       "checked": false,
-      "kind": "segment_hostility",
-      "reason": "no ways layer: traffic stress not established",
-      "source": "segment_hostility",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "crossings",
-      "reason": "no ways layer: crossings not established",
-      "source": "crossings",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "stop_density",
-      "reason": "no nodes layer: stops not established",
-      "source": "stop_density",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "surface_profile",
-      "reason": "no ways layer: surface not established",
-      "source": "surface_profile",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "services_along",
-      "reason": "no amenities layer: services not established",
-      "source": "services_along",
+      "kind": "park_boundaries",
+      "reason": "no park layer: park containment not established",
+      "source": "parks",
       "vintage": null
     },
     {
@@ -92,11 +106,11 @@
       "vintage": null
     },
     {
-      "checked": false,
+      "checked": true,
       "kind": "lit_tags",
-      "reason": "no ways layer: street lighting not established",
+      "reason": null,
       "source": "ways",
-      "vintage": null
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -113,11 +127,11 @@
       "vintage": null
     },
     {
-      "checked": false,
-      "kind": "resupply_schedule",
-      "reason": "no amenities layer: opening hours not established",
-      "source": "resupply_schedule",
-      "vintage": null
+      "checked": true,
+      "kind": "opening_hours",
+      "reason": null,
+      "source": "nodes",
+      "vintage": "2026-09-04"
     },
     {
       "checked": false,
@@ -162,17 +176,322 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "5620a0812fbc9c5e6329ae9d04ae4708ea4391fd73015fdf07b07b121297ac82",
+  "measurements_sha256": "9f5c1fad3ae940b590ee2fe703114afd821f6008c71178fc04604cca22909200",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
   },
-  "residual_flags": [],
+  "residual_flags": [
+    {
+      "kind": "hard",
+      "reason_code": "lts_4",
+      "scorer": "segment_hostility",
+      "segment_id": "s00040",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "lts_4",
+      "scorer": "segment_hostility",
+      "segment_id": "s00038",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "foot_private",
+      "scorer": "legality",
+      "segment_id": "s00007",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "foot_private",
+      "scorer": "legality",
+      "segment_id": "s00016",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "foot_no",
+      "scorer": "legality",
+      "segment_id": "s00038",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "access_no",
+      "scorer": "legality",
+      "segment_id": "s00039",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "foot_no",
+      "scorer": "legality",
+      "segment_id": "s00040",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "access_private",
+      "scorer": "legality",
+      "segment_id": "s00047",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "hard",
+      "reason_code": "access_private",
+      "scorer": "legality",
+      "segment_id": "s00050",
+      "severity": 1.0,
+      "tier": "safety"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00050",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00049",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00048",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00047",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00046",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00045",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00044",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00043",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00042",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00041",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00040",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00039",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00038",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00037",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00036",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00035",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00034",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00033",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00032",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00031",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00030",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00029",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00028",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00027",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00026",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00025",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00024",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "stops_per_km_above_tolerance",
+      "scorer": "stop_density",
+      "segment_id": "s00023",
+      "severity": 1.0,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "lts_3",
+      "scorer": "segment_hostility",
+      "segment_id": "s00039",
+      "severity": 0.667,
+      "tier": "comfort"
+    }
+  ],
   "route": {
     "length_m": 2026.6,
     "point_count": 126,
-    "segment_count": 9,
-    "segments_matched_to_a_way": 0
+    "segment_count": 51,
+    "segments_matched_to_a_way": 43
   },
   "scorers": {
     "access_hours": {
@@ -191,10 +510,10 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 10,
+      "measured_segments": 52,
       "summary": {
         "max_us_aqi": 57.0,
-        "mean_us_aqi": 54.222,
+        "mean_us_aqi": 54.157,
         "sites": 2,
         "sites_answered": 2,
         "source": "open-meteo (CAMS model)"
@@ -226,9 +545,15 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "crossings": 1,
+        "crossings_per_km": 0.493,
+        "grade_separated": 0,
+        "signals_checked": true,
+        "unsignalized": 0
+      },
       "worst": []
     },
     "hazards": {
@@ -246,13 +571,13 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.64,
-      "measured_segments": 10,
+      "mean_confidence": 0.615,
+      "measured_segments": 52,
       "summary": {
         "formula": "ACSM/BoM approximation: temperature and humidity only",
         "hard_floor_c": 30.0,
-        "max_wbgt_c": 19.158,
-        "mean_wbgt_c": 19.128,
+        "max_wbgt_c": 19.16,
+        "mean_wbgt_c": 19.13,
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
@@ -260,13 +585,54 @@
     },
     "legality": {
       "flags": {
-        "hard": 0,
+        "hard": 7,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
-      "worst": []
+      "mean_confidence": 0.892,
+      "measured_segments": 52,
+      "summary": {
+        "length_m": 2026.637,
+        "prohibited_m": 202.648,
+        "prohibited_segments": 7,
+        "unknown_m": 775.573
+      },
+      "worst": [
+        {
+          "kind": "hard",
+          "reason_code": "foot_private",
+          "segment_id": "s00007",
+          "severity": 1.0,
+          "tier": "safety"
+        },
+        {
+          "kind": "hard",
+          "reason_code": "foot_private",
+          "segment_id": "s00016",
+          "severity": 1.0,
+          "tier": "safety"
+        },
+        {
+          "kind": "hard",
+          "reason_code": "foot_no",
+          "segment_id": "s00038",
+          "severity": 1.0,
+          "tier": "safety"
+        },
+        {
+          "kind": "hard",
+          "reason_code": "access_no",
+          "segment_id": "s00039",
+          "severity": 1.0,
+          "tier": "safety"
+        },
+        {
+          "kind": "hard",
+          "reason_code": "foot_no",
+          "segment_id": "s00040",
+          "severity": 1.0,
+          "tier": "safety"
+        }
+      ]
     },
     "lighting": {
       "flags": {
@@ -274,7 +640,7 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 10,
+      "measured_segments": 52,
       "summary": {
         "dark_m": 0.0,
         "finishes_in_daylight": true,
@@ -294,9 +660,9 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 10,
+      "measured_segments": 52,
       "summary": {
-        "max_temp_c": 17.823,
+        "max_temp_c": 17.827,
         "min_temp_c": 17.7,
         "providers": "open-meteo:2",
         "sites": 2,
@@ -310,40 +676,129 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "carry_capacity_ml": 500.0,
+        "max_dry_gap_min": 4.26,
+        "max_food_gap_min": 3.455,
+        "max_toilet_gap_min": 5.453,
+        "services_with_unreadable_hours": 0,
+        "suggested_carry_ml": 42.599,
+        "water_hard_threshold_min": 150.0,
+        "water_soft_threshold_min": 90.0,
+        "wbgt_used_c": 19.16
+      },
       "worst": []
     },
     "segment_hostility": {
       "flags": {
-        "hard": 0,
-        "soft": 0
+        "hard": 2,
+        "soft": 1
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
-      "worst": []
+      "mean_confidence": 0.697,
+      "measured_segments": 52,
+      "summary": {
+        "fraction_lts3_plus": 0.057,
+        "length_m": 2026.637,
+        "lts4_count": 2,
+        "scored_m": 1251.064,
+        "traffic_tolerance": 2
+      },
+      "worst": [
+        {
+          "kind": "hard",
+          "reason_code": "lts_4",
+          "segment_id": "s00038",
+          "severity": 1.0,
+          "tier": "safety"
+        },
+        {
+          "kind": "hard",
+          "reason_code": "lts_4",
+          "segment_id": "s00040",
+          "severity": 1.0,
+          "tier": "safety"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "lts_3",
+          "segment_id": "s00039",
+          "severity": 0.667,
+          "tier": "comfort"
+        }
+      ]
     },
     "services_along": {
       "flags": {
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 0.804,
+      "measured_segments": 52,
+      "summary": {
+        "buffer_m": 200.0,
+        "food_count": 39,
+        "max_food_gap_m": 557.039,
+        "max_toilet_gap_m": 828.581,
+        "max_water_gap_m": 713.718,
+        "parks_checked": false,
+        "toilet_count": 15,
+        "water_count": 11
+      },
       "worst": []
     },
     "stop_density": {
       "flags": {
         "hard": 0,
-        "soft": 0
+        "soft": 28
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
-      "worst": []
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "gates": 5,
+        "signals": 7,
+        "stops": 12,
+        "stops_per_km": 5.921,
+        "stops_tolerance": 3.0
+      },
+      "worst": [
+        {
+          "kind": "soft",
+          "reason_code": "stops_per_km_above_tolerance",
+          "segment_id": "s00023",
+          "severity": 1.0,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "stops_per_km_above_tolerance",
+          "segment_id": "s00024",
+          "severity": 1.0,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "stops_per_km_above_tolerance",
+          "segment_id": "s00025",
+          "severity": 1.0,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "stops_per_km_above_tolerance",
+          "segment_id": "s00026",
+          "severity": 1.0,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "stops_per_km_above_tolerance",
+          "segment_id": "s00027",
+          "severity": 1.0,
+          "tier": "comfort"
+        }
+      ]
     },
     "sun_exposure": {
       "flags": {
@@ -351,7 +806,7 @@
         "soft": 0
       },
       "mean_confidence": 0.7,
-      "measured_segments": 10,
+      "measured_segments": 52,
       "summary": {
         "mean_sky_view_factor": 0.921,
         "peak_irradiance_w_m2": 279.007,
@@ -369,9 +824,17 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 0.648,
+      "measured_segments": 52,
+      "summary": {
+        "paved_fraction": 0.301,
+        "paved_m": 609.359,
+        "surface_preference": "mixed",
+        "unknown_fraction": 0.699,
+        "unknown_m": 1417.278,
+        "unpaved_fraction": 0.0,
+        "unpaved_m": 0.0
+      },
       "worst": []
     },
     "trail_status": {
@@ -413,8 +876,8 @@
     {
       "name": "no_illegal_ways",
       "number": 5,
-      "offenders": 0,
-      "status": "skipped"
+      "offenders": 7,
+      "status": "failed"
     },
     {
       "name": "no_active_closures",
@@ -432,7 +895,7 @@
       "name": "no_dangerous_crossings",
       "number": 8,
       "offenders": 0,
-      "status": "skipped"
+      "status": "passed"
     },
     {
       "name": "time_constraints",

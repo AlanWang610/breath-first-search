@@ -194,6 +194,11 @@ def freeze_fixture(
             vintage = store.vintage(layer)
             if vintage is not None:
                 pins.layer_vintages[layer] = vintage
+                # Scope 6.4 asks for the extract date by name, and until the OSM loader
+                # existed there was nothing to read it from. `ways` is the layer that
+                # carries it: every other OSM layer came out of the same file.
+                if layer == "ways":
+                    pins.osm_extract_date = vintage
             typer.echo(f"froze {layer}: {count} features, vintage {vintage or 'unrecorded'}")
 
     if dem:
@@ -201,8 +206,43 @@ def freeze_fixture(
         typer.echo(f"froze dem: {pins.dem_resolution_m:.0f} m resolution")
 
     snapshot = out.parent / "snapshot.json"
-    snapshot.write_text(pins.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    merged = _merge_pins(snapshot, pins)
+    snapshot.write_text(merged.model_dump_json(indent=2) + "\n", encoding="utf-8")
     typer.echo(f"wrote {snapshot}")
+
+
+def _merge_pins(snapshot: Path, fresh: SnapshotPins) -> SnapshotPins:
+    """Fold this run's pins into whatever the route already recorded.
+
+    A freeze names its layers, so most runs re-freeze *some* of them. Writing the pins
+    whole would then silently drop every pin this run did not produce — re-freezing the
+    vector layers would erase `dem_resolution_m`, which scope 6.4 requires the manifest to
+    carry and which nothing downstream would notice was missing.
+
+    A route's `snapshot.json` also carries hand-written `extra` notes ("canopy not fetched:
+    the tile index is 15 MB and this corridor is downtown"). Those are provenance a
+    reviewer wrote, and no freeze should be able to delete them. Delete the file to start
+    clean; that is the deliberate act, and overwriting is not.
+    """
+    if not snapshot.exists():
+        return fresh
+
+    try:
+        previous = SnapshotPins.model_validate_json(snapshot.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        typer.echo(f"warning: could not read {snapshot}, replacing it: {exc}", err=True)
+        return fresh
+
+    merged = previous.model_copy(deep=True)
+    merged.layer_vintages.update(fresh.layer_vintages)
+    merged.extra.update(fresh.extra)
+    if fresh.dem_resolution_m is not None:
+        merged.dem_resolution_m = fresh.dem_resolution_m
+    if fresh.canopy_version is not None:
+        merged.canopy_version = fresh.canopy_version
+    if fresh.osm_extract_date is not None:
+        merged.osm_extract_date = fresh.osm_extract_date
+    return merged
 
 
 def freeze_cassette(

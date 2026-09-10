@@ -29,16 +29,49 @@ figure has something to measure. Peak irradiance is 279 W/m² against the synthe
 | DEM | USGS 3DEP 1/3 arc-second, tile `n38w123`, clipped | real, −1.1 to 5.7 m along the route |
 | Buildings | Overture `2026-08-19.0`, via duckdb over S3 | real, 6,470 of 7,038 with a height |
 | Canopy | Meta/WRI | **not fetched** — the tile index is 15 MB and this corridor is downtown |
-| Ways, nodes, amenities | OSM | **absent** — the loaders are M3 |
+| Ways, nodes, amenities | OSM, Geofabrik NorCal clipped to the Bay Area, `2026-09-04` | real, via `longrun load-osm` → PostGIS → `freeze-fixture` |
+| Parks | PAD-US | **absent** — that loader is still M3 |
 
-Six scorers therefore report `unavailable` on this route, and that is the point rather than
-a defect: `legality`, `segment_hostility`, `crossings`, `stop_density`, `surface_profile`
-and `services_along` all need OSM, `longrun freeze-fixture` is written and tested, and the
-region build that would populate PostGIS is M3. The coverage manifest says so in one line
-each, which is the scope §3.6 behaviour this fixture exercises hardest.
+All twelve implemented scorers now measure. The five that report `unavailable` are the
+ones whose milestone has not arrived: `closures`, `trail_status` and `access_hours` need
+the M4 adapter registry, `hazards` needs NHD, `bailouts` needs GTFS.
 
-`segments_matched_to_a_way` is **0** for the same reason, so verification check 2
-(`on_network`) reports `skipped`, not passed.
+## What the OSM layers changed, and what to read in them
+
+Segments went from 9 to 51. That is scope's segment rule working rather than a tuning
+change: with no way ids a route is cut into uniform ~250 m pieces, and with them it is cut
+at way-change boundaries.
+
+**Seven HARD legality flags on a waterfront route is not a bug, and it took checking.**
+Two are pier gangways tagged `foot=private, bridge=yes, layer=1`, snapped 2 m and 20 m from
+the line. Three more are at 1655–1726 m where the route leaves the promenade and runs onto
+The Embarcadero itself (`highway=primary, foot=no, lanes=4`), its Muni busway
+(`access=no`), and the Bay Street ramp (`primary_link, foot=no`, snapped 0.1 m). The route
+really does go there. This is `repair` mode doing its job on a route with problems in it.
+
+**One crossing on a 2 km San Francisco route is also right, and checking it caught a
+wrong explanation.** Eighteen ways meet the route line; twelve are `service` driveways and
+parking aisles, below `crossings.MIN_REPORTED_RANK`. Four are secondary or above, and
+three of those — The Embarcadero as `primary` and again as `secondary`, and one of the two
+Bay Street `primary_link` ramps — are ways the route *runs along*, which `own_way_ids`
+excludes. What is left is the **other** Bay Street ramp, way 368095536, and it is
+`primary_link` rather than the secondary road a first reading of the code suggested. It
+carries no `maxspeed`, so it would classify as `unsignalized_primary_crossing_unknown_speed`
+at severity 0.7 — except that `signal_positions` finds a `traffic_signals` node within 30 m,
+which is correct: Bay Street at The Embarcadero is a signalized intersection. Hence
+`unsignalized: 0` and no flag.
+
+That correction came from a sabotage, not from reading. Lowering the threshold to
+`tertiary` changed nothing, because no tertiary way meets this route — a vacuous sabotage
+of exactly the kind M2.2 hit. Raising it to `primary` was the one that bit, and it bit
+`synthetic-hazards` while leaving `bay-urban` untouched, which is what proved the surviving
+crossing was primary-class all along.
+
+**62% of route points snap to a way within 25 m**, so 38% of the route carries no tags at
+all: `legality` reports 776 m of 2027 m as unknown and `surface_profile` reports 70%
+unknown, which are the same fact seen twice. That figure now reaches the coverage manifest
+on every run. Until this fixture existed it was recorded only below 50%, so a route like
+this one said nothing at all — a cliff no reader could see.
 
 ## Fixture extent
 

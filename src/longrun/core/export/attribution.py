@@ -77,11 +77,38 @@ LICENCES: dict[str, SourceLicence] = {
 }
 
 
+def _layer_sources() -> dict[str, str]:
+    """Layer name -> source, derived from the store's own table map rather than restated.
+
+    A scorer records the *layer* it read — `ways`, `nodes`, `parks` — because that is what
+    it asked the store for. Attribution is owed by *source*, and the mapping between them
+    is already written down exactly once, as the schema half of `DEFAULT_LAYER_TABLES`:
+    `ways` lives in `osm.ways`, `parks` in `padus.units`. Deriving it here means a layer
+    added to the store cannot arrive unattributed because someone forgot a second table.
+
+    This became load-bearing the moment the OSM loader landed. Before it, no real plan had
+    an OSM layer in its coverage, so every sheet's attribution block was accidentally
+    complete; the first corridor with ways in it printed three `LICENCE NOT RECORDED`
+    lines for data that is ODbL and share-alike.
+    """
+    from longrun.core.data.postgis import DEFAULT_LAYER_TABLES
+
+    return {layer: table.partition(".")[0] for layer, table in DEFAULT_LAYER_TABLES.items()}
+
+
+#: Coverage sources that are neither a layer nor a source: derivations that read one.
+#: `way_matching` snaps route points onto OSM ways, so what it reports is OSM's.
+DERIVED_SOURCES: dict[str, str] = {"way_matching": "osm"}
+
+
 def licence_for(source: str) -> SourceLicence | None:
-    """Look up a source's licence, tolerating the `osm_ways`-style qualified names."""
+    """Look up a source's licence, resolving layer names and `osm_ways`-style prefixes."""
     key = source.lower()
     if key in LICENCES:
         return LICENCES[key]
+    resolved = DERIVED_SOURCES.get(key) or _layer_sources().get(key)
+    if resolved is not None and resolved in LICENCES:
+        return LICENCES[resolved]
     return next((v for k, v in LICENCES.items() if key.startswith(k)), None)
 
 

@@ -237,19 +237,8 @@ def repair(
         # route and the commonest entry mode becomes the least useful one.
         match = _match_ways(route, ctx)
         segments = segment_route(route, way_ids=match.way_ids if match else None)
-        if match is not None and not match.is_usable:
-            ctx.coverage.record(
-                CoverageEntry(
-                    source="way_matching",
-                    kind="osm_tags",
-                    checked=False,
-                    reason=(
-                        f"only {match.match_rate:.0%} of route points snapped to a way within "
-                        f"{match.tolerance_m:.0f} m; tag-driven scorers cover a minority of "
-                        f"this route"
-                    ),
-                )
-            )
+        if match is not None:
+            ctx.coverage.record(_matching_coverage(match))
 
         # sample_elevation already returns all-None where the DEM has no coverage, which is
         # what "unknown elevation" looks like downstream (scope 12).
@@ -348,6 +337,44 @@ def _match_ways(route: Any, ctx: ScorerContext) -> Any:
         )
         return None
     return assign_way_ids(route, ways)
+
+
+def _matching_coverage(match: Any) -> CoverageEntry:
+    """Report how much of the route carries way tags at all (scope 3.6, 12).
+
+    Recorded on **every** run, and that is a correction rather than a tidy-up. Until the
+    OSM loader landed there was no real corridor to notice it on, and the entry was written
+    only when `is_usable` was False — below 50%. The first real corridor snapped 62% of its
+    points, so 38% of the route had no tags, every tag-driven scorer quietly described the
+    other 62%, and the sheet said nothing at all.
+
+    That is precisely the failure mode scope 12 names: a partial answer presented as a
+    whole one. A silence at 62% and a warning at 49% is a cliff no reader can see.
+    """
+    rate = match.match_rate
+    if rate >= 1.0:
+        return CoverageEntry(
+            source="way_matching",
+            kind="osm_tags",
+            checked=True,
+            reason=None,
+            confidence=1.0,
+        )
+    unmatched = len(match.way_ids) - match.matched
+    tail = (
+        "tag-driven scorers cover a minority of this route"
+        if not match.is_usable
+        else f"{unmatched} point(s) carry no way tags"
+    )
+    return CoverageEntry(
+        source="way_matching",
+        kind="osm_tags",
+        checked=match.is_usable,
+        reason=(
+            f"{rate:.0%} of route points snapped to a way within {match.tolerance_m:.0f} m; {tail}"
+        ),
+        confidence=round(rate, 3),
+    )
 
 
 def _echo_utf8(text: str) -> None:
