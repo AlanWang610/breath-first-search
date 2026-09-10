@@ -66,7 +66,19 @@ NODE_KINDS: dict[str, frozenset[str]] = {
     "highway": frozenset({"traffic_signals", "crossing", "stop", "give_way", "mini_roundabout"}),
     "railway": frozenset({"level_crossing", "crossing"}),
     "barrier": frozenset(
-        {"gate", "lift_gate", "swing_gate", "kissing_gate", "stile", "bollard", "cycle_barrier"}
+        {
+            "gate",
+            "lift_gate",
+            "swing_gate",
+            "kissing_gate",
+            "stile",
+            "bollard",
+            "cycle_barrier",
+            # Named by scope 7.6 as a hazard rather than by 7.2 as a stop, and it is both:
+            # a cattle grid is something you slow for and something you can turn an ankle
+            # on. `hazards` reads it; `stop_density` counts it like any other barrier.
+            "cattle_grid",
+        }
     ),
 }
 

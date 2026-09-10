@@ -52,7 +52,18 @@ POINT_LAYERS = frozenset({"nodes", "amenities"})
 #: The layers a fixture carries. Fewer than `DEFAULT_LAYER_TABLES` on purpose: freezing a
 #: layer no scorer reads inflates the corridor extract for nothing, and the cap on
 #: committed fixture size is what keeps the golden suite fast.
-DEFAULT_LAYERS: tuple[str, ...] = ("ways", "nodes", "amenities", "parks")
+#:
+#: `railways` and `flowlines` joined when `hazards` landed and started reading them.
+#: `boundaries` has not, because no *scorer* reads it — jurisdiction discovery is the
+#: region build's step 4 and the M4 adapters', both of which have a live database.
+DEFAULT_LAYERS: tuple[str, ...] = (
+    "ways",
+    "nodes",
+    "amenities",
+    "parks",
+    "railways",
+    "flowlines",
+)
 
 
 def _everything_in_corridor(store: PostGISLayerStore, layer: str, box: Corridor) -> GeoDataFrame:

@@ -134,6 +134,48 @@
       "vintage": "2026-09-04"
     },
     {
+      "checked": true,
+      "kind": "osm_hazard_tags",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "rail_crossings",
+      "reason": null,
+      "source": "railways",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "water_crossings",
+      "reason": null,
+      "source": "flowlines",
+      "vintage": "nhd-hu4"
+    },
+    {
+      "checked": true,
+      "kind": "cattle_grids",
+      "reason": null,
+      "source": "nodes",
+      "vintage": "2026-09-04"
+    },
+    {
+      "checked": true,
+      "kind": "seasonal_snow",
+      "reason": null,
+      "source": "dem",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "warnings",
+      "reason": "LONGRUN_NWS_USER_AGENT is not set; NWS requires a contact string",
+      "source": "nws_alerts",
+      "vintage": null
+    },
+    {
       "checked": false,
       "kind": "closures",
       "reason": "needs the jurisdiction adapter registry (M4)",
@@ -156,13 +198,6 @@
     },
     {
       "checked": false,
-      "kind": "hazards",
-      "reason": "needs NHD and NWS alerts (M3)",
-      "source": "hazards",
-      "vintage": null
-    },
-    {
-      "checked": false,
       "kind": "bailouts",
       "reason": "needs GTFS (M3)",
       "source": "bailouts",
@@ -176,7 +211,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "9f5c1fad3ae940b590ee2fe703114afd821f6008c71178fc04604cca22909200",
+  "measurements_sha256": "eda685582fdc2ea2b8d1ad8603cfefe29b23031d3d1dba854d744136af494a15",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -485,6 +520,22 @@
       "segment_id": "s00039",
       "severity": 0.667,
       "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "rail_at_grade",
+      "scorer": "hazards",
+      "segment_id": "s00039",
+      "severity": 0.5,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "rail_at_grade",
+      "scorer": "hazards",
+      "segment_id": "s00039",
+      "severity": 0.5,
+      "tier": "comfort"
     }
   ],
   "route": {
@@ -559,12 +610,32 @@
     "hazards": {
       "flags": {
         "hard": 0,
-        "soft": 0
+        "soft": 2
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
-      "worst": []
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "hazards": 2,
+        "rail_at_grade": 2,
+        "sources_checked": 5,
+        "sources_missing": 1
+      },
+      "worst": [
+        {
+          "kind": "soft",
+          "reason_code": "rail_at_grade",
+          "segment_id": "s00039",
+          "severity": 0.5,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "rail_at_grade",
+          "segment_id": "s00039",
+          "severity": 0.5,
+          "tier": "comfort"
+        }
+      ]
     },
     "heat_stress": {
       "flags": {

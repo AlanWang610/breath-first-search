@@ -61,6 +61,7 @@ SCORERS: dict[str, str] = {
     "air_quality": "longrun.core.scorers.air_quality",
     # After heat_stress: scope 8.3 scales the dry-gap thresholds down with WBGT.
     "resupply_schedule": "longrun.core.scorers.resupply_schedule",
+    "hazards": "longrun.core.scorers.hazards",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the
@@ -69,7 +70,6 @@ NOT_YET_IMPLEMENTED: dict[str, str] = {
     "closures": "needs the jurisdiction adapter registry (M4)",
     "trail_status": "needs the jurisdiction adapter registry (M4)",
     "access_hours": "needs the jurisdiction adapter registry (M4)",
-    "hazards": "needs NHD and NWS alerts (M3)",
     "bailouts": "needs GTFS (M3)",
 }
 

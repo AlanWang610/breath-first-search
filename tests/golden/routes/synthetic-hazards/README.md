@@ -101,12 +101,42 @@ date can never be re-fetched, which is also why `request.yaml` pins an absolute 
 `request.yaml` pins `utc_offset_hours: -7`. Longitude alone gives −8, and 12 September is
 Pacific Daylight Time; an hour of error is fifteen degrees of solar azimuth.
 
+## Rail and water the route meets
+
+Added when `hazards` landed, so the route named for hazards actually exercises one. Both
+files carry a crossing **and** a control that must stay silent, and both crossing points
+are arithmetic: half-steps at 39.54 m each.
+
+| feature | file | where | expected |
+|---|---|---|---|
+| way 301 `railway=rail` | `railways.geojson` | across at point 14.5 = **573.3 m** | `rail_at_grade`, soft, COMFORT |
+| way 302 `railway=rail` | `railways.geojson` | parallel, 111 m north | **no flag** |
+| `creek-across` | `flowlines.geojson` | across at point 74.5 = **2945.7 m** | `possible_water_crossing` |
+| `creek-alongside` | `flowlines.geojson` | parallel, 55 m north | **no flag** |
+
+The rail crossing is on way 101, the benign opening footway, on purpose: putting it on the
+LTS 4 primary or the motorway would make the flag impossible to read against the flags
+those already produce.
+
+The creek is deliberately unbridged. NHD and OSM are separately digitised, so a real
+crossing like this is often a culvert nobody tagged — which is why the flag goes out at
+`CONFLATION_CONFIDENCE` with the reason saying so, rather than as a claim about the ground.
+
+**The parallel controls do not test what they look like they test.** A line that never
+touches the route produces an empty intersection, so it exercises nothing in the
+run-along filter; deleting that filter leaves both controls green. The case that reaches
+it is a railway **collinear** with the route — a tram down the middle of the path — and
+that lives in `tests/unit/test_scorer_hazards.py`, where the geometry can be built to
+overlap exactly. Found by sabotage, which is what sabotage is for.
+
 ## What this route does not cover
 
-Air quality, resupply schedules, closures, trail status, access hours, hazards and bailouts
-all report `unavailable` here, because their scorers do not exist yet. They appear in the
-coverage manifest with a reason, which is the scope 3.6 behaviour under test — not an
-omission from this fixture.
+Closures, trail status, access hours and bailouts report `unavailable` here, because
+their scorers do not exist yet. `hazards` runs but reports **`nws_alerts` unchecked**: NWS
+requires a contact string in `LONGRUN_NWS_USER_AGENT` and this fixture does not carry one,
+so the alert half of scope 7.6 is honestly unanswered rather than quietly empty. All of it
+appears in the coverage manifest with a reason, which is the scope 3.6 behaviour under
+test — not an omission from this fixture.
 
 Way matching is geometric (repair mode has no router), so verification check 2
 (`on_network`) reports `skipped`. It is not a pass.
