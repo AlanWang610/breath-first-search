@@ -28,7 +28,7 @@ from longrun.core.data.cache import (
 )
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore, LayerNotFound
 from longrun.core.geo.segments import corridor
-from longrun.core.models.geometry import Route, RoutePoint
+from longrun.core.models.geometry import BBox, Route, RoutePoint
 
 SF_LINE = LineString([(-122.40, 37.77), (-122.40, 37.78)])
 KANSAS_LINE = LineString([(-100.0, 40.0), (-100.0, 40.1)])
@@ -442,3 +442,50 @@ def test_a_remote_read_is_charged_to_the_budget(tmp_path: Path) -> None:
     assert budget.raster_windows_used == 2
     with pytest.raises(BudgetExceeded, match="remote raster budget"):
         store._source("dem")
+
+
+def test_a_windowed_read_returns_a_transform_that_describes_its_array(tmp_path: Path) -> None:
+    """The returned origin must sit on a whole source pixel.
+
+    `src.read` rounds a fractional window; `window_transform` does not. So an unsnapped
+    read returns pixels from one place and a transform saying they came from up to half a
+    cell away — and everything downstream inverts that transform to find a coordinate's
+    cell. `sample_elevation` then reads the wrong cell, silently.
+
+    Found by trimming the `bay-urban` fixture, where re-clipping with different padding
+    moved the elevation gain from 32.6 m to 38.9 m for no reason but the window. Asserted
+    as an invariant rather than as a round trip, because a round trip has two windowing
+    steps and each can mask the other.
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    res, size = 0.0002, 400
+    west, north = -122.45, 37.83
+    with rasterio.open(
+        tmp_path / "dem.tif",
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(west, north, res, res),
+        nodata=-9999.0,
+    ) as dst:
+        dst.write(np.zeros((size, size), dtype="float32"), 1)
+
+    store = FileRasterStore(tmp_path)
+    # A bbox deliberately off the pixel grid: min_lon is 0.55 of a cell past a boundary.
+    window = store.read_window_meta(
+        "dem", BBox(min_lon=-122.44011, min_lat=37.79, max_lon=-122.40, max_lat=37.81)
+    )
+    assert window is not None
+
+    for axis, origin, step in (("x", window.transform.c, res), ("y", window.transform.f, -res)):
+        offset_px = (origin - (west if axis == "x" else north)) / step
+        assert abs(offset_px - round(offset_px)) < 1e-9, (
+            f"{axis} origin is {offset_px:.4f} pixels from the source origin, not a whole one"
+        )

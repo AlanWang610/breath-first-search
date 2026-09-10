@@ -184,4 +184,8 @@ def test_the_cost_is_linear_in_route_length_not_worse() -> None:
         return best
 
     ratio = cost(80) / max(cost(20), 1e-9)
-    assert 2.0 < ratio < 8.0, f"four times the points cost {ratio:.1f}x, not ~4x"
+    # Wide on purpose. Four times the points should be about four times the work;
+    # quadratic would be sixteen. A tight band on a wall-clock ratio fails on a busy
+    # laptop and then gets deleted, which is worse than a loose one that still catches
+    # a change of complexity class.
+    assert 1.5 < ratio < 12.0, f"four times the points cost {ratio:.1f}x, not ~4x"

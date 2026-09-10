@@ -205,7 +205,14 @@ class FileRasterStore:
                 bounds = (bbox.min_lon, bbox.min_lat, bbox.max_lon, bbox.max_lat)
                 if src.crs is not None and src.crs.to_string() != WGS84:
                     bounds = transform_bounds(WGS84, src.crs, *bounds)
+                # Snapped to whole source pixels before reading. `src.read` rounds a
+                # fractional window anyway, but `window_transform` does not - it returns the
+                # fractional origin, so the transform then claims the returned pixels sit up
+                # to half a cell from where they are. Everything downstream inverts that
+                # transform to find a coordinate's cell, so the lie propagates into every
+                # elevation sample. Snapping makes the transform describe the array.
                 window = from_bounds(*bounds, transform=src.transform)
+                window = window.round_offsets(op="floor").round_lengths(op="ceil")
                 array = src.read(1, window=window, boundless=True, fill_value=src.nodata)
                 return RasterWindow(
                     array=array,

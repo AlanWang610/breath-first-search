@@ -59,7 +59,7 @@
     {
       "checked": true,
       "kind": "surface_model",
-      "reason": "569 footprint read(s) across tiles carried no height and were not raised",
+      "reason": "568 footprint read(s) across tiles carried no height and were not raised",
       "source": "overture",
       "vintage": null
     },
@@ -156,16 +156,16 @@
     }
   ],
   "elevation": {
-    "gain_m": 32.6,
-    "loss_m": 31.7,
+    "gain_m": 36.5,
+    "loss_m": 35.5,
     "max_m": 5.7,
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "debaddce8f2e9d1fd7c1e787ebc27dd0e264c3157ea4363d325f68449bc6ce52",
+  "measurements_sha256": "5620a0812fbc9c5e6329ae9d04ae4708ea4391fd73015fdf07b07b121297ac82",
   "pacing": {
-    "duration_s": 763.6,
-    "finish": "2026-09-12T17:42:43"
+    "duration_s": 765.6,
+    "finish": "2026-09-12T17:42:45"
   },
   "residual_flags": [],
   "route": {
@@ -296,7 +296,7 @@
       "mean_confidence": 1.0,
       "measured_segments": 10,
       "summary": {
-        "max_temp_c": 17.822,
+        "max_temp_c": 17.823,
         "min_temp_c": 17.7,
         "providers": "open-meteo:2",
         "sites": 2,
@@ -353,10 +353,10 @@
       "mean_confidence": 0.7,
       "measured_segments": 10,
       "summary": {
-        "mean_sky_view_factor": 0.922,
-        "peak_irradiance_w_m2": 279.008,
+        "mean_sky_view_factor": 0.921,
+        "peak_irradiance_w_m2": 279.007,
         "raycast_rung": "full",
-        "shaded_fraction": 0.143,
+        "shaded_fraction": 0.135,
         "surface": "shade measured from buildings and dem; canopy unavailable",
         "utc_offset_guessed": false,
         "utc_offset_hours": -7.0,

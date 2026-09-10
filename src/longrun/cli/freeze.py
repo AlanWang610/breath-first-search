@@ -99,9 +99,14 @@ def _clip_dem(source: str, box: Corridor, path: Path) -> float:
     from rasterio.windows import from_bounds
 
     with rasterio.open(source) as src:
+        # Snapped to whole source pixels. An unsnapped float window rounds on read, so two
+        # clips of the same raster with slightly different bounds can land on a different
+        # pixel grid - and then the same route samples different cells and reports a
+        # different elevation gain. A frozen fixture has to be reproducible from its bounds.
         window = from_bounds(
             box.bbox.min_lon, box.bbox.min_lat, box.bbox.max_lon, box.bbox.max_lat, src.transform
         )
+        window = window.round_offsets(op="floor").round_lengths(op="ceil")
         array = src.read(1, window=window, boundless=True, fill_value=src.nodata)
         profile = src.profile | {
             "height": array.shape[0],

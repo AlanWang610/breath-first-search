@@ -169,7 +169,7 @@
     "min_m": 5.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "9d04208c143d7a2daaf15d45d9094dea0dc25321d230729056d83260ffdb9510",
+  "measurements_sha256": "ee59bc2910e43d545669db30682694c700fe75ee2a77d812866b2d766149233c",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -615,7 +615,7 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 1.0,
+      "mean_confidence": 0.997,
       "measured_segments": 20,
       "summary": {
         "mean_sky_view_factor": 0.908,
