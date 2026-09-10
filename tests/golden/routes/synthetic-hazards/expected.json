@@ -87,7 +87,7 @@
     {
       "checked": true,
       "kind": "solar_geometry",
-      "reason": "UTC offset -7 h as given",
+      "reason": "UTC offset -7 h, stated",
       "source": "pvlib",
       "vintage": null
     },
@@ -108,7 +108,7 @@
     {
       "checked": true,
       "kind": "solar_geometry",
-      "reason": "UTC offset -7 h as given",
+      "reason": "UTC offset -7 h, stated",
       "source": "pvlib",
       "vintage": null
     },
@@ -169,7 +169,7 @@
     "min_m": 5.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "fca594b56639f6b590f885e961e4804cca8e70cd5eda4ef214c98a2fabbbb5ea",
+  "measurements_sha256": "9d04208c143d7a2daaf15d45d9094dea0dc25321d230729056d83260ffdb9510",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -452,7 +452,8 @@
         "unknown_lit_dark_m": 0.0,
         "unlit_dark_m": 0.0,
         "utc_offset_guessed": false,
-        "utc_offset_hours": -7.0
+        "utc_offset_hours": -7.0,
+        "utc_offset_source": "stated"
       },
       "worst": []
     },
@@ -623,7 +624,8 @@
         "shaded_fraction": 0.218,
         "surface": "shade measured from buildings, canopy and dem",
         "utc_offset_guessed": false,
-        "utc_offset_hours": -7.0
+        "utc_offset_hours": -7.0,
+        "utc_offset_source": "stated"
       },
       "worst": []
     },

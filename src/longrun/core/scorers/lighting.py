@@ -23,11 +23,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from longrun.core.data.file_store import LayerNotFound
-from longrun.core.geo.solar import (
-    CIVIL_TWILIGHT_DEG,
-    solar_positions,
-    utc_offset_from_longitude,
-)
+from longrun.core.geo.solar import CIVIL_TWILIGHT_DEG, solar_positions, utc_offset_for
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.measurement import (
     Flag,
@@ -91,10 +87,10 @@ def lighting(
     if not etas or len(etas) != len(route.points):
         return unavailable(name, "no ETA vector: daylight is only defined at a time")
 
-    offset = ctx.utc_offset_hours
-    guessed = offset is None
-    if offset is None:
-        offset = utc_offset_from_longitude(route.points[0].lon)
+    offset, how = utc_offset_for(
+        route.points[0].lat, route.points[0].lon, etas[0], ctx.utc_offset_hours
+    )
+    guessed = how.startswith("derived")
 
     position = solar_positions(etas, route.points[0].lat, route.points[0].lon, offset)
     daylight = position.is_daylight
@@ -169,6 +165,7 @@ def lighting(
                 "twilight_threshold_deg": CIVIL_TWILIGHT_DEG,
                 "utc_offset_hours": offset,
                 "utc_offset_guessed": guessed,
+                "utc_offset_source": how,
                 "starts_in_daylight": bool(daylight[0]),
                 "finishes_in_daylight": bool(daylight[-1]),
             },
@@ -206,11 +203,7 @@ def lighting(
             source="pvlib",
             kind="solar_geometry",
             checked=True,
-            reason=(
-                f"UTC offset derived from longitude ({offset:+.0f} h)"
-                if guessed
-                else f"UTC offset {offset:+.0f} h as given"
-            ),
+            reason=f"UTC offset {offset:+.0f} h, {how}",
             confidence=0.7 if guessed else 1.0,
         )
     )

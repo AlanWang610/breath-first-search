@@ -36,7 +36,7 @@ from longrun.core.geo.solar import (
     SolarPosition,
     clear_sky,
     solar_positions,
-    utc_offset_from_longitude,
+    utc_offset_for,
 )
 from longrun.core.geo.svf import corridor_horizons
 from longrun.core.models.coverage import CoverageEntry
@@ -105,13 +105,10 @@ def sun_exposure(
             name, f"no surface model: {horizons.coverage.describe()}", kind="surface_model"
         )
 
-    offset = ctx.utc_offset_hours
-    guessed = offset is None
-    if offset is None:
-        offset = utc_offset_from_longitude(route.points[0].lon)
-
     lat = route.points[0].lat
     lon = route.points[0].lon
+    offset, how = utc_offset_for(lat, lon, etas[0], ctx.utc_offset_hours)
+    guessed = how.startswith("derived")
     position = solar_positions(etas, lat, lon, offset)
     sky = clear_sky(etas, lat, lon, offset)
 
@@ -129,7 +126,7 @@ def sun_exposure(
 
     result = ScorerResult(name=name)
     _measure_segments(result, segments, etas, direct, diffuse, lit, horizons, forecast)
-    _summarise(result, route, segments, direct, diffuse, lit, horizons, offset, guessed)
+    _summarise(result, route, segments, direct, diffuse, lit, horizons, offset, guessed, how)
     _flag_against_preference(result, segments, ctx, lit, forecast, etas)
 
     for entry in horizons.coverage.entries():
@@ -140,10 +137,12 @@ def sun_exposure(
             kind="solar_geometry",
             checked=True,
             reason=(
-                f"UTC offset derived from longitude ({offset:+.0f} h); pass --utc-offset "
-                "to state it, or shade is placed up to an hour out"
-                if guessed
-                else f"UTC offset {offset:+.0f} h as given"
+                f"UTC offset {offset:+.0f} h, {how}"
+                + (
+                    "; pass --utc-offset to state it, or shade is placed up to an hour out"
+                    if guessed
+                    else ""
+                )
             ),
             confidence=0.7 if guessed else 1.0,
         )
@@ -247,6 +246,7 @@ def _summarise(
     horizons: CorridorHorizons,
     offset: float,
     guessed: bool,
+    how: str,
 ) -> None:
     total = direct + diffuse
     result.measurements.append(
@@ -259,6 +259,7 @@ def _summarise(
                 "surface": horizons.coverage.describe(),
                 "utc_offset_hours": offset,
                 "utc_offset_guessed": guessed,
+                "utc_offset_source": how,
                 "raycast_rung": horizons.settings.rung,
             },
             confidence=float(horizons.coverage.confidence),

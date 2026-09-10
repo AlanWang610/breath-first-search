@@ -9,4 +9,9 @@
 # real shadows across real streets, so the shade figure has something to measure.
 date: 2026-09-12
 start: "17:30"
-utc_offset_hours: -7
+
+# No utc_offset_hours on purpose. synthetic-hazards pins one; this route leaves it out
+# so the ADR 0008 lookup is exercised end to end on a real coordinate. The expectation
+# records `zone America/Los_Angeles` and -7, which is Pacific Daylight Time - longitude
+# alone would have said -8. If a tzdata release ever changes that, this golden is where
+# it should become visible.

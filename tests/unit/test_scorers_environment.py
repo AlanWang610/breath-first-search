@@ -240,3 +240,48 @@ def test_the_air_quality_cache_key_rounds_its_coordinates() -> None:
         37.7955, -122.4001, date(2026, 9, 12)
     )
     assert air_args(37.7955, -122.4, date(2026, 9, 12))["hourly"] == AIR_FIELDS
+
+
+def test_the_offset_is_looked_up_rather_than_guessed() -> None:
+    """ADR 0008. Longitude gives -8 for San Francisco; September is Pacific Daylight Time.
+
+    The second element is the point: a plan has to be able to say whether the number was
+    stated, looked up, or guessed, because a guessed one can be an hour out and an hour is
+    more than fifteen degrees of solar azimuth.
+    """
+    from longrun.core.geo.solar import utc_offset_for
+
+    offset, how = utc_offset_for(SF_LAT, SF_LON, datetime(2026, 9, 12, 12, 0))
+    assert offset == -7.0
+    assert how.startswith("zone ")
+    assert utc_offset_from_longitude(SF_LON) == -8.0, "which is what it would have guessed"
+
+
+def test_the_same_place_in_winter_is_an_hour_different() -> None:
+    """Summer time is the whole reason a longitude guess is not good enough."""
+    from longrun.core.geo.solar import utc_offset_for
+
+    assert utc_offset_for(SF_LAT, SF_LON, datetime(2026, 1, 12, 12, 0))[0] == -8.0
+    assert utc_offset_for(SF_LAT, SF_LON, datetime(2026, 9, 12, 12, 0))[0] == -7.0
+
+
+def test_arizona_does_not_observe_summer_time() -> None:
+    """Phoenix is scope 11's hot test region, and it is the case a rule of thumb gets wrong.
+
+    Longitude happens to be right here — which is exactly why "it looked fine in testing"
+    is not evidence about a timezone rule.
+    """
+    from longrun.core.geo.solar import utc_offset_for
+
+    assert utc_offset_for(33.4484, -112.0740, datetime(2026, 9, 12, 12, 0))[0] == -7.0
+    assert utc_offset_for(33.4484, -112.0740, datetime(2026, 1, 12, 12, 0))[0] == -7.0
+
+
+def test_a_stated_offset_is_never_second_guessed() -> None:
+    """A user who passed --utc-offset has told us something the database cannot know."""
+    from longrun.core.geo.solar import utc_offset_for
+
+    assert utc_offset_for(SF_LAT, SF_LON, datetime(2026, 9, 12, 12, 0), stated=-5.0) == (
+        -5.0,
+        "stated",
+    )

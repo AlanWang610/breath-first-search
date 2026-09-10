@@ -80,7 +80,7 @@
     {
       "checked": true,
       "kind": "solar_geometry",
-      "reason": "UTC offset -7 h as given",
+      "reason": "UTC offset -7 h, zone America/Los_Angeles",
       "source": "pvlib",
       "vintage": null
     },
@@ -101,7 +101,7 @@
     {
       "checked": true,
       "kind": "solar_geometry",
-      "reason": "UTC offset -7 h as given",
+      "reason": "UTC offset -7 h, zone America/Los_Angeles",
       "source": "pvlib",
       "vintage": null
     },
@@ -162,7 +162,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "d1f76df294d606806c0addcca58754a8c63cdd25413761b6ebecc2485e6a8ec5",
+  "measurements_sha256": "debaddce8f2e9d1fd7c1e787ebc27dd0e264c3157ea4363d325f68449bc6ce52",
   "pacing": {
     "duration_s": 763.6,
     "finish": "2026-09-12T17:42:43"
@@ -283,7 +283,8 @@
         "unknown_lit_dark_m": 0.0,
         "unlit_dark_m": 0.0,
         "utc_offset_guessed": false,
-        "utc_offset_hours": -7.0
+        "utc_offset_hours": -7.0,
+        "utc_offset_source": "zone America/Los_Angeles"
       },
       "worst": []
     },
@@ -358,7 +359,8 @@
         "shaded_fraction": 0.143,
         "surface": "shade measured from buildings and dem; canopy unavailable",
         "utc_offset_guessed": false,
-        "utc_offset_hours": -7.0
+        "utc_offset_hours": -7.0,
+        "utc_offset_source": "zone America/Los_Angeles"
       },
       "worst": []
     },

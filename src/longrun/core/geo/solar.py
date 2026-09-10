@@ -10,12 +10,15 @@ and `lighting` both need it.
 actual UTC instant. An hour of error is fifteen degrees of azimuth, which moves a shadow
 across the street — so this cannot be waved through.
 
-There is no timezone database in this project's dependencies, so the offset is either
-**stated** by the caller or **derived from longitude**, and the difference is reported
-rather than hidden. Longitude gives mean solar time, which is right to within the
-difference between a zone's meridian and the actual place, plus an hour wherever summer
-time is in force — so the derived value is a fallback that says so, not a silent default.
-Scope 3.6 applied to the clock: an assumed offset is a known unknown, not a fact.
+The offset is **stated** by the caller, **looked up** from the coordinate through a
+timezone database, or — only if both fail — **derived from longitude**, and which of the
+three happened is reported rather than hidden (ADR 0008). Scope 3.6 applied to the clock.
+
+The longitude fallback is kept and is a poor answer: it gives mean solar time, so it is
+wrong by an hour wherever summer time is in force, which for a US route is most of the
+running season. San Francisco in September is -7 and longitude says -8; Boston is -4 and
+longitude says -5. It survives only because a lookup can fail on a coordinate no zone
+polygon covers, and a wrong hour reported as a guess still beats a crash.
 """
 
 from __future__ import annotations
@@ -73,11 +76,41 @@ class ClearSky:
 def utc_offset_from_longitude(lon: float) -> float:
     """Mean-solar-time offset for a longitude, in hours.
 
-    A fallback, never a fact. It is right to within a zone's meridian offset and wrong by
-    a further hour wherever summer time applies — which for a US route is most of the
-    running season. Callers report having used it.
+    The last resort. Right to within a zone's meridian offset and wrong by a further hour
+    wherever summer time applies. Callers report having used it.
     """
     return round(lon / DEGREES_PER_HOUR)
+
+
+def utc_offset_for(
+    lat: float, lon: float, when: datetime, stated: float | None = None
+) -> tuple[float, str]:
+    """`(hours from UTC, how it was arrived at)` — stated, looked up, or guessed.
+
+    The second element is the point. A shade figure computed from a guessed offset can be
+    an hour out, which is more than fifteen degrees of solar azimuth, and a plan has to be
+    able to say which of the three it used.
+
+    The lookup resolves the zone from the coordinate and then asks that zone what its
+    offset was **on the plan's own date**, so summer time is handled rather than averaged
+    over. Ambiguous instants inside a DST transition resolve to the standard-time reading,
+    which is `zoneinfo`'s default and is off by an hour for at most one hour a year.
+    """
+    if stated is not None:
+        return float(stated), "stated"
+    try:
+        from zoneinfo import ZoneInfo
+
+        import tzfpy
+
+        zone = tzfpy.get_tz(lon, lat)
+        if zone:
+            offset = when.replace(tzinfo=ZoneInfo(zone)).utcoffset()
+            if offset is not None:
+                return offset.total_seconds() / 3600.0, f"zone {zone}"
+    except Exception:  # pragma: no cover - no zone covers this coordinate, or no data
+        pass
+    return utc_offset_from_longitude(lon), "derived from longitude"
 
 
 def _index(times: Sequence[datetime], utc_offset_hours: float) -> object:
@@ -147,5 +180,6 @@ __all__ = [
     "SolarPosition",
     "clear_sky",
     "solar_positions",
+    "utc_offset_for",
     "utc_offset_from_longitude",
 ]
