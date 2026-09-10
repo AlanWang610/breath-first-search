@@ -1,0 +1,24 @@
+# Phoenix - scope 11's test region 2, and the region ADR 0004 named as the trigger
+# for revisiting the WBGT formulation.
+#
+# The second region, which is the point: everything about a region build that is really
+# Bay-Area-shaped shows up the first time a different polygon runs through it.
+#
+#   uv run longrun build-region deploy/regions/phoenix.yaml
+
+name: phoenix
+polygon: phoenix.geojson
+
+# Clipped from Geofabrik arizona-latest by clip_pbf.py: 287 MB in, 114 MB out.
+osm_extract: ../../data/osm/phoenix.osm.pbf
+
+# 1506 Middle Gila, 1507 Lower Gila, 1503 Verde. The Salt and the Gila run through the
+# metro area and both are dry most of the year, which is exactly the case `hazards` marks
+# as a possible crossing at reduced confidence rather than a ford.
+huc4:
+  - "1506"
+
+# None loaded. Valley Metro publishes GTFS and it is not here, so `transit` and `bailouts`
+# report what the loaded feeds say - nothing - rather than what Phoenix has. The coverage
+# manifest is where that distinction has to survive.
+gtfs: {}

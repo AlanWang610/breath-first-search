@@ -1,0 +1,5 @@
+# Shipped defaults, unmodified. synthetic-hazards pins a non-default surface preference to
+# exercise that path; this route's job is to show what the scorers say to a user who has
+# told us nothing, which is the state every first-time user is in (scope 6.3 forbids an
+# up-front questionnaire).
+version: 1

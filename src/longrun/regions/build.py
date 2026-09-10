@@ -32,6 +32,8 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
+WGS84 = 4326
+
 #: Step names, in the order scope 13 lists them.
 STEPS: tuple[str, ...] = (
     "osm_graph",
@@ -386,19 +388,33 @@ def jurisdictions_in(ctx: BuildContext) -> list[dict[str, str]]:
 
 
 def coverage_report(ctx: BuildContext) -> list[str]:
-    """One line per layer: whether it exists, how many rows, and its vintage."""
+    """One line per layer: whether it exists, how many rows **in this region**, and its
+    vintage.
+
+    Counted inside the polygon rather than over the table, and the second region is what
+    made that necessary. The layers are shared - OSM ids are global and the loaders upsert
+    on them (ADR 0010) - so a whole-table count told Phoenix it had 1,566,342 ways, which
+    is Phoenix's 634,170 plus the Bay Area's 932,172, and 103 BART stops. A coverage report
+    for a region has to be about that region or it is not a coverage report.
+    """
     from longrun.core.data.postgis import DEFAULT_LAYER_TABLES, PostGISLayerStore
 
     store = PostGISLayerStore(ctx.connection)
+    polygon = ctx.spec.shape().wkt
     lines: list[str] = []
     for layer, table in sorted(DEFAULT_LAYER_TABLES.items()):
         if not store.has_layer(layer):
             lines.append(f"{layer}: ABSENT ({table} does not exist)")
             continue
         with ctx.connection.cursor() as cursor:
-            cursor.execute(f"SELECT count(*) FROM {table}")
+            cursor.execute(
+                f"SELECT count(*) FROM {table} "
+                f"WHERE ST_Intersects(geom, ST_GeomFromText(%s, {WGS84}))",
+                (polygon,),
+            )
             count = cursor.fetchone()[0]
-        lines.append(f"{layer}: {count:,} row(s), vintage {store.vintage(layer) or 'unrecorded'}")
+        state = f"{count:,} row(s)" if count else "0 rows IN THIS REGION"
+        lines.append(f"{layer}: {state}, vintage {store.vintage(layer) or 'unrecorded'}")
     return lines
 
 

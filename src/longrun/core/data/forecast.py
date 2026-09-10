@@ -67,6 +67,19 @@ STATIC_DAY = "static"
 NWS_ROOT = "https://api.weather.gov"
 OPEN_METEO_ROOT = "https://api.open-meteo.com/v1/forecast"
 
+#: The same fields, for a day the forecast endpoint no longer covers.
+#:
+#: The forecast API reaches about a fortnight either side of today; a golden route pins an
+#: **absolute** date forever (scope 11), so the day a golden was recorded on slides out of
+#: that window and its cassette becomes unrecordable. `freeze-cassette`'s docstring said as
+#: much - "a forecast for a past date can never be re-fetched" - and that is a property of
+#: the endpoint, not of the weather. The archive holds the reanalysis for the same hours.
+OPEN_METEO_ARCHIVE_ROOT = "https://archive-api.open-meteo.com/v1/archive"
+
+#: How far back before the archive is used instead. The archive lags real time by a few
+#: days, and inside that window the forecast endpoint is the one with data.
+ARCHIVE_AFTER_DAYS = 10
+
 #: Open-Meteo hourly fields, in the order they go into the cache key. Kept as a tuple
 #: so the key cannot change because a set iterated differently.
 OPEN_METEO_FIELDS = (
@@ -482,8 +495,28 @@ def _nws_site(site: ForecastSite, ctx: ScorerContext, day: date) -> SiteForecast
     )
 
 
+def open_meteo_root(day: date, today: date | None = None) -> str:
+    """Which Open-Meteo endpoint can answer for a day.
+
+    A named function so the choice is testable without the network, and because it is the
+    kind of thing that looks like an implementation detail and is not: the two endpoints
+    return the same fields for the same hours but one of them returns *nothing* outside
+    its window, which reads downstream as "Open-Meteo returned no hours".
+    """
+    from datetime import date as _date
+
+    reference = today or _date.today()
+    return (
+        OPEN_METEO_ARCHIVE_ROOT if (reference - day).days > ARCHIVE_AFTER_DAYS else OPEN_METEO_ROOT
+    )
+
+
 def _open_meteo_site(site: ForecastSite, ctx: ScorerContext, day: date) -> SiteForecast:
     args = open_meteo_args(site.lat, site.lon, day)
+    # The endpoint is chosen from the day but is deliberately **not** in the cache key: a
+    # cassette recorded from the archive has to replay for a scorer that would have asked
+    # the forecast endpoint, and the answer is the same weather either way.
+    root = open_meteo_root(day, ctx.clock.now().date())
     payload = fetch(
         ctx.cache,
         "open_meteo.forecast",
@@ -492,7 +525,7 @@ def _open_meteo_site(site: ForecastSite, ctx: ScorerContext, day: date) -> SiteF
         _producer(
             ctx,
             lambda: _get_json(
-                OPEN_METEO_ROOT,
+                root,
                 {**args, "hourly": ",".join(OPEN_METEO_FIELDS)},
                 {"Accept": "application/json"},
             ),
@@ -575,6 +608,8 @@ __all__ = [
     "COORD_PRECISION",
     "DEFAULT_SPACING_M",
     "MAX_SAMPLE_POINTS",
+    "ARCHIVE_AFTER_DAYS",
+    "OPEN_METEO_ARCHIVE_ROOT",
     "OPEN_METEO_ROOT",
     "NWS_ROOT",
     "STATIC_DAY",
@@ -588,6 +623,7 @@ __all__ = [
     "nws_grid_args",
     "nws_points_args",
     "open_meteo_args",
+    "open_meteo_root",
     "parse_nws_gridpoint",
     "parse_open_meteo",
     "route_forecast",

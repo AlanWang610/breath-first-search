@@ -68,3 +68,43 @@ Test region 2. If Phoenix in July produces WBGT figures that stay under 30 °C o
 arterials at midday, the approximation is failing at exactly the case the project exists
 to catch, and Liljegren becomes worth implementing properly — with a reference dataset to
 validate against, not from memory.
+
+---
+
+## Resolved 2026-09-10 — the trigger was not met, and the approximation stays
+
+Test region 2 was asked the question this ADR set it. Open-Meteo's reanalysis for
+**Phoenix, July 2026**, through `heat.wbgt_c` unchanged:
+
+| | |
+|---|---|
+| midday hours sampled (11:00–16:00, whole month) | 186 |
+| above the **30 °C hard floor** | **154 (83%)** |
+| above the 26 °C soft floor | 181 (97%) |
+| peak | **36.6 °C WBGT** — 46.3 °C at 16% RH, 24 July, 15:00 |
+| coolest midday hour of the month | 24.3 °C WBGT — 32.2 °C at 11% RH |
+
+The revisit condition was *"if Phoenix in July produces WBGT figures that stay under 30 °C
+on exposed arterials at midday"*. They do not stay under it; they exceed it in five hours
+out of six, by up to 6.6 °C. Scope §11's expectation of "WBGT hard flags in ordinary
+conditions" is met with room to spare, and **the ACSM/BoM approximation stands**.
+
+**What this does and does not settle.** It settles that the formula is not so conservative
+as to be useless in the case the project exists to catch — which is the only claim this
+ADR ever made for it. It does **not** make the number right on an exposed arterial: the
+approximation still ignores solar load and wind, still returns a lower bound, and
+`heat_stress` still drops to 0.6 confidence on any segment more than half sunlit and says
+*"a humidity-only WBGT understates this"*. Phoenix's dry heat is in fact the friendliest
+case for a humidity-only index; a humid climate at the same WBGT would be a different test.
+
+**So Liljegren is not needed, and the reason has changed.** It was deferred because
+implementing an iterative radiative-balance solver from memory would produce a number that
+looked authoritative and might be wrong by degrees. It stays deferred because the
+approximation demonstrably clears the bar the scope set. Should it ever be implemented, the
+case to validate against is a **humid** one — Houston or Miami in August — where the
+solar-and-wind terms and the humidity term pull in opposite directions and this formula's
+error is not a bound in a known direction.
+
+The measurement is kept standing as `tests/contract/test_wbgt_phoenix.py`, `network`-marked
+and run on demand, rather than as a number in this file that decays the moment someone
+changes `wbgt_c`.

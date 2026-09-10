@@ -39,28 +39,37 @@ SEEK = {"priority": [{"if": "lts < 3", "multiply_by": "0.1"}]}
 
 
 @pytest.fixture(scope="module")
-def router() -> GraphHopperRouter:
+def info() -> dict[str, Any]:
+    """`/info` from whatever is listening, or a skip.
+
+    A skip rather than a failure when the graph is a *different region*: one port serves
+    one graph, and once a second region exists - which is scope 11's plan and M3's exit
+    criterion - the server on 8989 is as likely to be Phoenix as the Bay Area. A test that
+    failed instead would report "no route" for a question about the wrong continent's worth
+    of graph, which is a true statement and a useless one.
+    """
     import httpx
 
     url = url_from_env()
     try:
-        response = httpx.get(f"{url}/info", timeout=5.0)
-        response.raise_for_status()
+        payload = dict(httpx.get(f"{url}/info", timeout=5.0).json())
     except Exception as exc:  # noqa: BLE001 - any failure to reach it is a skip
         pytest.skip(f"no GraphHopper at {url}: {exc}")
-    return GraphHopperRouter(url)
+        raise
+
+    west, south, east, north = payload.get("bbox") or (0, 0, 0, 0)
+    for point in (FERRY, DEYOUNG):
+        if not (west <= point.lon <= east and south <= point.lat <= north):
+            pytest.skip(
+                f"the graph at {url} covers ({west:.1f},{south:.1f})-({east:.1f},{north:.1f}), "
+                f"which is not the Bay Area"
+            )
+    return payload
 
 
 @pytest.fixture(scope="module")
-def info() -> dict[str, Any]:
-    import httpx
-
-    url = url_from_env()
-    try:
-        return dict(httpx.get(f"{url}/info", timeout=5.0).json())
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"no GraphHopper at {url}: {exc}")
-        raise
+def router(info: dict[str, Any]) -> GraphHopperRouter:
+    return GraphHopperRouter(url_from_env())
 
 
 # --- R1: the encoded value ---------------------------------------------------
