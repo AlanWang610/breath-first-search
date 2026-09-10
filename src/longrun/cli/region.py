@@ -15,6 +15,7 @@ extract and a live PostGIS:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -86,5 +87,74 @@ def load_osm(
         raise typer.Exit(code=1)
 
 
+def _connect(dsn: str | None) -> Any:
+    """Open the build's database connection, or exit saying why it could not."""
+    try:
+        import psycopg
+    except ImportError as exc:  # pragma: no cover - psycopg is a declared dependency
+        typer.echo("error: psycopg is not installed", err=True)
+        raise typer.Exit(code=2) from exc
+
+    target = dsn or dsn_from_env()
+    try:
+        return psycopg.connect(target, connect_timeout=10)
+    except psycopg.OperationalError as exc:
+        typer.echo(f"error: could not connect to {target}: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+
+def load_tiger(
+    region: str = typer.Option(..., "--region", help="Region name for meta.layer_vintage."),
+    states: str = typer.Option(
+        ..., "--states", help="Comma-separated two-digit state FIPS codes, e.g. 06,32."
+    ),
+    dsn: str | None = typer.Option(None, "--dsn", help="PostGIS connection string."),
+    into: Path | None = typer.Option(None, "--into", help="Where downloads are cached."),
+) -> None:
+    """Load Census boundaries into `tiger.boundaries` (scope 13 step 4).
+
+    States are required rather than defaulted: places are published per state, so a build
+    has to know which states its polygon touches before it can ask for them. A region on a
+    state line — scope 11 names one deliberately — passes both.
+    """
+    from longrun.core.data.national import load_tiger as run
+
+    codes = [s.strip() for s in states.split(",") if s.strip()]
+    if not codes:
+        typer.echo("error: --states needs at least one FIPS code", err=True)
+        raise typer.Exit(code=2)
+
+    with _connect(dsn) as connection:
+        counts = run(connection, region, codes, into=into)
+    for what, count in counts.items():
+        typer.echo(f"  {what}: {count:,} boundary(ies)")
+
+
+def load_nhd(
+    region: str = typer.Option(..., "--region", help="Region name for meta.layer_vintage."),
+    huc4: str = typer.Option(..., "--huc4", help="Comma-separated HUC4 watershed codes."),
+    dsn: str | None = typer.Option(None, "--dsn", help="PostGIS connection string."),
+    into: Path | None = typer.Option(None, "--into", help="Where downloads are cached."),
+) -> None:
+    """Load NHD flowlines into `nhd.flowlines` (scope 7.6 water crossings).
+
+    Per watershed, not per state: California's NHD download is 1,831 MB and the San
+    Francisco Bay HUC4 is 121 MB for the same water a Bay Area region can reach.
+    """
+    from longrun.core.data.national import load_nhd as run
+
+    codes = [s.strip() for s in huc4.split(",") if s.strip()]
+    if not codes:
+        typer.echo("error: --huc4 needs at least one watershed code", err=True)
+        raise typer.Exit(code=2)
+
+    with _connect(dsn) as connection:
+        counts = run(connection, region, codes, into=into)
+    for code, count in counts.items():
+        typer.echo(f"  HUC4 {code}: {count:,} flowline(s)")
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
+    app.command("load-tiger")(load_tiger)
+    app.command("load-nhd")(load_nhd)
