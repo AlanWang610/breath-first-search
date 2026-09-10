@@ -254,6 +254,13 @@
     },
     {
       "checked": false,
+      "kind": "cell_coverage",
+      "reason": "no cell coverage layer: the FCC bulk download needs an account, so no region build has loaded one",
+      "source": "cell_coverage",
+      "vintage": null
+    },
+    {
+      "checked": false,
       "kind": "closures",
       "reason": "needs the jurisdiction adapter registry (M4)",
       "source": "closures",
@@ -663,6 +670,16 @@
         "transit_checked": true,
         "worst_exit_m": 120.7
       },
+      "worst": []
+    },
+    "cell_coverage": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
       "worst": []
     },
     "closures": {

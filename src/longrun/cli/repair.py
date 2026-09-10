@@ -69,6 +69,7 @@ SCORERS: dict[str, str] = {
     # Last, and deliberately: it re-evaluates what the time-dependent scorers above
     # measured, at a dozen other start times, from the horizons they already built.
     "start_time_optimizer": "longrun.core.scorers.start_time_optimizer",
+    "cell_coverage": "longrun.core.scorers.cell_coverage",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the

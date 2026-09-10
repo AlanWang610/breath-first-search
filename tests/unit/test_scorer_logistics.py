@@ -351,3 +351,79 @@ def _patch_horizons(monkeypatch: pytest.MonkeyPatch) -> None:
         coverage = _Coverage()
 
     monkeypatch.setattr(sweep, "corridor_horizons", lambda route, ctx: _Horizons())
+
+
+# --- cell coverage ----------------------------------------------------------
+
+
+def _run_cell(layers: Any, points: int = 41) -> Any:
+    from longrun.core.scorers import cell_coverage as cells
+
+    route = _route(points)
+    return cells.cell_coverage(route, _segments(route), _ctx(layers), _etas(route))
+
+
+def test_cell_coverage_names_the_blocker_rather_than_the_absence() -> None:
+    """A source nobody can load and a source nobody has loaded read the same on a sheet
+    unless the reason says which. The FCC bulk download is behind an account."""
+    result = _run_cell(_Layers())
+    entry = result.coverage[0]
+    assert not entry.checked
+    assert "account" in (entry.reason or "")
+
+
+def test_a_route_inside_coverage_reports_no_gap() -> None:
+    from shapely.geometry import box
+
+    covered = _frame([{"provider": "Carrier A"}], [box(LON - 1, LAT - 1, LON + 1, LAT + 1)])
+    result = _run_cell(_Layers(cell_coverage=covered))
+    summary = _summary(result)
+    assert summary["dark_fraction"] == 0.0
+    assert summary["carriers"] == "Carrier A"
+    assert not result.flags
+
+
+def test_coverage_is_reported_as_a_claim_not_a_measurement() -> None:
+    """Carrier self-report. A route inside a filed polygon has not been shown to have
+    signal, so no measurement here may carry full confidence."""
+    from shapely.geometry import box
+
+    from longrun.core.scorers import cell_coverage as cells
+
+    covered = _frame([{"provider": "A"}], [box(LON - 1, LAT - 1, LON + 1, LAT + 1)])
+    result = _run_cell(_Layers(cell_coverage=covered))
+    assert all(m.confidence == cells.SELF_REPORT_CONFIDENCE for m in result.measurements)
+    assert any("filed by carriers" in (c.reason or "") for c in result.coverage)
+
+
+def test_a_long_dark_stretch_is_flagged_and_a_short_one_is_not() -> None:
+    """The route is 40 steps of ~44 m, so an uncovered half is ~880 m - well under the
+    3 km threshold. A route with no coverage at all is 1.76 km and also under it, which is
+    why the flag needs a route long enough to exceed the threshold to fire at all."""
+
+    from longrun.core.scorers import cell_coverage as cells
+
+    nothing = _frame([], [])
+    short = _run_cell(_Layers(cell_coverage=nothing), points=21)
+    assert _summary(short)["dark_fraction"] == 1.0
+    assert not short.flags, "880 m is under the gap threshold"
+
+    long_route = _run_cell(_Layers(cell_coverage=nothing), points=121)
+    assert long_route.flags
+    assert {f.reason_code for f in long_route.flags} == {"no_signal_gap"}
+    assert _summary(long_route)["longest_gap_m"] >= cells.GAP_FLAG_M
+
+
+def test_a_gap_is_measured_across_segment_boundaries() -> None:
+    """Two adjacent segments each half-dark are one gap, not two shorter ones - and
+    measuring per segment would report two and flag neither."""
+    from shapely.geometry import box
+
+    from longrun.core.scorers import cell_coverage as cells
+
+    # Covered only at the very start, so everything after it is one continuous dark run.
+    covered = _frame([{"provider": "A"}], [box(LON - 0.001, LAT - 0.001, LON + 0.001, LAT + 0.001)])
+    result = _run_cell(_Layers(cell_coverage=covered), points=121)
+    gaps = [f for f in result.flags if f.reason_code == "no_signal_gap"]
+    assert len(gaps) == 1, [f.detail for f in gaps]
+    assert _summary(result)["longest_gap_m"] > cells.GAP_FLAG_M

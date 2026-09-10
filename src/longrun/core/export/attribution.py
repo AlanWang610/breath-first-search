@@ -86,6 +86,11 @@ def _layer_sources() -> dict[str, str]:
     `ways` lives in `osm.ways`, `parks` in `padus.units`. Deriving it here means a layer
     added to the store cannot arrive unattributed because someone forgot a second table.
 
+    It also means **the schema name has to be the source name**, which is a constraint on
+    `DEFAULT_LAYER_TABLES` rather than an accident of it: `fcc.cell_coverage` would
+    resolve to a source called `fcc` that no licence table knows, so the schema is
+    `fcc_bdc`, matching the row scope 14 actually has.
+
     This became load-bearing the moment the OSM loader landed. Before it, no real plan had
     an OSM layer in its coverage, so every sheet's attribution block was accidentally
     complete; the first corridor with ways in it printed three `LICENCE NOT RECORDED`
