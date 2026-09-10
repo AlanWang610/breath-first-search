@@ -54,5 +54,6 @@ mvn -f deploy/graphhopper/lts-wrapper/pom.xml package
 `lts_for_way` with a lookup against the PostGIS Furth computation keyed on OSM way id; nothing
 else in this directory changes.
 
-`scripts/` needs pyosmium, which is deliberately **not** in `pyproject.toml` — it is a
-region-build tool, not a library dependency: `uv pip install osmium`.
+`scripts/` needs pyosmium, which since M2 is a declared `ingest` extra rather than a
+manual install: `uv sync --extra ingest`. ADR 0010 makes that the same dependency the OSM
+loader uses, so a region build has one pbf reader and not two.
