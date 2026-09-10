@@ -31,8 +31,14 @@ figure has something to measure. Peak irradiance is 279 W/m² against the synthe
 | Canopy | Meta/WRI | **not fetched** — the tile index is 15 MB and this corridor is downtown |
 | Ways, nodes, amenities | OSM, Geofabrik NorCal clipped to the Bay Area, `2026-09-04` | real, via `longrun load-osm` → PostGIS → `freeze-fixture` |
 | Parks | PAD-US | **absent** — that loader is still M3 |
+| Railways, flowlines | OSM, USGS NHD HUC4 1805 | real — 162 railway ways, and **zero** flowlines, which is the right answer downtown |
+| Transit stops | BART GTFS, summarised per stop | real — 6 stops in the corridor, service spans per day type |
 
-All twelve implemented scorers now measure. The five that report `unavailable` are the
+All fifteen implemented scorers now measure. `transit` flags the finish: Fort Mason is
+1.9 km from Embarcadero station, past the 1 km an endpoint counts as served within, so
+the sheet says so before anyone plans to take BART home. Only BART is loaded — Muni
+serves Fort Mason and is not in the region build yet, which is why the number is a
+statement about the loaded feeds and not about San Francisco. The five that report `unavailable` are the
 ones whose milestone has not arrived: `closures`, `trail_status` and `access_hours` need
 the M4 adapter registry, `hazards` needs NHD, `bailouts` needs GTFS.
 

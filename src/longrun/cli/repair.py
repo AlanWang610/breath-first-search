@@ -62,6 +62,9 @@ SCORERS: dict[str, str] = {
     # After heat_stress: scope 8.3 scales the dry-gap thresholds down with WBGT.
     "resupply_schedule": "longrun.core.scorers.resupply_schedule",
     "hazards": "longrun.core.scorers.hazards",
+    "transit": "longrun.core.scorers.transit",
+    # After transit: both read the same stop layer, and `bailouts` reuses its service test.
+    "bailouts": "longrun.core.scorers.bailouts",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the
@@ -70,7 +73,6 @@ NOT_YET_IMPLEMENTED: dict[str, str] = {
     "closures": "needs the jurisdiction adapter registry (M4)",
     "trail_status": "needs the jurisdiction adapter registry (M4)",
     "access_hours": "needs the jurisdiction adapter registry (M4)",
-    "bailouts": "needs GTFS (M3)",
 }
 
 

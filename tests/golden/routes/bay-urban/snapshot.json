@@ -11,7 +11,8 @@
     "nodes": "2026-09-04",
     "amenities": "2026-09-04",
     "railways": "2026-09-04",
-    "flowlines": "nhd-hu4"
+    "flowlines": "nhd-hu4",
+    "transit_stops": "gtfs-bart"
   },
   "extra": {
     "buildings": "Overture 2026-08-19.0 buildings theme, via duckdb over S3",

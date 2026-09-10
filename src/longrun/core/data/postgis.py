@@ -60,6 +60,10 @@ DEFAULT_LAYER_TABLES: dict[str, str] = {
     "buildings": "overture.buildings",
     "flowlines": "nhd.flowlines",
     "boundaries": "tiger.boundaries",
+    # Service *summaries* per stop, not a timetable: every LayerStore method is a
+    # corridor query, so precomputing at build time is what makes transit reachable
+    # through the seam at all. See core/data/gtfs.py.
+    "transit_stops": "gtfs.stops",
 }
 
 #: Geometry column every layer table carries, in EPSG:4326.

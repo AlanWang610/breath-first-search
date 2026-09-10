@@ -263,15 +263,35 @@ def read_zipped_vector(path: Path, layer: str | None = None, **kwargs: Any) -> G
 
 
 def create_statements(spec: NationalSource) -> list[str]:
-    """DDL for one source's table. Idempotent, so a resumed build re-runs it freely."""
+    """DDL for one source's table. Idempotent, so a resumed build re-runs it freely.
+
+    **`CREATE TABLE IF NOT EXISTS` alone is not enough, and the way it fails is quiet.**
+    Adding a column to a `NationalSource` after its table exists does nothing: the create
+    is skipped, the `COPY` names the new column, and Postgres refuses — or worse, the
+    reader carries on against a table missing the field and every row of it reads as NULL.
+    That happened here, between two loads of the same GTFS feed an hour apart: the second
+    declared per-day service spans, the table still had the combined pair, and the frozen
+    fixture came back with columns that no longer existed in the code.
+
+    So every declared column is also an `ADD COLUMN IF NOT EXISTS`. Additive only — a
+    changed *type* still needs a migration, and a dropped column stays until someone drops
+    it, both of which are the right amount of ceremony for a destructive change.
+    """
     columns = ", ".join(f"{name} {sql_type}" for name, sql_type in spec.columns.items())
-    return [
+    statements = [
         f"CREATE SCHEMA IF NOT EXISTS {spec.schema}",
         f"CREATE TABLE IF NOT EXISTS {spec.qualified} "
         f"({spec.key} text PRIMARY KEY, {columns}, "
         f"geom geometry({spec.geometry}, {WGS84}) NOT NULL)",
-        f"CREATE INDEX IF NOT EXISTS {spec.table}_geom_idx ON {spec.qualified} USING GIST (geom)",
     ]
+    statements += [
+        f"ALTER TABLE {spec.qualified} ADD COLUMN IF NOT EXISTS {name} {sql_type}"
+        for name, sql_type in spec.columns.items()
+    ]
+    statements.append(
+        f"CREATE INDEX IF NOT EXISTS {spec.table}_geom_idx ON {spec.qualified} USING GIST (geom)"
+    )
+    return statements
 
 
 def _as_multi(geometry: Any, target: str) -> Any:

@@ -154,7 +154,47 @@ def load_nhd(
         typer.echo(f"  HUC4 {code}: {count:,} flowline(s)")
 
 
+def load_gtfs(
+    region: str = typer.Option(..., "--region", help="Region name for meta.layer_vintage."),
+    feeds: str = typer.Option(
+        ..., "--feeds", help="Comma-separated `id=path.zip` pairs, e.g. bart=data/gtfs/bart.zip."
+    ),
+    dsn: str | None = typer.Option(None, "--dsn", help="PostGIS connection string."),
+) -> None:
+    """Summarise GTFS feeds into `gtfs.stops` (scope 7.7).
+
+    One row per boardable stop carrying what serves it and when, not a timetable — every
+    `LayerStore` method is a corridor query, so a departures table would be unreachable by
+    any scorer. See `core/data/gtfs.py`.
+
+    Feeds are named rather than discovered: scope 13 asks for "all intersecting GTFS
+    feeds", and discovery needs a registry with its own key and its own licence.
+    """
+    from longrun.core.data.gtfs import load_gtfs as run
+
+    parsed: dict[str, Path] = {}
+    for item in feeds.split(","):
+        feed_id, _, location = item.strip().partition("=")
+        if not feed_id or not location:
+            typer.echo(f"error: expected id=path, got {item!r}", err=True)
+            raise typer.Exit(code=2)
+        path = Path(location)
+        if not path.exists():
+            typer.echo(f"error: no such feed: {path}", err=True)
+            raise typer.Exit(code=2)
+        parsed[feed_id] = path
+
+    with _connect(dsn) as connection:
+        counts = run(connection, region, parsed)
+    for feed_id, count in counts.items():
+        typer.echo(f"  {feed_id}: {count:,} stop(s)")
+    if not any(counts.values()):
+        typer.echo("error: no stop had a readable timetable", err=True)
+        raise typer.Exit(code=1)
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
     app.command("load-tiger")(load_tiger)
     app.command("load-nhd")(load_nhd)
+    app.command("load-gtfs")(load_gtfs)

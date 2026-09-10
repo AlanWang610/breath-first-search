@@ -177,6 +177,27 @@
     },
     {
       "checked": false,
+      "kind": "transit",
+      "reason": "no transit stops layer: getting to and from not established",
+      "source": "transit",
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "kind": "bailout_transit",
+      "reason": "no transit stops layer: exits measured from roads only",
+      "source": "transit_stops",
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "kind": "bailout_roads",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-01"
+    },
+    {
+      "checked": false,
       "kind": "closures",
       "reason": "needs the jurisdiction adapter registry (M4)",
       "source": "closures",
@@ -195,13 +216,6 @@
       "reason": "needs the jurisdiction adapter registry (M4)",
       "source": "access_hours",
       "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "bailouts",
-      "reason": "needs GTFS (M3)",
-      "source": "bailouts",
-      "vintage": null
     }
   ],
   "elevation": {
@@ -211,7 +225,7 @@
     "min_m": 5.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "350c709764f9daa0b8b59bdff727ca35d5c0338cfaa2f6aa25071331e1d73f74",
+  "measurements_sha256": "25f02492fd21e80ceb3f1da90e1e3f597b3a96fa0938c597a9ffe6920511717f",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -392,9 +406,15 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 0.62,
+      "measured_segments": 20,
+      "summary": {
+        "reach_m": 2000.0,
+        "roads_checked": true,
+        "segments_out_of_reach": 0,
+        "transit_checked": false,
+        "worst_exit_m": 673.5
+      },
       "worst": []
     },
     "closures": {
@@ -735,6 +755,16 @@
       ]
     },
     "trail_status": {
+      "flags": {
+        "hard": 0,
+        "soft": 0
+      },
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
+    },
+    "transit": {
       "flags": {
         "hard": 0,
         "soft": 0

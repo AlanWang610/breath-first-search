@@ -47,7 +47,7 @@ if TYPE_CHECKING:  # pragma: no cover
 #: else goes through `polygons_intersecting`, which in `PostGISLayerStore` is the same
 #: `ST_Intersects` against the same corridor polygon — the three method names on the
 #: protocol describe what a *scorer* is asking, not three different predicates.
-POINT_LAYERS = frozenset({"nodes", "amenities"})
+POINT_LAYERS = frozenset({"nodes", "amenities", "transit_stops"})
 
 #: The layers a fixture carries. Fewer than `DEFAULT_LAYER_TABLES` on purpose: freezing a
 #: layer no scorer reads inflates the corridor extract for nothing, and the cap on
@@ -63,6 +63,7 @@ DEFAULT_LAYERS: tuple[str, ...] = (
     "parks",
     "railways",
     "flowlines",
+    "transit_stops",
 )
 
 

@@ -176,6 +176,27 @@
       "vintage": null
     },
     {
+      "checked": true,
+      "kind": "transit_service",
+      "reason": null,
+      "source": "transit_stops",
+      "vintage": "gtfs-bart"
+    },
+    {
+      "checked": true,
+      "kind": "bailout_transit",
+      "reason": null,
+      "source": "transit_stops",
+      "vintage": "gtfs-bart"
+    },
+    {
+      "checked": true,
+      "kind": "bailout_roads",
+      "reason": null,
+      "source": "ways",
+      "vintage": "2026-09-04"
+    },
+    {
       "checked": false,
       "kind": "closures",
       "reason": "needs the jurisdiction adapter registry (M4)",
@@ -195,13 +216,6 @@
       "reason": "needs the jurisdiction adapter registry (M4)",
       "source": "access_hours",
       "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "bailouts",
-      "reason": "needs GTFS (M3)",
-      "source": "bailouts",
-      "vintage": null
     }
   ],
   "elevation": {
@@ -211,7 +225,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "eda685582fdc2ea2b8d1ad8603cfefe29b23031d3d1dba854d744136af494a15",
+  "measurements_sha256": "f9ecf1e30e4637c1cc577014029e419f8be367e2707b4cc77a52134cae1a2f48",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -523,6 +537,14 @@
     },
     {
       "kind": "soft",
+      "reason_code": "finish_unserved",
+      "scorer": "transit",
+      "segment_id": "route",
+      "severity": 0.7,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
       "reason_code": "rail_at_grade",
       "scorer": "hazards",
       "segment_id": "s00039",
@@ -576,9 +598,15 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "reach_m": 2000.0,
+        "roads_checked": true,
+        "segments_out_of_reach": 0,
+        "transit_checked": true,
+        "worst_exit_m": 120.7
+      },
       "worst": []
     },
     "closures": {
@@ -917,6 +945,32 @@
       "measured_segments": 0,
       "summary": null,
       "worst": []
+    },
+    "transit": {
+      "flags": {
+        "hard": 0,
+        "soft": 1
+      },
+      "mean_confidence": 1.0,
+      "measured_segments": 1,
+      "summary": {
+        "finish_served": false,
+        "finish_stop": "Embarcadero (Blue-S,Green-S,Red-S,Yellow-S)",
+        "finish_stop_m": 1918.8,
+        "start_served": true,
+        "start_stop": "Embarcadero (Blue-S,Green-S,Red-S,Yellow-S)",
+        "start_stop_m": 423.1,
+        "stops_in_corridor": 6
+      },
+      "worst": [
+        {
+          "kind": "soft",
+          "reason_code": "finish_unserved",
+          "segment_id": "route",
+          "severity": 0.7,
+          "tier": "comfort"
+        }
+      ]
     }
   },
   "verify": [
