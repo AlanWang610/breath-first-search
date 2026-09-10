@@ -343,3 +343,24 @@ def test_summary_names_every_scorer_and_the_unchecked_sources(
     assert "sun_exposure" in result.stdout
     assert "verification:" in result.stdout
     assert "unchecked_sources" in result.stdout
+
+
+def test_the_manifest_records_how_long_each_scorer_took(route_file: Path, tmp_path: Path) -> None:
+    """Scope 6.4 wants per-tool elapsed time so the budget is measured, not assumed.
+
+    `Manifest.tool_calls` existed from M1.1 with nothing writing to it, which meant "which
+    scorer is slow" was a question only a profiler could answer. Filling it answered R5 in
+    one run: on a real corridor `sun_exposure` was 2.00 s of a 2.01 s total.
+    """
+    out = tmp_path / "run"
+    result = runner.invoke(
+        app, ["repair", str(route_file), "--date", "2026-09-12", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.stdout
+
+    from longrun.core.models.plan import Plan
+
+    plan = Plan.model_validate_json((out / "plan.json").read_text(encoding="utf-8"))
+    recorded = {call.tool for call in plan.manifest.tool_calls}
+    assert recorded == set(SCORERS), "every scorer that ran should be timed"
+    assert plan.manifest.total_elapsed_s >= 0.0

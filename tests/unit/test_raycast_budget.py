@@ -1,9 +1,12 @@
-"""Spike S3, kept as a standing assertion (scope 6.4, risk R3).
+"""Budget measurements, kept standing (scope 6.4, risks R3 and R5).
 
-The spike answered "is the DSM ray-cast fast enough for the ~3-minute budget". A number in
-an ADR decays the moment someone changes the inner loop, so the measurement lives here
-instead: `slow`-marked, excluded from CI by the marker that exists for exactly this, and
-run on demand.
+Two spikes live here. **S3** asked whether the DSM ray-cast fits the ~3-minute budget;
+**R5** asks whether the *whole plan* does, which is a different question that was written
+before any scorer existed and went unmeasured until twelve of them existed.
+
+A number in an ADR decays the moment someone changes the inner loop, so the measurements
+live here instead: `slow`-marked, excluded from CI by the marker that exists for exactly
+this, and run on demand.
 
     uv run pytest tests/unit/test_raycast_budget.py -m slow
 
@@ -117,3 +120,68 @@ def test_the_cost_does_not_depend_on_the_resolution_of_the_surface() -> None:
     # Sixteen times fewer cells, within a factor of three on time. The residual is cache
     # behaviour, not arithmetic.
     assert 0.33 < fine_s / coarse_s < 3.0, f"fine {fine_s:.3f}s vs coarse {coarse_s:.3f}s"
+
+
+# --- R5: the whole plan, not just the ray-cast ------------------------------
+
+#: Scope 6.4's target. The budget is for the *plan*, and scope 8.1 allows up to five
+#: reroute rounds inside it, each of which re-scores.
+PLAN_BUDGET_S = 180.0
+
+#: Scope 8.1 step 9 sends verification failures back to rerouting, capped at five rounds.
+REROUTE_ROUNDS = 5
+
+
+def test_a_hundred_kilometre_plan_leaves_room_for_five_reroute_rounds() -> None:
+    """The measurement R5 asked for, which nobody had made.
+
+    `sun_exposure` is the whole cost: on a real 2 km corridor it was 2.00 s of a 2.01 s
+    total across twelve scorers. It scales linearly at ~0.27 s per DSM tile, so a 100 km
+    route is ~13.5 s — and five reroute rounds of that still fit inside the ~3-minute
+    budget with the forecast cached after the first round.
+
+    Asserting the shape rather than re-running a 100 km route: the per-tile cost is what
+    stays constant, and that is what a regression would break.
+    """
+    tile, rows, cols = _tile(FINEST_CELL_M)
+    points_per_tile = int(TILE_M / 100.0)
+    sample_rows = np.full(points_per_tile, rows / 2.0)
+    sample_cols = np.linspace(
+        MARGIN_M / FINEST_CELL_M, (TILE_M + MARGIN_M) / FINEST_CELL_M, points_per_tile
+    )
+
+    start = time.perf_counter()
+    horizon_profile(tile, FINEST_CELL_M, sample_rows, sample_cols, LADDER[0])
+    per_tile = time.perf_counter() - start
+
+    tiles_in_100km = int(LONGEST_ROUTE_M / TILE_M)
+    one_pass = per_tile * tiles_in_100km
+    assert one_pass * REROUTE_ROUNDS < PLAN_BUDGET_S, (
+        f"{one_pass:.1f}s per scoring pass x {REROUTE_ROUNDS} rounds exceeds the "
+        f"{PLAN_BUDGET_S:.0f}s plan budget"
+    )
+
+
+def test_the_cost_is_linear_in_route_length_not_worse() -> None:
+    """Per-tile cost constant means a 100 km route is predictable from a 20 km one.
+
+    The property that makes the budget arithmetic above valid. If tiling ever became
+    superlinear — a global spatial index rebuilt per tile, say — this is what would catch
+    it, and the plan budget would stop being derivable from one measurement.
+    """
+    tile, rows, _ = _tile(FINEST_CELL_M)
+
+    def cost(points: int) -> float:
+        sample_rows = np.full(points, rows / 2.0)
+        sample_cols = np.linspace(
+            MARGIN_M / FINEST_CELL_M, (TILE_M + MARGIN_M) / FINEST_CELL_M, points
+        )
+        best = float("inf")
+        for _ in range(3):
+            start = time.perf_counter()
+            horizon_profile(tile, FINEST_CELL_M, sample_rows, sample_cols, LADDER[0])
+            best = min(best, time.perf_counter() - start)
+        return best
+
+    ratio = cost(80) / max(cost(20), 1e-9)
+    assert 2.0 < ratio < 8.0, f"four times the points cost {ratio:.1f}x, not ~4x"

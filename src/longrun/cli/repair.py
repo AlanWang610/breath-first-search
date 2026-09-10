@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import sys
+import time
 import uuid
 from datetime import datetime
 from datetime import time as time_type
@@ -34,7 +35,7 @@ from longrun.core.geo.segments import corridor, segment_route
 from longrun.core.models.context import Budget, FrozenClock, ScorerContext
 from longrun.core.models.coverage import CoverageEntry, CoverageManifest
 from longrun.core.models.measurement import ScorerResult
-from longrun.core.models.plan import Manifest, Plan, SnapshotPins
+from longrun.core.models.plan import Manifest, Plan, SnapshotPins, ToolCall
 from longrun.core.models.request import PlanRequest
 from longrun.core.pacing.model import pacing_model
 from longrun.core.plan.arbitrate import residual_flags
@@ -106,9 +107,19 @@ def _call(
 
 
 def _run_scorers(
-    route: Any, segments: list[Any], ctx: ScorerContext, etas: list[datetime]
+    route: Any,
+    segments: list[Any],
+    ctx: ScorerContext,
+    etas: list[datetime],
+    manifest: Manifest | None = None,
 ) -> list[ScorerResult]:
-    """Run every scorer that exists; report every one that does not."""
+    """Run every scorer that exists; report every one that does not.
+
+    Each is timed into the manifest. Scope 6.4 wants per-tool elapsed time recorded so the
+    ~3-minute budget is measured rather than assumed, and until now `Manifest.tool_calls`
+    existed with nothing writing to it - so "which scorer is slow" was a question only a
+    profiler could answer, and only on a machine that had one.
+    """
     results: list[ScorerResult] = []
 
     for name, module_path in SCORERS.items():
@@ -116,10 +127,13 @@ def _run_scorers(
         if func is None:
             results.append(unavailable(name, "scorer not implemented yet"))
             continue
+        started = time.perf_counter()
         try:
             results.append(_call(func, route, segments, ctx, etas, results))
         except Exception as exc:  # a scorer must never take the whole plan down
             results.append(unavailable(name, f"scorer failed: {type(exc).__name__}: {exc}"))
+        if manifest is not None:
+            manifest.record(ToolCall(tool=name, elapsed_s=time.perf_counter() - started))
 
     for name, reason in NOT_YET_IMPLEMENTED.items():
         results.append(unavailable(name, reason))
@@ -254,7 +268,8 @@ def repair(
         )
 
         eta_vector = pacing_model(route, start_at, elevations=elevations)
-        results = _run_scorers(route, segments, ctx, eta_vector.etas)
+        manifest = Manifest(snapshot=snapshot)
+        results = _run_scorers(route, segments, ctx, eta_vector.etas, manifest)
 
         # Verification runs before the plan is assembled so the plan can carry its own
         # report: `plan.json` is the golden-test artifact and the scope 10.3 API contract,
@@ -280,7 +295,7 @@ def repair(
             profile=profile,
             verify=report,
             elevation=elevation,
-            manifest=Manifest(snapshot=snapshot),
+            manifest=manifest,
         )
         sheet = render_markdown(
             plan, elevation=elevation, verify=report, pacing_caveats=eta_vector.caveats
