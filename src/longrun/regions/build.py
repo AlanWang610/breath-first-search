@@ -265,13 +265,24 @@ def step_layers(ctx: BuildContext) -> StepRecord:
     else:
         blocked.append("gtfs (no feeds in the spec)")
 
-    # Named individually rather than as "some layers missing": a region missing PAD-US and
-    # a region missing HPMS support different plans, and the coverage report has to say
-    # which. `overture` is the odd one - it has a loader, but a corridor one (ADR 0009).
+    from longrun.core.data.padus import load_padus
+    from longrun.core.models.geometry import BBox
+
+    west, south, east, north = ctx.spec.shape().bounds
+    counts["padus_units"] = load_padus(
+        ctx.connection,
+        ctx.spec.name,
+        BBox(min_lon=west, min_lat=south, max_lon=east, max_lat=north),
+    )
+
+    # Named individually rather than as "some layers missing": a region missing HPMS and a
+    # region missing cell coverage support different plans, and the coverage report has to
+    # say which. `overture` is the odd one - it has a loader, but a corridor one (ADR 0009).
     blocked.extend(
         [
-            "padus (no loader written)",
-            "hpms (no loader written)",
+            # ADR 0012: no unauthenticated endpoint serves it, so the level every plan
+            # reports is tag-only and says so.
+            "hpms (no reachable source - ADR 0012)",
             "fcc_bdc (bulk download needs an account)",
             "overture (loads per corridor, not per region - ADR 0009)",
         ]

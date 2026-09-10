@@ -219,3 +219,96 @@ def test_the_kept_feature_types_include_the_ordinary_stream() -> None:
 @pytest.mark.parametrize("excluded", [428, 420, 566])
 def test_the_excluded_feature_types_stay_excluded(excluded: int) -> None:
     assert excluded not in NHD_CROSSABLE_FTYPES
+
+
+# --- PAD-US -----------------------------------------------------------------
+
+
+def test_padus_writes_the_table_the_store_reads() -> None:
+    from longrun.core.data.padus import PADUS
+
+    assert DEFAULT_LAYER_TABLES["parks"] == PADUS.qualified
+
+
+def test_the_padus_query_names_the_input_projection() -> None:
+    """The quiet failure: without `inSR` the server reads a WGS84 envelope in the *layer's*
+    projection, which for California selects a box in the Pacific and returns zero features
+    rather than an error."""
+    from longrun.core.data.padus import query_params
+    from longrun.core.models.geometry import BBox
+
+    params = query_params(BBox(min_lon=-122.5, min_lat=37.7, max_lon=-122.3, max_lat=37.9))
+    assert params["inSR"] == "4326"
+    assert params["outSR"] == "4326"
+    assert params["geometry"] == "-122.5,37.7,-122.3,37.9"
+    assert params["geometryType"] == "esriGeometryEnvelope"
+
+
+def test_the_padus_query_is_sorted_so_paging_is_defined() -> None:
+    """ArcGIS documents `resultOffset` as requiring a sort; without one a second page may
+    repeat or skip rows from the first."""
+    from longrun.core.data.padus import query_params
+    from longrun.core.models.geometry import BBox
+
+    params = query_params(BBox(min_lon=-1.0, min_lat=1.0, max_lon=1.0, max_lat=2.0), offset=1000)
+    assert params["orderByFields"]
+    assert params["resultOffset"] == 1000
+
+
+def test_the_agency_columns_are_requested() -> None:
+    """`Mang_Name` is what resolves a park to an adapter (scope 13 step 4). Without it the
+    layer answers containment and nothing else."""
+    from longrun.core.data.padus import query_params
+    from longrun.core.models.geometry import BBox
+
+    fields = query_params(BBox(min_lon=-1.0, min_lat=1.0, max_lon=1.0, max_lat=2.0))["outFields"]
+    assert "Mang_Name" in fields
+    assert "Unit_Nm" in fields
+
+
+def test_an_aggregate_row_is_split_into_its_parts() -> None:
+    """The defect the first real corridor produced: two unnamed `CITY` rows of 15,243 and
+    18,573 parts were 19.7 MB of a 19.9 MB fixture holding 106 features.
+
+    Kept whole, such a row answers a corridor query with "somewhere inside this blob there
+    is a park near you" and costs a point-in-polygon test against all of it.
+    """
+    from shapely.geometry import MultiPolygon, Polygon
+
+    from longrun.core.data.padus import _parts
+
+    a = Polygon([(0, 0), (1, 0), (1, 1), (0, 0)])
+    b = Polygon([(5, 5), (6, 5), (6, 6), (5, 5)])
+    assert len(_parts(MultiPolygon([a, b]))) == 2
+    assert len(_parts(a)) == 1
+
+
+def test_an_empty_part_is_dropped_rather_than_written() -> None:
+    from shapely.geometry import Polygon
+
+    from longrun.core.data.padus import _parts
+
+    assert _parts(Polygon()) == []
+
+
+def test_every_part_of_an_aggregate_keeps_its_agency_and_gets_its_own_id() -> None:
+    """An aggregate row is one *manager*, not one place - so the agency is copied to every
+    part, and the id has to distinguish them or the upsert keeps only the last."""
+    from longrun.core.data.padus import _normalise
+
+    properties = {"Unit_Nm": "", "Mang_Name": "CITY", "Mang_Type": "LOC"}
+    first = _normalise(properties, 3, 0)
+    second = _normalise(properties, 3, 1)
+    assert first["agency"] == second["agency"] == "CITY"
+    assert first["unit_id"] != second["unit_id"]
+
+
+def test_a_row_with_no_name_is_still_loaded() -> None:
+    """PAD-US publishes protected land with no name and no manager recorded. It is still
+    protected land, and `services_along` asks only whether a point is inside it."""
+    from longrun.core.data.padus import _normalise
+
+    row = _normalise({}, 0, 0)
+    assert row["name"] == "unnamed"
+    assert row["agency"] == "unknown"
+    assert row["unit_id"]

@@ -11,7 +11,8 @@
     "amenities": "2026-09-10",
     "railways": "2026-09-10",
     "flowlines": "nhd-hu4",
-    "transit_stops": "gtfs-bart"
+    "transit_stops": "gtfs-bart",
+    "parks": "padus-4.1"
   },
   "extra": {}
 }

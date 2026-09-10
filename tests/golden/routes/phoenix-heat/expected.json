@@ -57,11 +57,11 @@
       "vintage": "2026-09-10"
     },
     {
-      "checked": false,
+      "checked": true,
       "kind": "park_boundaries",
-      "reason": "no park layer: park containment not established",
+      "reason": null,
       "source": "parks",
-      "vintage": null
+      "vintage": "padus-4.1"
     },
     {
       "checked": true,
@@ -288,7 +288,7 @@
     "min_m": 329.3,
     "samples_missing": 0
   },
-  "measurements_sha256": "eecd3239931719e666e6274af9eadc0fc39d2aeb0e3fbe5dba9dd337dbd1468b",
+  "measurements_sha256": "3d44514f49ee3301c2800f033454d1031246913956c732883002e1b772b44881",
   "pacing": {
     "duration_s": 1884.2,
     "finish": "2026-07-15T12:31:24"
@@ -2139,7 +2139,7 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.802,
+      "mean_confidence": 1.0,
       "measured_segments": 98,
       "summary": {
         "buffer_m": 200.0,
@@ -2147,7 +2147,7 @@
         "max_food_gap_m": 940.215,
         "max_toilet_gap_m": 3352.229,
         "max_water_gap_m": 3461.536,
-        "parks_checked": false,
+        "parks_checked": true,
         "toilet_count": 1,
         "water_count": 13
       },
