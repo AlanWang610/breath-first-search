@@ -50,6 +50,7 @@ SCORERS: dict[str, str] = {
     "stop_density": "longrun.core.scorers.stop_density",
     "surface_profile": "longrun.core.scorers.surface",
     "services_along": "longrun.core.scorers.services",
+    "microclimate": "longrun.core.scorers.microclimate",
 }
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the
@@ -57,7 +58,6 @@ SCORERS: dict[str, str] = {
 NOT_YET_IMPLEMENTED: dict[str, str] = {
     "sun_exposure": "DSM ray-cast lands in M2",
     "heat_stress": "needs the forecast adapter (M2)",
-    "microclimate": "needs the forecast adapter (M2)",
     "air_quality": "needs the AirNow adapter (M2)",
     "lighting": "needs solar geometry wiring (M2)",
     "resupply_schedule": "needs opening-hours parsing (M2)",
