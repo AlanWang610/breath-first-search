@@ -206,14 +206,15 @@ def repair(
         # fills gaps - and a GDAL /vsicurl/ read bypasses the cache, the budget and
         # LONGRUN_OFFLINE, which is a hole worth keeping deliberate.
         remote = _remote_map(route, remote_rasters)
+        budget = Budget()
         ctx = ScorerContext(
             layers=layers,
-            rasters=FileRasterStore(root, remote=remote),
+            rasters=FileRasterStore(root, remote=remote, offline=offline, budget=budget),
             cache=cache,
             clock=FrozenClock(start_at),
             coverage=CoverageManifest(),
             profile=profile,
-            budget=Budget(),
+            budget=budget,
             utc_offset_hours=utc_offset,
         )
 

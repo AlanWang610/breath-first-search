@@ -29,6 +29,8 @@ from longrun.core.models.geometry import BBox, Corridor, Route
 if TYPE_CHECKING:  # pragma: no cover
     from geopandas import GeoDataFrame
 
+    from longrun.core.models.context import Budget
+
 WGS84 = "EPSG:4326"
 
 #: Fixture formats, in precedence order, one file per layer.
@@ -130,15 +132,38 @@ class FileRasterStore:
     `prd-tnm.s3.amazonaws.com` support range requests.
     """
 
-    def __init__(self, root: Path | str, remote: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        root: Path | str,
+        remote: dict[str, str] | None = None,
+        offline: bool = False,
+        budget: Budget | None = None,
+    ) -> None:
         self.root = Path(root)
         self.remote = remote or {}
+        self.offline = offline
+        self.budget = budget
 
     def _source(self, layer: str) -> str:
+        """A local file if there is one, else a remote COG - unless offline forbids it.
+
+        A GDAL `/vsicurl/` read does not pass through `core.data.cache`: it does not spend
+        the API budget, it is not recorded in a cassette, and `LONGRUN_OFFLINE` cannot see
+        it. ADR 0007 accepts that as a deliberate exception for content-addressed rasters
+        and closes the two holes it leaves - offline refuses a remote read outright, and a
+        remote read that does happen is metered.
+        """
         local = self.root / f"{layer}.tif"
         if local.exists():
             return str(local)
         if layer in self.remote:
+            if self.offline:
+                raise LayerNotFound(
+                    f"remote raster {layer!r} refused in offline mode: a /vsicurl/ read "
+                    "is not served from any cassette"
+                )
+            if self.budget is not None:
+                self.budget.spend_raster_window()
             return f"/vsicurl/{self.remote[layer]}"
         raise LayerNotFound(f"no raster {layer!r} under {self.root} or in remote map")
 

@@ -3,10 +3,16 @@
 One file per decision that was expensive to make and would otherwise be re-litigated:
 `NNNN-short-title.md`, with context, the decision, and what would make us revisit it.
 
-Decisions already made in the scope, to be written up here as they are implemented:
+**What earns a file here.** A decision the scope did not make, or one it made that
+implementation has since contradicted or refined. A decision the scope states clearly and
+that the code simply follows does not need restating — that is transcription, and it makes
+this directory look like there is work outstanding when there is not.
 
-- Router: GraphHopper over Valhalla (scope 4.3)
-- No graph-workflow framework for the agent loop (scope 4.2)
-- SVF computed per route corridor on first use, not region-wide at build (scope 5)
-- Preference elicitation in context, never an up-front questionnaire (scope 6.3)
-- Position weight applied in the scoring loop, not the router (scope 8.2)
+By that test, four of the five entries this list used to carry were transcription and have
+been struck: GraphHopper over Valhalla (§4.3), no graph-workflow framework (§4.2),
+elicitation in context rather than a questionnaire (§6.3), and position weight applied in
+the scoring loop rather than the router (§8.2). All four are still true, still in the
+scope, and still what the code does.
+
+The fifth — SVF per corridor rather than region-wide — turned out to need a real decision
+once it was measured, and is now **ADR 0005**.

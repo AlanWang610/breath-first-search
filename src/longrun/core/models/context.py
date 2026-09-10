@@ -58,13 +58,27 @@ class Budget:
     deadline: datetime | None = None
     api_calls_max: int = 200
     imagery_tiles_max: int = 10
+    #: Windowed COG reads over `/vsicurl/`. Metered separately from API calls because
+    #: they are a different kind of cost - content-addressed, immutable, and cached by
+    #: GDAL rather than by us - but metered, because a DSM over a 100 km corridor is
+    #: tens of range requests per tile and nothing else would notice.
+    raster_windows_max: int = 500
     api_calls_used: int = 0
     imagery_tiles_used: int = 0
+    raster_windows_used: int = 0
 
     def spend_api_call(self, n: int = 1) -> None:
         if self.api_calls_used + n > self.api_calls_max:
             raise BudgetExceeded(f"external API budget exhausted ({self.api_calls_max} calls)")
         self.api_calls_used += n
+
+    def spend_raster_window(self, n: int = 1) -> None:
+        """Charge a remote windowed raster read (scope 6.4)."""
+        if self.raster_windows_used + n > self.raster_windows_max:
+            raise BudgetExceeded(
+                f"remote raster budget exhausted ({self.raster_windows_max} windows)"
+            )
+        self.raster_windows_used += n
 
     def spend_imagery_tile(self, n: int = 1) -> None:
         if self.imagery_tiles_used + n > self.imagery_tiles_max:

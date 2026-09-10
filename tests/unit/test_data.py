@@ -383,3 +383,62 @@ def test_absent_raster_reads_as_no_coverage(tmp_path: Path, sf_route: Route) -> 
     store = FileRasterStore(tmp_path)
     assert store.read_window("dem", corridor(sf_route).bbox) is None
     assert store.resolution_m("dem") is None
+
+
+# --- remote rasters, metered and gated --------------------------------------
+
+
+def test_offline_refuses_a_remote_raster_rather_than_fetching_it(
+    tmp_path: Path, sf_route: Route
+) -> None:
+    """ADR 0007: a /vsicurl/ read is served from no cassette, so offline must refuse it.
+
+    Without this, `conftest._block_network` is the only thing between a golden test and a
+    multi-gigabyte range-request session, and that fixture exists only inside pytest.
+    """
+    store = FileRasterStore(
+        tmp_path, remote={"dem": "https://example.invalid/dem.tif"}, offline=True
+    )
+    with pytest.raises(LayerNotFound, match="refused in offline mode"):
+        store._source("dem")
+
+
+def test_a_local_raster_still_wins_when_offline(tmp_path: Path) -> None:
+    """A golden route carries its own DEM, so offline must not break it."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    with rasterio.open(
+        tmp_path / "dem.tif",
+        "w",
+        driver="GTiff",
+        height=4,
+        width=4,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(-122.4, 37.8, 0.001, 0.001),
+    ) as dst:
+        dst.write(np.zeros((4, 4), dtype="float32"), 1)
+
+    store = FileRasterStore(
+        tmp_path, remote={"dem": "https://example.invalid/dem.tif"}, offline=True
+    )
+    assert store._source("dem").endswith("dem.tif")
+    assert "vsicurl" not in store._source("dem")
+
+
+def test_a_remote_read_is_charged_to_the_budget(tmp_path: Path) -> None:
+    """Metered separately from API calls: a different kind of cost, but still a cost."""
+    from longrun.core.models.context import Budget, BudgetExceeded
+
+    budget = Budget(raster_windows_max=2)
+    store = FileRasterStore(
+        tmp_path, remote={"dem": "https://example.invalid/dem.tif"}, budget=budget
+    )
+    store._source("dem")
+    store._source("dem")
+    assert budget.raster_windows_used == 2
+    with pytest.raises(BudgetExceeded, match="remote raster budget"):
+        store._source("dem")
