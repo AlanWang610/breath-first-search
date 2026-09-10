@@ -233,6 +233,17 @@ def repair(
         # what "unknown elevation" looks like downstream (scope 12).
         elevations = sample_elevation(route, ctx.rasters)
         elevation = elevation_profile(route, elevations)
+        # Scope 7.1: elevation comes from the terrain model, never from the GPX. Writing it
+        # onto the stored route makes that true of `plan.json` too, so a later `export` or
+        # `route_diff` reads the same numbers this run scored - without the DEM.
+        route = route.model_copy(
+            update={
+                "points": [
+                    point.model_copy(update={"ele_m": value})
+                    for point, value in zip(route.points, elevations, strict=True)
+                ]
+            }
+        )
 
         eta_vector = pacing_model(route, start_at, elevations=elevations)
         results = _run_scorers(route, segments, ctx, eta_vector.etas)
@@ -260,6 +271,7 @@ def repair(
             coverage=ctx.coverage,
             profile=profile,
             verify=report,
+            elevation=elevation,
             manifest=Manifest(snapshot=snapshot),
         )
         sheet = render_markdown(

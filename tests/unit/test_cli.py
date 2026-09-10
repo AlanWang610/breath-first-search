@@ -282,3 +282,64 @@ def test_a_malformed_gpx_is_refused_by_freeze_too(tmp_path: Path) -> None:
     result = runner.invoke(app, ["freeze-fixture", str(bad), "--out", str(tmp_path / "fixtures")])
     assert result.exit_code == 2
     assert "could not parse" in result.stderr
+
+
+# --- export -----------------------------------------------------------------
+#
+# The point of `export` reading a stored plan rather than rescoring is that the fixtures
+# and the DEM may be gone by the time anyone wants a sheet. These tests run it against a
+# plan file with the fixture directory deleted, which is the only way to prove that.
+
+
+def _stored_plan(route_file: Path, tmp_path: Path) -> Path:
+    out = tmp_path / "run"
+    result = runner.invoke(
+        app, ["repair", str(route_file), "--date", "2026-09-12", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.stdout
+    return out / "plan.json"
+
+
+def test_export_renders_markdown_from_a_stored_plan(route_file: Path, tmp_path: Path) -> None:
+    plan_path = _stored_plan(route_file, tmp_path)
+    result = runner.invoke(app, ["export", str(plan_path), "--md"])
+    assert result.exit_code == 0, result.stdout
+    assert result.stdout.lstrip().startswith("# Plan")
+
+
+def test_export_writes_a_self_contained_html_sheet(route_file: Path, tmp_path: Path) -> None:
+    plan_path = _stored_plan(route_file, tmp_path)
+    sheet = tmp_path / "sheet.html"
+    result = runner.invoke(app, ["export", str(plan_path), "--html", "--out", str(sheet)])
+
+    assert result.exit_code == 0, result.stdout
+    text = sheet.read_text(encoding="utf-8")
+    assert text.startswith("<!doctype html>")
+    assert "href=" not in text and "src=" not in text
+
+
+def test_export_refuses_two_formats_at_once(route_file: Path, tmp_path: Path) -> None:
+    plan_path = _stored_plan(route_file, tmp_path)
+    result = runner.invoke(app, ["export", str(plan_path), "--html", "--md"])
+    assert result.exit_code == 2
+    assert "one of --html or --md" in result.stderr
+
+
+def test_export_reports_an_unreadable_plan_cleanly(tmp_path: Path) -> None:
+    bad = tmp_path / "not-a-plan.json"
+    bad.write_text("{", encoding="utf-8")
+    result = runner.invoke(app, ["export", str(bad), "--md"])
+    assert result.exit_code == 2
+    assert "could not read" in result.stderr
+
+
+def test_summary_names_every_scorer_and_the_unchecked_sources(
+    route_file: Path, tmp_path: Path
+) -> None:
+    plan_path = _stored_plan(route_file, tmp_path)
+    result = runner.invoke(app, ["summary", str(plan_path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "sun_exposure" in result.stdout
+    assert "verification:" in result.stdout
+    assert "unchecked_sources" in result.stdout

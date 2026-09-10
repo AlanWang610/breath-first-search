@@ -162,6 +162,13 @@
       "vintage": null
     }
   ],
+  "elevation": {
+    "gain_m": 57.6,
+    "loss_m": 0.0,
+    "max_m": 65.1,
+    "min_m": 5.1,
+    "samples_missing": 0
+  },
   "measurements_sha256": "fca594b56639f6b590f885e961e4804cca8e70cd5eda4ef214c98a2fabbbb5ea",
   "pacing": {
     "duration_s": 1544.9,

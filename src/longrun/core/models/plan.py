@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from longrun.core.geo.dem import ElevationProfile
 from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import Flag, ScorerResult
@@ -106,6 +107,10 @@ class Plan(BaseModel):
     #: never ran, which is not the same as running clean - scope 8.1 step 9 needs the
     #: named offenders to reroute, and a sheet must not imply checks that never happened.
     verify: VerifyReport | None = None
+    #: Gain, loss, grade histogram and the longest sustained runs. Stored for the same
+    #: reason as `verify`: `longrun export` renders a sheet from a plan file alone, and
+    #: recomputing this would mean re-reading a DEM the plan may no longer have.
+    elevation: ElevationProfile | None = None
     profile: PreferenceProfile = PreferenceProfile()
     status: PlanStatus = "complete"
 

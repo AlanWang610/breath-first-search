@@ -26,6 +26,9 @@ What is stored, and why each:
   inside the hash would mean a route whose signalized crossing stopped being detected as
   a crossing at all produced an identical-looking expectation, because it has no flag
   either way.
+* **route and elevation totals.** Gain and loss are headline numbers a reader checks
+  against the map, and they are what the pacing figure is derived from — so a change in
+  one that does not move the other is a bug worth seeing directly.
 * **a content hash of the full measurement array.** Everything above is a summary, and a
   summary can miss things. The hash cannot: any change to any measured value on any
   segment fails the test, and the small diff above is what you read to find out why.
@@ -130,6 +133,25 @@ def digest(plan: Plan) -> dict[str, Any]:
             "segment_count": len(plan.segments),
             "segments_matched_to_a_way": sum(1 for s in plan.segments if s.way_id is not None),
         },
+        "elevation": (
+            {
+                "gain_m": round(plan.elevation.gain_m, QUANTITY_DP),
+                "loss_m": round(plan.elevation.loss_m, QUANTITY_DP),
+                "min_m": (
+                    None
+                    if plan.elevation.min_ele_m is None
+                    else round(plan.elevation.min_ele_m, QUANTITY_DP)
+                ),
+                "max_m": (
+                    None
+                    if plan.elevation.max_ele_m is None
+                    else round(plan.elevation.max_ele_m, QUANTITY_DP)
+                ),
+                "samples_missing": plan.elevation.samples_missing,
+            }
+            if plan.elevation
+            else None
+        ),
         "pacing": {
             "duration_s": round(duration_s, QUANTITY_DP) if duration_s is not None else None,
             # To the second, never finer. A microsecond is the seventh significant digit
