@@ -101,7 +101,18 @@ packages = ["longrun"]
 strict = false
 
 [[tool.mypy.overrides]]
-# No type stubs published for the geospatial stack.
+# Two different reasons, one setting.
+#
+# The geospatial stack publishes no type stubs, so mypy has nothing to check against.
+#
+# `duckdb` and `osmium` are the `ingest` extra, which CI does not install: the whole point
+# of the extra is that the test suite never touches S3 or a `.pbf`. Without this, `mypy`
+# passes on a developer machine with `--all-extras` and fails on CI, which is a gate that
+# is not a gate. `osmium` in particular *does* ship stubs, and they are worth having - they
+# are what forced the `isinstance(obj, osmium.osm.Way)` narrowing in `core/data/osm.py` -
+# so this suppresses only its absence, never its types when it is present.
+#
+# Anything else that lands in `ingest` belongs on this list for the same reason.
 module = [
   "geopandas.*",
   "rasterio.*",
@@ -111,5 +122,6 @@ module = [
   "pyproj.*",
   "pandas.*",
   "duckdb.*",
+  "osmium.*",
 ]
 ignore_missing_imports = true
