@@ -13,6 +13,7 @@ from longrun.core.models.geometry import Route, RoutePoint
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, Tier
 from longrun.core.plan.arbitrate import (
     TRADEOFF_MARGIN,
+    arbitrate,
     compare,
     rank_flags,
     residual_flags,
@@ -377,3 +378,61 @@ def test_a_clean_route_beats_a_flagged_one() -> None:
     clean = _candidate("A", [])
     flagged = _candidate("B", [_flag("surface_profile", "s00000", Tier.COMFORT, severity=0.9)])
     assert compare(clean, flagged, "s00000").winner == "A"
+
+
+# --- arbitrating a field, not a pair ----------------------------------------
+
+
+def test_a_third_candidate_that_beats_both_is_not_asked_about() -> None:
+    """`compare` is pairwise and "close" is a local property, so pairing order decides.
+
+    A and B are within the margin of each other; C beats both outright. Comparing the
+    first pair that comes to hand raises a trade-off and never looks at C - the user is
+    asked to choose between two routes when a better one was on the table. `tier_key` is a
+    total order over the field, so the driver ranks first and compares second.
+    """
+    a = _candidate("A", [_flag("surface_profile", "s00000", Tier.COMFORT, severity=0.50)])
+    b = _candidate("B", [_flag("surface_profile", "s00000", Tier.COMFORT, severity=0.55)])
+    c = _candidate("C", [])
+
+    assert compare(a, b, segment_id="s00000").needs_input, "the pair really is a trade-off"
+
+    outcome = arbitrate([a, b, c], segment_id="s00000")
+    assert outcome.winner == "C"
+    assert not outcome.needs_input
+
+
+def test_a_field_whose_best_two_are_close_still_asks() -> None:
+    """The driver must not resolve a genuine same-tier conflict by ranking it away."""
+    a = _candidate("A", [_flag("surface_profile", "s00000", Tier.COMFORT, severity=0.50)])
+    b = _candidate("B", [_flag("surface_profile", "s00000", Tier.COMFORT, severity=0.55)])
+    worse = _candidate("C", [_flag("surface_profile", "s00000", Tier.COMFORT, FlagKind.HARD, 1.0)])
+
+    outcome = arbitrate([a, b, worse], segment_id="s00000")
+
+    assert outcome.needs_input
+    assert outcome.trade_off is not None
+    assert {outcome.trade_off.option_a, outcome.trade_off.option_b} == {"A", "B"}
+
+
+def test_arbitration_lists_the_flags_the_winner_still_carries() -> None:
+    """Scope 8.4: "residual flags are always listed".
+
+    `Arbitration.residual` has existed since M1 and `compare` never wrote it, so every
+    arbitration reported an empty residual - which reads as "nothing is wrong with the
+    winner" rather than "nobody looked".
+    """
+    clean = _candidate("A", [])
+    flagged = _candidate("B", [_flag("surface_profile", "s00000", Tier.COMFORT, severity=0.9)])
+
+    assert arbitrate([clean], segment_id="s00000").residual == []
+    assert [f.scorer for f in arbitrate([flagged], segment_id="s00000").residual] == [
+        "surface_profile"
+    ]
+
+
+def test_arbitrating_nothing_chooses_nothing() -> None:
+    """A round that produced no candidates is not a round that chose the original."""
+    outcome = arbitrate([], segment_id="s00000")
+    assert outcome.winner is None
+    assert not outcome.needs_input

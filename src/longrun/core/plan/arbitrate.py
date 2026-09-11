@@ -11,9 +11,11 @@ picking one and hiding the choice. Scope 8.4 spells out why — "A adds 0.8 km a
 signalized crossing; B is fully shaded but has 600 m without sidewalk at mile 41" is a
 decision the runner should make.
 
-This module takes `propose_alternatives` as an injected callback and never imports a
-router, so the whole of scope 8.4 is testable with hand-built `ScorerResult`s and no
-routing engine at all.
+This module compares *already-scored* candidates and never imports a router, so the whole
+of scope 8.4 is testable with hand-built `ScorerResult`s and no routing engine at all.
+Proposing the candidates is the loop's job, not arbitration's: until M5.3 this docstring
+claimed the module "takes `propose_alternatives` as an injected callback", which described
+a parameter that did not exist anywhere in the tree.
 """
 
 from __future__ import annotations
@@ -169,22 +171,68 @@ def compare(
 
     # Identical scores: pick deterministically rather than asking about nothing.
     if key_a == key_b:
-        return Arbitration(winner=a.label, ranked=a.ranked)
+        return _outcome(winner=a.label, ranked=a.ranked)
 
     decisive = _first_difference(key_a, key_b)
     if decisive is None or not _is_close(key_a, key_b, decisive, margin):
         winner = a if key_a < key_b else b
-        return Arbitration(winner=winner.label, ranked=winner.ranked)
+        return _outcome(winner=winner.label, ranked=winner.ranked)
 
     comparison = describe(a, b) if describe else f"{a.label} and {b.label} score within {margin}"
-    return Arbitration(
+    return _outcome(
+        ranked=(a if key_a <= key_b else b).ranked,
         trade_off=TradeOff(
             segment_id=segment_id,
             option_a=a.label,
             option_b=b.label,
             comparison=comparison,
         ),
-        ranked=(a if key_a <= key_b else b).ranked,
+    )
+
+
+def arbitrate(
+    candidates: Sequence[Candidate],
+    *,
+    segment_id: str,
+    describe: Callable[[Candidate, Candidate], str] | None = None,
+    margin: float = TRADEOFF_MARGIN,
+) -> Arbitration:
+    """Choose among any number of scored candidates - scope 8.1 step 6's decision.
+
+    `compare` is pairwise, and `_is_close` is a **local** property: A and B may be close
+    enough to be a trade-off while A beats C outright. So comparing a field of four in
+    arbitrary pairs gives an answer - and, worse, a decision about whether to stop and ask
+    the user at all - that depends on the pairing order.
+
+    `Candidate.tier_key()` is a total order over the whole field and settles it. `compare`
+    then does the one job it was written for: deciding whether the best two are too close
+    to separate. Ties break on the label, so a golden cannot reorder between runs.
+    """
+    if not candidates:
+        return Arbitration()
+    ordered = sorted(candidates, key=lambda c: (c.tier_key(), c.label))
+    if len(ordered) == 1:
+        return _outcome(winner=ordered[0].label, ranked=ordered[0].ranked)
+    return compare(ordered[0], ordered[1], segment_id, describe=describe, margin=margin)
+
+
+def _outcome(
+    *,
+    ranked: Sequence[RankedFlag],
+    winner: str | None = None,
+    trade_off: TradeOff | None = None,
+) -> Arbitration:
+    """An arbitration that fills the `residual` it declares.
+
+    Scope 8.4: "residual flags are always listed". The field has existed since M1 and
+    `compare` never wrote it, so every arbitration reported an empty residual - which
+    reads as "nothing is wrong with the winner" rather than "nobody looked".
+    """
+    return Arbitration(
+        winner=winner,
+        trade_off=trade_off,
+        ranked=list(ranked),
+        residual=[item.flag for item in ranked],
     )
 
 
