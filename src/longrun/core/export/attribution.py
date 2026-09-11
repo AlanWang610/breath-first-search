@@ -58,6 +58,31 @@ LICENCES: dict[str, SourceLicence] = {
         licence="per publishing agency (CC0 or US public domain for the feeds loaded)",
         attribution="Work zone data via the USDOT WZDx feed registry",
     ),
+    "state511_sfbay": SourceLicence(
+        source="state511_sfbay",
+        licence="511.org terms of use; attribution required",
+        attribution="Traffic data courtesy of 511 SF Bay / MTC",
+    ),
+    "state511_az511": SourceLicence(
+        source="state511_az511",
+        licence="AZ511 terms of use",
+        attribution="Arizona DOT / AZ511",
+    ),
+    "wzdx_modot": SourceLicence(
+        source="wzdx_modot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Missouri Department of Transportation",
+    ),
+    "wzdx_kdot": SourceLicence(
+        source="wzdx_kdot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Kansas Department of Transportation",
+    ),
+    "wzdx_maricopa": SourceLicence(
+        source="wzdx_maricopa",
+        licence="CC0 1.0",
+        attribution="Work zone data: Maricopa County DOT",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",

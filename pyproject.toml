@@ -68,6 +68,11 @@ longrun = "longrun.cli.main:app"
 wzdx-modot = "longrun.adapters.wzdx.modot:CLOSURES"
 wzdx-kdot = "longrun.adapters.wzdx.kdot:CLOSURES"
 wzdx-maricopa = "longrun.adapters.wzdx.maricopa:CLOSURES"
+# Tier 2: state 511. Both need a free key; each reports which one by name until it has it.
+state511-sfbay = "longrun.adapters.state511.sfbay:CLOSURES"
+state511-az511 = "longrun.adapters.state511.az511:CLOSURES"
+# Tier 3: agency portals. Keyed on a PAD-US agency rather than a census boundary.
+portal-nps = "longrun.adapters.portals.nps:TRAIL_STATUS"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/longrun"]

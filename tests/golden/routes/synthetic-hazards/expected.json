@@ -229,7 +229,7 @@
       "checked": false,
       "jurisdiction": "San Francisco County (tiger:county:06075)",
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token)",
       "source": "closures",
       "tier": null,
       "vintage": null

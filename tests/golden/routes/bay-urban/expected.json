@@ -310,7 +310,7 @@
       "checked": false,
       "jurisdiction": "San Francisco Maritime National Historical Park (padus:NPS)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "LONGRUN_NPS_API_KEY is not set; the NPS data API needs a free key (https://www.nps.gov/subjects/developer/get-started.htm)",
       "source": "trail_status",
       "tier": null,
       "vintage": null
