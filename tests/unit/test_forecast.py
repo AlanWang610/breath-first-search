@@ -17,11 +17,9 @@ from typing import Any
 
 import pytest
 
-from longrun.core.data.cache import SqliteCache, args_hash
+from longrun.core.data.cache import COORD_PRECISION, STATIC_DAY, SqliteCache, args_hash
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore
 from longrun.core.data.forecast import (
-    COORD_PRECISION,
-    STATIC_DAY,
     USER_AGENT_ENV_VAR,
     ForecastSite,
     HourlyPoint,

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from longrun.core.data.cache import CacheMiss, fetch
+from longrun.core.data.cache import COORD_PRECISION, STATIC_DAY, CacheMiss, fetch
 from longrun.core.models.context import BudgetExceeded
 from longrun.core.models.coverage import CoverageEntry
 
@@ -56,13 +56,6 @@ DEFAULT_SPACING_M = 5000.0
 #: budget, leaving room for everything else a plan does.
 MAX_SAMPLE_POINTS = 24
 
-#: ~11 m. Finer than this and the cache key depends on floating-point noise.
-COORD_PRECISION = 4
-
-#: A `/points` response maps a coordinate to a forecast grid and has no date. Keying it by
-#: the plan date would refetch it daily for nothing and multiply cassette size. A
-#: deliberate, named abuse of the `day` column rather than an accident.
-STATIC_DAY = "static"
 
 NWS_ROOT = "https://api.weather.gov"
 OPEN_METEO_ROOT = "https://api.open-meteo.com/v1/forecast"

@@ -319,6 +319,13 @@ def freeze_cassette(
     with_adapters: bool = typer.Option(
         False, "--with-adapters", help="Also record jurisdiction adapter responses."
     ),
+    with_routes: bool = typer.Option(
+        False, "--with-routes", help="Also record router answers: map-match and detours."
+    ),
+    router_url: str | None = typer.Option(None, "--router", help="GraphHopper base URL."),
+    graph: str | None = typer.Option(
+        None, "--graph", help="Graph identity for the route cache key, e.g. the extract date."
+    ),
 ) -> None:
     """Record a route's forecast into a cassette a golden run can replay.
 
@@ -358,18 +365,61 @@ def freeze_cassette(
         # a cassette that carries one and not the other is a route that half-scores.
         air = route_air_quality(route, ctx, date.date())
         adapters = _record_adapters(route, ctx, date) if with_adapters else None
+        routes = _record_routes(route, ctx, router_url, graph) if with_routes else None
         recorded = len(cache.keys())
 
     for site in forecast.sites:
         state = site.provider if site.hours else f"none ({site.reason})"
         typer.echo(f"  site {site.site.index} at {site.site.cum_dist_m / 1000:.1f} km: {state}")
     typer.echo(f"  air quality: {sum(1 for s in air.sites if s.hours)} of {len(air.sites)} site(s)")
-    for line in adapters or []:
+    for line in [*(adapters or []), *(routes or [])]:
         typer.echo(f"  {line}")
     typer.echo(f"wrote {out}: {recorded} key(s), {ctx.budget.api_calls_used} API call(s)")
     if not forecast.answered and not air.answered:
         typer.echo("error: nothing was recorded", err=True)
         raise typer.Exit(code=1)
+
+
+def _record_routes(route: Any, ctx: Any, url: str | None, graph: str | None) -> list[str]:
+    """Record what the router says about this route, through the production wrapper.
+
+    `freeze-fixture`'s argument once more: this goes through `CachedRouter`, so the
+    recorded keys are the ones a plan will ask for. A hand-written route cassette would be
+    a second implementation of the key derivation and would drift the first time the
+    rounding rule changed.
+
+    What gets recorded is the map-match - which is what generate mode needs before it can
+    score anything - and a detour around the middle of the route, which is what scope 8.1
+    step 6 asks for and the only thing that lets a golden exercise the loop offline.
+    """
+    from longrun.core.routing.cached import CachedRouter
+    from longrun.core.routing.graphhopper import GraphHopperRouter
+
+    router = CachedRouter(GraphHopperRouter(url), ctx.cache, ctx.budget, graph=graph)
+    lines: list[str] = []
+
+    try:
+        matched, way_ids = router.map_match(route)
+    except Exception as exc:  # noqa: BLE001 - a recording pass reports, it does not fail
+        lines.append(f"map match: {type(exc).__name__}: {exc}")
+    else:
+        known = sum(1 for w in way_ids if w is not None)
+        lines.append(f"map match: {len(matched.points)} point(s), {known} way id(s)")
+
+    span = (route.length_m * 0.40, route.length_m * 0.50)
+    try:
+        found = router.alternatives(route, span, k=1)
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"detour: {type(exc).__name__}: {exc}")
+    else:
+        # An empty answer is reported and not recorded - `alternatives` turns an outage
+        # into the same empty list a genuinely undetourable span produces, and a cassette
+        # that pinned one as the other would be permanent.
+        lines.append(
+            f"detour around {span[0] / 1000:.1f}-{span[1] / 1000:.1f} km: "
+            + (f"{found[0].length_m / 1000:.2f} km" if found else "none offered")
+        )
+    return lines
 
 
 def _record_adapters(route: Any, ctx: Any, when: datetime) -> list[str]:

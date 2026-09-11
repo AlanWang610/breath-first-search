@@ -33,11 +33,15 @@ from typing import Any
 import typer
 
 from longrun.cli.repair import score_route
+from longrun.core.data.cache import CacheMiss, SqliteCache, cache_path_from_env, offline_from_env
+from longrun.core.models.context import Budget
 from longrun.core.models.geometry import LatLon
 from longrun.core.models.plan import SnapshotPins
 from longrun.core.models.request import PlanRequest
 from longrun.core.preferences.store import load_profile
 from longrun.core.routing.base import NoRouteError, RouterUnavailable
+from longrun.core.routing.cached import CachedRouter
+from longrun.runtime import PLAN_LATENCY_BUDGET_S
 
 #: A custom model that keeps a runner off high-stress roads, in the terms ADR 0001's
 #: encoded value made available. Not applied unless asked: M0.5 measured `avoid` against
@@ -104,73 +108,100 @@ def plan(
         typer.echo(f"error: could not read --start {start!r}; expected HH:MM", err=True)
         raise typer.Exit(code=2) from exc
 
-    router = GraphHopperRouter(router_url)
-    model = AVOID_HIGH_STRESS if avoid_high_stress else None
-    typer.echo(f"routing {len(waypoints)} point(s) through {router.url}")
+    # Either door turns no-miss mode on, as `repair` has always done and this had not:
+    # golden and contract runs export the variable rather than passing the flag.
+    offline = offline or offline_from_env()
+    snapshot = _snapshot(snapshot_path)
 
-    try:
-        route = router.route(waypoints, custom_model=model)
-    except RouterUnavailable as exc:
-        # Distinct exits, because they need different things done about them: a missing
-        # router is a service to start, and a missing route is a route to change.
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=3) from exc
-    except NoRouteError as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=4) from exc
-
-    typer.echo(f"routed {route.length_m / 1000:.2f} km over {len(route.points)} point(s)")
-
-    # The request carries the *asked-for* geometry, not the routed geometry: `route_diff`
-    # and any later re-plan need to know what was requested, and `loop` is what says a
-    # route ending where it started was meant to.
-    request = PlanRequest(
-        mode="generate",
-        date=date.date(),
-        start=waypoints[0],
-        end=waypoints[-1],
-        via=list(waypoints[1:-1]),
-        loop=waypoints[0] == waypoints[-1],
-        start_time=start_at.time(),
-        target_distance_km=target_km,
-        utc_offset_hours=utc_offset,
-    )
-    shared: dict[str, Any] = {
-        "start_at": start_at,
-        "profile": load_profile(profile_path),
-        "root": fixtures or Path("data"),
-        "snapshot": _snapshot(snapshot_path),
-        "offline": offline,
-        "cache_path": cache_path,
-        "remote_rasters": remote_rasters,
-        "utc_offset": utc_offset,
-        "router": router,
-    }
-
-    score_route(route, request, out=out, **shared)
-
-    # `max_paths` is a total, not an extra: GraphHopper returns the primary path first, and
-    # in generate mode the primary path *is* the route just drawn. Asking for one more and
-    # skipping it is the difference between three alternatives and two plus a duplicate,
-    # which this scored - and wrote to its own directory - on every run until M5.4.
-    # And no request at all when none were asked for: `--alternatives 0` used to build a
-    # body, post it, and slice the answer away.
-    candidates = (
-        router.alternatives(route, None, k=alternatives + 1, custom_model=model)[1:]
-        if alternatives > 0
-        else []
-    )
-    for index, candidate in enumerate(candidates[:alternatives]):
-        # Scored, not compared. Scope 8.1 step 6 chooses between candidates and that is
-        # arbitration's job with the agent driving it (M5.5); what this produces is the raw
-        # material — a scored plan per candidate, in its own directory.
-        typer.echo(f"alternative {index}: {candidate.length_m / 1000:.2f} km")
-        score_route(
-            candidate,
-            request,
-            out=(out / f"alt-{index}") if out else None,
-            **shared,
+    # The cache is opened *before* the router, because the router is wrapped in it. Until
+    # M5.4 nothing cached a route and nothing charged one to the budget, so scope 6.4's
+    # 200-call cap counted forecasts and adapters and not the calls scope 8.1 step 6 makes
+    # most of - and no golden could replay a reroute, which is the loop's whole subject.
+    store = cache_path or cache_path_from_env()
+    with SqliteCache(store, offline=offline) as cache:
+        budget = Budget(latency_budget_s=PLAN_LATENCY_BUDGET_S)
+        engine = GraphHopperRouter(router_url)
+        router = CachedRouter(
+            engine,
+            cache,
+            budget,
+            # A route is a function of the graph it was drawn on, and scope 13 rebuilds
+            # that. Two graphs must not share a cache key.
+            graph=snapshot.osm_extract_date,
         )
+        model = AVOID_HIGH_STRESS if avoid_high_stress else None
+        typer.echo(f"routing {len(waypoints)} point(s) through {engine.url}")
+
+        try:
+            route = router.route(waypoints, custom_model=model)
+        except RouterUnavailable as exc:
+            # Distinct exits, because they need different things done about them: a missing
+            # router is a service to start, and a missing route is a route to change.
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=3) from exc
+        except NoRouteError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=4) from exc
+        except CacheMiss as exc:
+            # Offline and unrecorded. Its own exit code because it is neither of the above:
+            # nothing is down and no route is impossible - this cassette does not hold the
+            # answer, and the thing to do is record it.
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=5) from exc
+
+        typer.echo(f"routed {route.length_m / 1000:.2f} km over {len(route.points)} point(s)")
+
+        # The request carries the *asked-for* geometry, not the routed geometry:
+        # `route_diff` and any later re-plan need to know what was requested, and `loop` is
+        # what says a route ending where it started was meant to.
+        request = PlanRequest(
+            mode="generate",
+            date=date.date(),
+            start=waypoints[0],
+            end=waypoints[-1],
+            via=list(waypoints[1:-1]),
+            loop=waypoints[0] == waypoints[-1],
+            start_time=start_at.time(),
+            target_distance_km=target_km,
+            utc_offset_hours=utc_offset,
+        )
+        shared: dict[str, Any] = {
+            "start_at": start_at,
+            "profile": load_profile(profile_path),
+            "root": fixtures or Path("data"),
+            "snapshot": snapshot,
+            "offline": offline,
+            "remote_rasters": remote_rasters,
+            "utc_offset": utc_offset,
+            "router": router,
+            "cache": cache,
+            "budget": budget,
+        }
+
+        score_route(route, request, out=out, **shared)
+
+        # `max_paths` is a total, not an extra: GraphHopper returns the primary path first,
+        # and in generate mode the primary path *is* the route just drawn. Asking for one
+        # more and skipping it is the difference between three alternatives and two plus a
+        # duplicate, which this scored - and wrote to its own directory - on every run
+        # until M5.4. And no request at all when none were asked for: `--alternatives 0`
+        # used to build a body, post it, and slice the answer away.
+        candidates = (
+            router.alternatives(route, None, k=alternatives + 1, custom_model=model)[1:]
+            if alternatives > 0
+            else []
+        )
+        for index, candidate in enumerate(candidates[:alternatives]):
+            # Scored, not compared. Scope 8.1 step 6 chooses between candidates and that is
+            # arbitration's job with the agent driving it (M5.5); what this produces is the
+            # raw material - a scored plan per candidate, in its own directory.
+            typer.echo(f"alternative {index}: {candidate.length_m / 1000:.2f} km")
+            score_route(
+                candidate,
+                request,
+                out=(out / f"alt-{index}") if out else None,
+                **shared,
+            )
 
 
 def _snapshot(path: Path | None) -> SnapshotPins:

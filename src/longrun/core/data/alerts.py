@@ -23,9 +23,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from longrun.core.data.cache import CacheMiss, fetch
+from longrun.core.data.cache import COORD_PRECISION, CacheMiss, fetch
 from longrun.core.data.forecast import (
-    COORD_PRECISION,
     HTTP_TIMEOUT_S,
     NWS_ROOT,
     USER_AGENT_ENV_VAR,

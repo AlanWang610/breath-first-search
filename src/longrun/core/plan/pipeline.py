@@ -88,10 +88,17 @@ def score_once(
     """
     outer = ctx.coverage
     ctx.coverage = CoverageManifest()
+    external_before = len(getattr(ctx.cache, "calls", ()))
     try:
         scored = _score_pass(
             route, request, ctx, start_at=start_at, router=router, manifest=manifest
         )
+        if manifest is not None:
+            # The cache logs every external call; the manifest wants the ones this pass
+            # made. Taken by position rather than by clearing the log, because the cache
+            # belongs to the plan and outlives the pass - scope 8.1 step 6 runs several.
+            for call in list(getattr(ctx.cache, "calls", ()))[external_before:]:
+                manifest.record(call)
         return replace(scored, coverage=ctx.coverage)
     finally:
         ctx.coverage = outer

@@ -48,19 +48,26 @@ def open_context(
     remote_rasters: bool = False,
     utc_offset: float | None = None,
     latency_budget_s: float | None = PLAN_LATENCY_BUDGET_S,
+    cache: SqliteCache | None = None,
+    budget: Budget | None = None,
 ) -> Iterator[ScorerContext]:
     """Open the one context a plan is scored against, and close its cache afterwards.
 
     Held open with `with`: the SQLite connection is otherwise left to the garbage collector,
     and on Windows an unclosed handle keeps a file lock, so a leaked one can stop the next
     run - or a test's `tmp_path` cleanup - from removing the file.
+
+    `cache` and `budget` can be supplied by a caller that needed them *before* the context
+    - generate mode does, because the router is wrapped in the cache and the route has to
+    exist before a context can be built around it. A supplied cache is not closed here: it
+    belongs to whoever opened it.
     """
     # Precedence: an explicit path, then LONGRUN_CACHE_DIR, then in-memory. A golden route
     # pins its cassette in the route directory and passes it here, because the autouse
     # fixture that clears LONGRUN_* would otherwise leave the env var with nothing in it and
     # every forecast key would miss.
     store = cache_path or cache_path_from_env()
-    with SqliteCache(store, offline=offline) as cache:
+    with _cache_for(store, offline, cache) as cache:
         layers = FileLayerStore(root)
         # Scope 6.4: every source in the manifest carries a vintage. The store is what the
         # scorers ask, so the pins go in here rather than being stitched on afterwards - a
@@ -72,7 +79,7 @@ def open_context(
         # gaps - and a GDAL /vsicurl/ read bypasses the cache, the budget and
         # LONGRUN_OFFLINE, which is a hole worth keeping deliberate (ADR 0007).
         remote = remote_raster_map(route, remote_rasters)
-        budget = Budget(latency_budget_s=latency_budget_s)
+        budget = budget or Budget(latency_budget_s=latency_budget_s)
         # Imported here rather than at module scope so `longrun --version` does not pay for
         # entry-point scanning, and so a third-party adapter that will not import cannot
         # break a command that never asked for one. `discover()` reports rather than raises,
@@ -91,6 +98,18 @@ def open_context(
             features=AdapterRegistry(cache, budget, offline=offline),
             utc_offset_hours=utc_offset,
         )
+
+
+@contextmanager
+def _cache_for(
+    store: Path | str, offline: bool, existing: SqliteCache | None
+) -> Iterator[SqliteCache]:
+    """Own a cache, or borrow one. A borrowed cache outlives this context."""
+    if existing is not None:
+        yield existing
+        return
+    with SqliteCache(store, offline=offline) as opened:
+        yield opened
 
 
 def remote_raster_map(route: Any, enabled: bool) -> dict[str, str]:

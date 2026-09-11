@@ -116,6 +116,8 @@ def score_route(
     utc_offset: float | None = None,
     out: Path | None = None,
     router: Any = None,
+    cache: Any = None,
+    budget: Any = None,
 ) -> Plan:
     """Score one route and render its sheet. The one pipeline both modes run through.
 
@@ -137,6 +139,8 @@ def score_route(
         cache_path=cache_path,
         remote_rasters=remote_rasters,
         utc_offset=utc_offset,
+        cache=cache,
+        budget=budget,
     ) as ctx:
         manifest = Manifest(snapshot=snapshot)
         scored = score_once(

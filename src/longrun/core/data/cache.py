@@ -18,13 +18,15 @@ import hashlib
 import json
 import os
 import sqlite3
+import time
 from collections.abc import Callable, Mapping
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from longrun.core.data.base import Cache
+    from longrun.core.models.plan import ToolCall  # pragma: no cover
 
 #: Set to 1 to make a cache miss an error. Golden and contract tests run this way.
 OFFLINE_ENV_VAR = "LONGRUN_OFFLINE"
@@ -36,6 +38,18 @@ CACHE_DIR_ENV_VAR = "LONGRUN_CACHE_DIR"
 #: Accepted spellings of "yes". A bare `LONGRUN_OFFLINE=0` must not read as truthy, which
 #: a plain truthiness check on the string would get wrong.
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+#: ~11 m. Finer than this and a cache key depends on floating-point noise: a point
+#: recomputed rather than re-read misses a cassette it is identical to. `args_hash`
+#: deliberately does no rounding of its own, so every key builder applies this.
+COORD_PRECISION = 4
+
+#: For a lookup whose answer does not vary with the date: a coordinate's forecast grid,
+#: a geocode, a route. Keying those by the plan date would re-fetch them daily for
+#: nothing and multiply cassette size. A deliberate, named abuse of the `day` column
+#: rather than an accident - and what a route depends on instead goes in the args,
+#: because a route is a function of the graph it was drawn on.
+STATIC_DAY = "static"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
@@ -110,6 +124,9 @@ class SqliteCache:
         self._offline = offline
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+        #: Scope 6.4's tool-call record. Kept on the cache rather than passed to every
+        #: call site because the cache is already the one door and already per-plan.
+        self.calls: list[ToolCall] = []
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
@@ -191,8 +208,10 @@ def fetch(cache: Cache, tool: str, args: Any, day: date | str, producer: Callabl
     """
     key = args_hash(args)
     day_str = day.isoformat() if isinstance(day, date) else str(day)
+    started = time.perf_counter()
     hit = cache.get(tool, key, day_str)
     if hit is not None:
+        _record(cache, tool, key, started, cached=True)
         return hit
     value = producer()
     if value is None:
@@ -201,4 +220,27 @@ def fetch(cache: Cache, tool: str, args: Any, day: date | str, producer: Callabl
             "or None will read as a cache miss on every later call"
         )
     cache.put(tool, key, day_str, value)
+    _record(cache, tool, key, started, cached=False)
     return value
+
+
+def _record(cache: Cache, tool: str, key: str, started: float, *, cached: bool) -> None:
+    """Log one trip through the door, hit or miss.
+
+    A miss that *raised* - an offline `CacheMiss`, a dead endpoint, a budget refusal - is
+    deliberately not logged: it did not happen, and the reason it did not is already
+    reported through the coverage manifest, which is where scope 3.6 puts it.
+    """
+    from longrun.core.models.plan import ToolCall
+
+    log = getattr(cache, "calls", None)
+    if log is None:  # pragma: no cover - every cache in this codebase keeps one
+        return
+    log.append(
+        ToolCall(
+            tool=tool,
+            elapsed_s=time.perf_counter() - started,
+            args_hash=key,
+            cached=cached,
+        )
+    )

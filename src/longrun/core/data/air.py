@@ -26,9 +26,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from longrun.core.data.cache import fetch
+from longrun.core.data.cache import COORD_PRECISION, fetch
 from longrun.core.data.forecast import (
-    COORD_PRECISION,
     DEFAULT_SPACING_M,
     MAX_SAMPLE_POINTS,
     ForecastSite,

@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, runtime_checkable
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from datetime import date
 
     from geopandas import GeoDataFrame
@@ -22,6 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.features import FeatureKind, FeatureSet
     from longrun.core.models.geometry import BBox, Corridor, Route
     from longrun.core.models.jurisdiction import AdapterInfo, Jurisdiction
+    from longrun.core.models.plan import ToolCall
 
 
 @runtime_checkable
@@ -119,6 +120,13 @@ class Cache(Protocol):
 
     @property
     def offline(self) -> bool: ...
+
+    #: Every `fetch` through this cache, in order, with its args hash and whether it was
+    #: served from the store. The cache is the one door every external call goes through
+    #: and it is opened once per plan, so this is the only place that can answer "did this
+    #: plan touch the network" - which is what `Manifest.tool_calls` is for, and what
+    #: `ToolCall.args_hash` and `.cached` have been declared and unwritten for since M1.
+    calls: list[ToolCall]
 
 
 @runtime_checkable
