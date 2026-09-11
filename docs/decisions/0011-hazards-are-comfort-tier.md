@@ -14,6 +14,24 @@ Nine reason codes across six sources, and **the scope gives no threshold for any
 appear nowhere in it. §8.4 lists what is in the safety tier — legality, hard crossings,
 LTS 4 — and hazards are not there either.
 
+> **Erratum, 2026-09-10 (M4).** Both sentences above are wrong, and this ADR was accepted
+> on them. §8.3 line 285 reads `| Legality / hazards | — | any |`, and §8.4 reads *"safety
+> (legality, hard hostility, hard crossings, **hazards**, time constraints)"*. The scope
+> addressed hazards in both places and I reported that it had not.
+>
+> **The decision below stands**, because neither of its two arguments depends on the error:
+> the lexicographic one (a cattle grid in SAFETY would outrank an entire route's worth of
+> dangerous heat, because arbitration never reaches the tier below) and the double-counting
+> one (the disqualifying cases are already owned by `legality`, `hostility` and
+> `crossings`). What changes is the reading of the scope. §8.3's row *groups* legality with
+> hazards, and `legality` hard-flags the disqualifying cases in the safety tier — so the row
+> is honoured by `legality`, and what `hazards` carries is the residue those three do not
+> catch. That is a reconciliation rather than a contradiction, but it had to be reached by
+> reading the row, not by asserting it was absent.
+>
+> [ADR 0013](0013-closures-may-hard-fail.md) is why this surfaced: it needed to know whether
+> "no §8.3 row ⇒ no flags" was a rule of this codebase, and found that it never was.
+
 So the tier is undecided, and a golden route is about to freeze whatever gets written. That
 is the same position M1.7 was in over soft crossings, and it is why this is an ADR rather
 than a default.

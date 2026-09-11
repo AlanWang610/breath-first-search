@@ -62,6 +62,12 @@ SCORERS: dict[str, str] = {
     # After heat_stress: scope 8.3 scales the dry-gap thresholds down with WBGT.
     "resupply_schedule": "longrun.core.scorers.resupply_schedule",
     "hazards": "longrun.core.scorers.hazards",
+    # The three adapter-fed scorers (scope 7.6, 7.10). Grouped because they resolve the
+    # same jurisdictions and ask the same registry; `closures` is first because it is the
+    # only one that can fail verification.
+    "closures": "longrun.core.scorers.closures",
+    "trail_status": "longrun.core.scorers.trail_status",
+    "access_hours": "longrun.core.scorers.access_hours",
     "transit": "longrun.core.scorers.transit",
     # After transit: both read the same stop layer, and `bailouts` reuses its service test.
     "bailouts": "longrun.core.scorers.bailouts",
@@ -74,11 +80,12 @@ SCORERS: dict[str, str] = {
 
 #: Scorers the scope calls for whose milestone has not arrived. Named explicitly so the
 #: coverage manifest can say they were not run, instead of the sheet staying silent.
-NOT_YET_IMPLEMENTED: dict[str, str] = {
-    "closures": "needs the jurisdiction adapter registry (M4)",
-    "trail_status": "needs the jurisdiction adapter registry (M4)",
-    "access_hours": "needs the jurisdiction adapter registry (M4)",
-}
+#:
+#: **Empty since M4**, and kept rather than deleted. Two modules import it, and the mechanism
+#: is the honest one for a scorer the scope names and this build cannot run - it is how
+#: `closures`, `trail_status` and `access_hours` were reported from M1 until M4.4 wrote them.
+#: The next scorer the scope names and a milestone defers belongs here, not in a comment.
+NOT_YET_IMPLEMENTED: dict[str, str] = {}
 
 
 def _load_scorer(module_path: str) -> Any | None:
@@ -270,6 +277,12 @@ def score_route(
         # LONGRUN_OFFLINE, which is a hole worth keeping deliberate.
         remote = _remote_map(route, remote_rasters)
         budget = Budget()
+        # Imported here rather than at module scope so `longrun --version` does not pay for
+        # entry-point scanning, and so a third-party adapter that will not import cannot
+        # break a command that never asked for one. `discover()` reports rather than raises,
+        # but the import itself is still work nobody asked for on most invocations.
+        from longrun.adapters.registry import AdapterRegistry
+
         ctx = ScorerContext(
             layers=layers,
             rasters=FileRasterStore(root, remote=remote, offline=offline, budget=budget),
@@ -279,6 +292,7 @@ def score_route(
             profile=profile,
             budget=budget,
             snapshot=snapshot.layer_vintages,
+            features=AdapterRegistry(cache, budget, offline=offline),
             utc_offset_hours=utc_offset,
         )
 

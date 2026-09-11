@@ -188,6 +188,12 @@ def digest(plan: Plan) -> dict[str, Any]:
                 "source": entry.source,
                 "kind": entry.kind,
                 "checked": entry.checked,
+                # Added in M4. Without these the suite is blind to the exact thing scope 7.6
+                # asks a plan to report - "which tiers returned data for each jurisdiction
+                # crossed" - and four jurisdictions would freeze as four near-identical
+                # dicts distinguishable only by prose.
+                "jurisdiction": entry.jurisdiction,
+                "tier": entry.tier,
                 "reason": entry.reason,
                 "vintage": entry.vintage,
             }

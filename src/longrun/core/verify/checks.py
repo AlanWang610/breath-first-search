@@ -105,15 +105,33 @@ def check_5_no_illegal_ways(legality_offenders: list[str] | None) -> CheckResult
     return _result(5, "no_illegal_ways", list(legality_offenders))
 
 
-def check_6_no_active_closures(closure_offenders: list[str] | None) -> CheckResult:
+def check_6_no_active_closures(
+    closure_offenders: list[str] | None,
+    unanswered: list[str] | None = None,
+) -> CheckResult:
     """No overlap with active closures.
 
     Skipped whenever the closures scorer had no adapter to consult — reporting a pass
     would claim the route was checked against closure data that was never fetched.
+
+    **Fail beats skip beats pass**, and the order is the whole design (ADR 0013). A closure
+    found in a jurisdiction that answered is a fact whatever another jurisdiction's silence
+    says, so partial coverage must not discard it — which is what judging by `requires=`
+    alone would do, since that skips whenever *any* entry of the kind is unchecked. But a
+    route where two of four jurisdictions have no adapter has not been cleared either, and
+    reporting `passed` there is the vacuous pass this check exists to avoid.
     """
     if closure_offenders is None:
         return _skip(6, "no_active_closures", "no closure data available for this route")
-    return _result(6, "no_active_closures", list(closure_offenders))
+    if closure_offenders:
+        return _result(6, "no_active_closures", list(closure_offenders))
+    if unanswered:
+        return _skip(
+            6,
+            "no_active_closures",
+            f"no closure adapter for {', '.join(sorted(unanswered))}",
+        )
+    return _result(6, "no_active_closures", [])
 
 
 def check_7_distance_in_tolerance(

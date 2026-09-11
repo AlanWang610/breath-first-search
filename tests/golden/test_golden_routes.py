@@ -134,3 +134,21 @@ def test_no_scorer_emits_two_measurements_with_the_same_id(name: str, tmp_path: 
         ids = [m.segment_id for m in result.measurements]
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         assert not duplicates, f"{name}: {result.name} repeats {duplicates}"
+
+
+@pytest.mark.parametrize("name", ROUTE_NAMES)
+def test_every_recorded_source_has_a_licence(name: str, tmp_path: Path) -> None:
+    """Scope 14 is an obligation, and `LICENCE NOT RECORDED` is what an unmet one looks like.
+
+    Twice now a source has reached a real sheet without a licence row and nothing failed.
+    M3 found it for OSM - scorers record the *layer* they read and attribution is owed by
+    *source* - and M4 found `dem`, which has printed `LICENCE NOT RECORDED` for USGS 3DEP on
+    every sheet since M2, because `_layer_sources()` derives from `DEFAULT_LAYER_TABLES` and
+    that table is vector only. A golden expectation does not carry the attribution block, so
+    neither incident showed up as a diff. This reads the sheet.
+    """
+    run = harness.run(harness.ROUTES_DIR / name, tmp_path / "out")
+    assert "LICENCE NOT RECORDED" not in run.sheet, (
+        "a source reached the plan sheet with no scope 14 licence row; add it to "
+        "attribution.LICENCES or map it in DERIVED_SOURCES"
+    )

@@ -45,6 +45,40 @@ LICENCES: dict[str, SourceLicence] = {
         share_alike=True,
     ),
     "hpms": SourceLicence(source="hpms", licence="US public domain"),
+    # M4's adapter sources. Scope 14's table has no row for WZDx, any 511 system or any
+    # open-data portal, which ADR 0006 established is an omission in the scope rather than a
+    # statement that nothing is owed - the sheet renders `LICENCE NOT RECORDED` otherwise.
+    #
+    # `licence_for` resolves by prefix, so this one entry answers for `wzdx_modot`,
+    # `wzdx_kdot` and `wzdx_maricopa`. The licence is per publisher and several are CC0,
+    # which matters beyond attribution: a non-redistributable feed cannot be committed as a
+    # cassette, so a golden route could never replay it.
+    "wzdx": SourceLicence(
+        source="wzdx",
+        licence="per publishing agency (CC0 or US public domain for the feeds loaded)",
+        attribution="Work zone data via the USDOT WZDx feed registry",
+    ),
+    "state511": SourceLicence(
+        source="state511",
+        licence="per state DOT terms of use",
+        attribution="State 511 traveler information",
+    ),
+    "portal": SourceLicence(
+        source="portal",
+        licence="per publishing jurisdiction",
+        attribution="Local open-data portal",
+    ),
+    "nps": SourceLicence(
+        source="nps",
+        licence="US public domain",
+        attribution="National Park Service",
+    ),
+    # The three adapter-fed scorers report coverage under their own names when they could
+    # not reach a registry at all, so those names need to resolve too - otherwise a plan
+    # with no adapters prints three `LICENCE NOT RECORDED` lines for data it never used.
+    "closures": SourceLicence(source="closures", licence="per jurisdiction adapter"),
+    "trail_status": SourceLicence(source="trail_status", licence="per jurisdiction adapter"),
+    "access_hours": SourceLicence(source="access_hours", licence="per jurisdiction adapter"),
     "3dep": SourceLicence(source="3dep", licence="US public domain"),
     "nhd": SourceLicence(source="nhd", licence="US public domain"),
     "padus": SourceLicence(source="padus", licence="US public domain"),
@@ -103,7 +137,18 @@ def _layer_sources() -> dict[str, str]:
 
 #: Coverage sources that are neither a layer nor a source: derivations that read one.
 #: `way_matching` snaps route points onto OSM ways, so what it reports is OSM's.
-DERIVED_SOURCES: dict[str, str] = {"way_matching": "osm"}
+#:
+#: `dem` and `canopy_raster` are *raster* layers, and `_layer_sources()` derives only from
+#: `DEFAULT_LAYER_TABLES`, which is vector. So every sheet since M2 has printed
+#: `dem (LICENCE NOT RECORDED)` for USGS 3DEP - the same class of bug M3 fixed for OSM, on
+#: the other half of the store seam. `test_every_recorded_source_has_a_licence` is what
+#: stops it coming back a third time.
+DERIVED_SOURCES: dict[str, str] = {
+    "way_matching": "osm",
+    "dem": "3dep",
+    "elevation": "3dep",
+    "canopy_raster": "canopy",
+}
 
 
 def licence_for(source: str) -> SourceLicence | None:

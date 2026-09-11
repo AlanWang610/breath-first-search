@@ -67,16 +67,32 @@ def test_the_sheet_reports_distance_and_duration(route_file: Path, tmp_path: Pat
     assert "Projected duration" in sheet
 
 
-def test_every_unimplemented_scorer_is_named_in_coverage(route_file: Path, tmp_path: Path) -> None:
-    """Scope 3.6 applied to our own build state: a missing scorer is reported, not hidden."""
+def test_every_scorer_is_named_in_coverage(route_file: Path, tmp_path: Path) -> None:
+    """Scope 3.6 applied to our own build state: a scorer that could not run is reported,
+    not hidden.
+
+    Asserted over every scorer that ran rather than over `NOT_YET_IMPLEMENTED`, which M4
+    emptied. The old form looped over a dict that is now empty, so it passed by having
+    nothing to check - and would have kept passing if every scorer in the build went silent.
+
+    The invariant is the one `core/scorers/base.py` states: *"A scorer that returns neither
+    has told the plan sheet nothing, and that is the failure mode the coverage tests exist
+    to catch."* Note it is not that the scorer's **name** appears - a scorer that ran
+    records the *source* it consulted, because attribution is owed by source and
+    `microclimate` reports `nws` or `open_meteo`. What must hold is that each one said
+    something about what it could and could not establish.
+    """
+    from longrun.core.models.plan import Plan
+
     out = tmp_path / "out"
     runner.invoke(
         app,
         ["repair", str(route_file), "--date", "2026-03-15", "--start", "07:30", "--out", str(out)],
     )
-    sheet = (out / "sheet.md").read_text(encoding="utf-8")
-    for name in NOT_YET_IMPLEMENTED:
-        assert name in sheet, f"{name} vanished from the coverage manifest"
+    plan = Plan.model_validate_json((out / "plan.json").read_text(encoding="utf-8"))
+    silent = sorted(r.name for r in plan.results if not r.coverage)
+    assert not silent, f"these scorers reported no coverage at all: {silent}"
+    assert {r.name for r in plan.results} == set(SCORERS) | set(NOT_YET_IMPLEMENTED)
 
 
 def test_the_sheet_carries_pacing_caveats(route_file: Path, tmp_path: Path) -> None:

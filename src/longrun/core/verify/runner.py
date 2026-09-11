@@ -43,6 +43,24 @@ def _offenders_from(
     return [f.segment_id for f in result.flags if f.kind is FlagKind.HARD]
 
 
+def _unanswered(results: list[ScorerResult], scorer: str, kind: str) -> list[str]:
+    """Jurisdictions a scorer could not check, named for a skip reason (ADR 0013).
+
+    Separate from `requires=` on purpose. `requires` throws the whole answer away when any
+    entry of the kind is unchecked, which is right for check 8 - a crossing whose
+    signalization was never known cannot be judged at all - and wrong for check 6, where a
+    closure that *was* found is a fact regardless of who else stayed silent.
+    """
+    result = next((r for r in results if r.name == scorer), None)
+    if result is None:
+        return []
+    return [
+        entry.jurisdiction or entry.source
+        for entry in result.coverage
+        if entry.kind == kind and not entry.checked
+    ]
+
+
 def gpx_verify(
     route: Route,
     request: PlanRequest,
@@ -67,7 +85,10 @@ def gpx_verify(
             checks.check_3_no_gaps(route),
             checks.check_4_elevation_sane(elevations),
             checks.check_5_no_illegal_ways(_offenders_from(scorer_results, "legality")),
-            checks.check_6_no_active_closures(_offenders_from(scorer_results, "closures")),
+            checks.check_6_no_active_closures(
+                _offenders_from(scorer_results, "closures"),
+                _unanswered(scorer_results, "closures", "closures"),
+            ),
             checks.check_7_distance_in_tolerance(
                 route, request.target_distance_km, request.distance_tolerance_pct
             ),

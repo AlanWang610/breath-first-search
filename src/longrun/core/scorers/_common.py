@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from shapely.geometry import LineString, Point
+from shapely.ops import nearest_points
 
 from longrun.core.geo.projections import local_crs, transformer_to
 from longrun.core.geo.segments import DEFAULT_CORRIDOR_BUFFER_M, corridor
@@ -140,6 +141,25 @@ class RouteFrame:
         x, y = self._to_local.transform(lon, lat)
         point = Point(x, y)
         return self.line.project(point) * self._scale, self.line.distance(point)
+
+    def locate_path(self, coords: list[tuple[float, float]]) -> tuple[float, float]:
+        """The same, for a whole (lon, lat) path rather than one point.
+
+        Not a loop over `locate`, and the difference is not an optimisation. A street
+        crossing the route at right angles has its nearest approach *between* its vertices -
+        at the crossing itself - so a vertex-wise minimum reports the distance to its
+        endpoints and concludes the two do not meet. A cross-street 200 m long would read as
+        200 m away from a route it physically intersects.
+        """
+        if not coords:
+            return 0.0, float("inf")
+        if len(coords) == 1:
+            return self.locate(*coords[0])
+        xs, ys = self._to_local.transform([c[0] for c in coords], [c[1] for c in coords])
+        other = LineString(list(zip(xs, ys, strict=True)))
+        offset_m = self.line.distance(other)
+        near_route, _ = nearest_points(self.line, other)
+        return self.line.project(near_route) * self._scale, offset_m
 
 
 def segment_at(segments: list[Segment], cum_m: float) -> Segment | None:

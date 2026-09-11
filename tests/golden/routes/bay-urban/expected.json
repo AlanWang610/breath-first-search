@@ -2,282 +2,479 @@
   "coverage": [
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_tags",
       "reason": "62% of route points snapped to a way within 25 m; 48 point(s) carry no way tags",
       "source": "way_matching",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_access_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_crossings",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "traffic_signals",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_stops",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_surface",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "services",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "park_boundaries",
       "reason": null,
       "source": "parks",
+      "tier": null,
       "vintage": "padus-4.1"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "forecast",
       "reason": "2 of 2 sites along the route",
       "source": "open_meteo",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": "568 footprint read(s) across tiles carried no height and were not raised",
       "source": "overture",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": "no canopy raster in this store",
       "source": "canopy",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": null,
       "source": "3dep",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "solar_geometry",
       "reason": "UTC offset -7 h, zone America/Los_Angeles",
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "forecast",
       "reason": "2 of 2 sites along the route",
       "source": "open_meteo",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "lit_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "solar_geometry",
       "reason": "UTC offset -7 h, zone America/Los_Angeles",
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "air_quality",
       "reason": "2 of 2 sites, modelled (CAMS) rather than measured; AirNow needs a key this install does not have",
       "source": "open_meteo",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "opening_hours",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_hazard_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "rail_crossings",
       "reason": null,
       "source": "railways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "water_crossings",
       "reason": null,
       "source": "flowlines",
+      "tier": null,
       "vintage": "nhd-hu4"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "cattle_grids",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "seasonal_snow",
       "reason": null,
       "source": "dem",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "warnings",
       "reason": "LONGRUN_NWS_USER_AGENT is not set; NWS requires a contact string",
       "source": "nws_alerts",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "closures",
+      "reason": "no boundaries layer: not in this fixture",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "South Park (padus:CITY)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Brannan Street Wharf (padus:JNT)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Yerba Buena Gardens (padus:NGO)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "San Francisco Maritime National Historical Park (padus:NPS)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "101 California Plaza (padus:PVT)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "South Park (padus:CITY)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Brannan Street Wharf (padus:JNT)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Yerba Buena Gardens (padus:NGO)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "San Francisco Maritime National Historical Park (padus:NPS)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "101 California Plaza (padus:PVT)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "South Park (padus:CITY)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Brannan Street Wharf (padus:JNT)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Yerba Buena Gardens (padus:NGO)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "San Francisco Maritime National Historical Park (padus:NPS)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "101 California Plaza (padus:PVT)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "transit_service",
       "reason": null,
       "source": "transit_stops",
+      "tier": null,
       "vintage": "gtfs-bart"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "bailout_transit",
       "reason": null,
       "source": "transit_stops",
+      "tier": null,
       "vintage": "gtfs-bart"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "bailout_roads",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "crew_parking",
       "reason": null,
       "source": "amenities",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "crew_road_access",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-04"
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "crew_drive_time",
       "reason": "no router in repair mode: distances between meet points are along the route, not driving times",
       "source": "router",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": "568 footprint read(s) across tiles carried no height and were not raised",
       "source": "overture",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": "no canopy raster in this store",
       "source": "canopy",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": null,
       "source": "3dep",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "start_time_sweep",
       "reason": null,
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "solar_geometry",
       "reason": "UTC offset -7 h, zone America/Los_Angeles",
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "cell_coverage",
       "reason": "no cell coverage layer: the FCC bulk download needs an account, so no region build has loaded one",
       "source": "cell_coverage",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "closures",
-      "reason": "needs the jurisdiction adapter registry (M4)",
-      "source": "closures",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "trail_status",
-      "reason": "needs the jurisdiction adapter registry (M4)",
-      "source": "trail_status",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "access_hours",
-      "reason": "needs the jurisdiction adapter registry (M4)",
-      "source": "access_hours",
+      "tier": null,
       "vintage": null
     }
   ],
@@ -288,7 +485,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "ecf03b35fc6d6272859e356f47d3467b879e212450a1d4bfcc9bbaa07635d694",
+  "measurements_sha256": "313fb2a27a0102e04df4b4d73c7da07dcebd15dd3980d040a5878d2e426076e6",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -635,9 +832,13 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "access_violations": 0,
+        "agencies_answered": 0,
+        "agencies_crossed": 5
+      },
       "worst": []
     },
     "air_quality": {
@@ -687,9 +888,14 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "closures": 0,
+        "jurisdictions_answered": 0,
+        "jurisdictions_crossed": 5,
+        "jurisdictions_unanswered": 6
+      },
       "worst": []
     },
     "crew_points": {
@@ -1046,9 +1252,13 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 52,
+      "summary": {
+        "agencies_answered": 0,
+        "agencies_crossed": 5,
+        "trail_alerts": 0
+      },
       "worst": []
     },
     "transit": {

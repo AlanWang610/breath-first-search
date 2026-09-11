@@ -175,6 +175,11 @@ class JurisdictionScan:
     boundaries_checked: bool = False
     parks_checked: bool = False
     reasons: list[str] = field(default_factory=list)
+    #: Park polygons met but not attributable to any agency - PAD-US rows whose `Mang_Name`
+    #: is one of the "unknown" codes, or a fixture frozen before the column existed. Counted
+    #: rather than dropped, because "no managed land here" and "managed land whose manager
+    #: this data cannot name" are different sentences and only the first is an all-clear.
+    unattributed_parks: int = 0
 
     @property
     def answered(self) -> bool:
@@ -202,11 +207,14 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
     except Exception as exc:  # noqa: BLE001
         reasons.append(f"no parks layer: {_describe(exc)}")
 
+    found = jurisdictions_from_frames(boundaries, parks)
+    named = sum(1 for j in found if j.source == "padus")
     return JurisdictionScan(
-        jurisdictions=jurisdictions_from_frames(boundaries, parks),
+        jurisdictions=found,
         boundaries_checked=boundaries is not None,
         parks_checked=parks is not None,
         reasons=reasons,
+        unattributed_parks=max(0, len(parks) - named) if parks is not None else 0,
     )
 
 

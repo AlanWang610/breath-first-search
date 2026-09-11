@@ -2,289 +2,380 @@
   "coverage": [
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_tags",
       "reason": null,
       "source": "way_matching",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_access_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_crossings",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "traffic_signals",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_stops",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_surface",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "services",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "park_boundaries",
       "reason": null,
       "source": "parks",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "forecast",
       "reason": "2 of 2 sites along the route",
       "source": "open_meteo",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": "2 footprint read(s) across tiles carried no height and were not raised",
       "source": "overture",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": null,
       "source": "canopy",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": null,
       "source": "3dep",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "solar_geometry",
       "reason": "UTC offset -7 h, stated",
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "forecast",
       "reason": "2 of 2 sites along the route",
       "source": "open_meteo",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "lit_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "solar_geometry",
       "reason": "UTC offset -7 h, stated",
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "air_quality",
       "reason": "2 of 2 sites, modelled (CAMS) rather than measured; AirNow needs a key this install does not have",
       "source": "open_meteo",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "opening_hours",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "osm_hazard_tags",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "rail_crossings",
       "reason": null,
       "source": "railways",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "water_crossings",
       "reason": null,
       "source": "flowlines",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "cattle_grids",
       "reason": null,
       "source": "nodes",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "seasonal_snow",
       "reason": null,
       "source": "dem",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "warnings",
       "reason": "LONGRUN_NWS_USER_AGENT is not set; NWS requires a contact string",
       "source": "nws_alerts",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": "San Francisco County (tiger:county:06075)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "San Francisco (tiger:place:0667000)",
+      "kind": "closures",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "jurisdiction": null,
+      "kind": "trail_status",
+      "reason": "1 park polygon(s) on this route name no managing agency, so there was nobody to ask",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": true,
+      "jurisdiction": null,
+      "kind": "access_hours",
+      "reason": "1 park polygon(s) on this route name no managing agency, so there was nobody to ask",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
       "kind": "transit",
       "reason": "no transit stops layer: getting to and from not established",
       "source": "transit",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "bailout_transit",
       "reason": "no transit stops layer: exits measured from roads only",
       "source": "transit_stops",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "bailout_roads",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "crew_parking",
       "reason": null,
       "source": "amenities",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "crew_road_access",
       "reason": null,
       "source": "ways",
+      "tier": null,
       "vintage": "2026-09-01"
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "crew_drive_time",
       "reason": "no router in repair mode: distances between meet points are along the route, not driving times",
       "source": "router",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": "2 footprint read(s) across tiles carried no height and were not raised",
       "source": "overture",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": null,
       "source": "canopy",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "surface_model",
       "reason": null,
       "source": "3dep",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "start_time_sweep",
       "reason": null,
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "start_time_transit",
       "reason": "no transit stops layer: the finish is not compared across start times",
       "source": "transit_stops",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": true,
+      "jurisdiction": null,
       "kind": "solar_geometry",
       "reason": "UTC offset -7 h, stated",
       "source": "pvlib",
+      "tier": null,
       "vintage": null
     },
     {
       "checked": false,
+      "jurisdiction": null,
       "kind": "cell_coverage",
       "reason": "no cell coverage layer: the FCC bulk download needs an account, so no region build has loaded one",
       "source": "cell_coverage",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "closures",
-      "reason": "needs the jurisdiction adapter registry (M4)",
-      "source": "closures",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "trail_status",
-      "reason": "needs the jurisdiction adapter registry (M4)",
-      "source": "trail_status",
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "kind": "access_hours",
-      "reason": "needs the jurisdiction adapter registry (M4)",
-      "source": "access_hours",
+      "tier": null,
       "vintage": null
     }
   ],
@@ -295,7 +386,7 @@
     "min_m": 5.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "f87c51bbea123e05ac8b52b1e85a33aad75086efca166651bd3a153a887efb5c",
+  "measurements_sha256": "0707386ca72b30e9ed70f27f20b8ce2484e97985bf736f701498ebb0f30b3eda",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -450,9 +541,13 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "access_violations": 0,
+        "agencies_answered": 0,
+        "agencies_crossed": 0
+      },
       "worst": []
     },
     "air_quality": {
@@ -502,9 +597,14 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "closures": 0,
+        "jurisdictions_answered": 0,
+        "jurisdictions_crossed": 2,
+        "jurisdictions_unanswered": 2
+      },
       "worst": []
     },
     "crew_points": {
@@ -871,9 +971,13 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
+      "mean_confidence": 1.0,
+      "measured_segments": 20,
+      "summary": {
+        "agencies_answered": 0,
+        "agencies_crossed": 0,
+        "trail_alerts": 0
+      },
       "worst": []
     },
     "transit": {
