@@ -19,6 +19,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
+from longrun.core.data.cache import CacheMiss
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.dem import elevation_profile, sample_elevation
 from longrun.core.geo.matching import assign_way_ids
@@ -285,6 +286,10 @@ def matched_way_ids(route: Route, router: Any) -> tuple[Route, list[int | None]]
     """
     try:
         matched, way_ids = router.map_match(route)
+    except CacheMiss:
+        # Re-raised for the reason `map_match` gives: an offline miss must be loud, and
+        # this handler is the second place it would otherwise become a silent fall-back.
+        raise
     except Exception:  # noqa: BLE001 - matching is optional; the route is not
         return None
     if not way_ids or len(way_ids) != len(matched.points) or not any(way_ids):

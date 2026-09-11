@@ -32,8 +32,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from longrun.core.data.cache import CacheMiss
 from longrun.core.models.geometry import LatLon, Route
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
+from longrun.core.routing.detour import detour_area, detour_waypoints
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Sequence
@@ -163,25 +165,75 @@ class GraphHopperRouter:
         avoid_polygons: list[dict[str, Any]] | None = None,
         custom_model: CostingModel | None = None,
     ) -> Route:
-        paths = self._paths(route_body(waypoints, profile, avoid_polygons, custom_model), waypoints)
+        paths = self.paths(route_body(waypoints, profile, avoid_polygons, custom_model), waypoints)
         return path_to_route(paths[0], route_id="generated")
 
-    def alternatives(self, gpx: Route, segment_idx: int, k: int = 3) -> list[Route]:
-        """Whole-route alternatives between the same endpoints.
+    def alternatives(
+        self,
+        gpx: Route,
+        around: tuple[float, float] | None = None,
+        k: int = 3,
+        *,
+        profile: str = FOOT_PROFILE,
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> list[Route]:
+        """Candidates to score: a detour around a span, or whole-route alternatives.
 
-        Deliberately not a detour around one segment: GraphHopper's `alternative_route`
-        works between two points, and asking it for a local reroute would mean inventing
-        via-points, which is a routing decision this adapter has no business making.
-        Scope 8.1 step 6 wants candidates to score; these are candidates.
+        `around=(start_m, end_m)` is scope 8.1 step 6's actual request - reroute the part
+        that was flagged and keep the rest - and it is built from two pieces that are
+        useless apart. The via points either side of the span hold the rest of the route;
+        the avoid-area over the span is what makes the answer different at all. Measured
+        on a live graph: via points alone return the original line **to the metre**. See
+        `core.routing.detour`.
+
+        `around=None` keeps the old behaviour, whole-route alternatives between the same
+        endpoints, which is what a caller wants when the whole route is the problem.
+
+        Two facts about GraphHopper that the shape of this method is built around, both
+        measured rather than read:
+
+        * `alternative_route.max_paths` is a **total, not an extra**. With `k=3` the first
+          path returned is the primary - for the same endpoints, the original route, which
+          diverges from itself by 0 m. A caller that already holds the primary (generate
+          mode does; it just drew it) asks for one more than it wants and skips the first.
+        * **The alternatives algorithm cannot be combined with via points.** Asking for
+          both answers `"Currently alternative routes work only with start and end point.
+          You tried to use: 4 points"`. A detour is pinned by via points, so a detour
+          request is a single-answer request: `k` is honoured for `around=None` and
+          ignored for a span. That is not a limitation worth working around by inventing
+          candidates the router did not offer - scope 8.1 step 6 iterates over flagged
+          *segments*, so the breadth comes from asking about more of them.
         """
         if len(gpx.points) < 2:
             return []
-        ends = [
-            LatLon(lat=gpx.points[0].lat, lon=gpx.points[0].lon),
-            LatLon(lat=gpx.points[-1].lat, lon=gpx.points[-1].lon),
-        ]
+
+        if around is None:
+            waypoints = [
+                LatLon(lat=gpx.points[0].lat, lon=gpx.points[0].lon),
+                LatLon(lat=gpx.points[-1].lat, lon=gpx.points[-1].lon),
+            ]
+            areas = list(avoid_polygons or [])
+        else:
+            start_m, end_m = around
+            waypoints = detour_waypoints(gpx, start_m, end_m)
+            if len(waypoints) < 2:
+                return []
+            areas = [*(avoid_polygons or []), detour_area(gpx, start_m, end_m)]
+
+        body = route_body(
+            waypoints,
+            profile=profile,
+            avoid_polygons=areas or None,
+            custom_model=custom_model,
+            # Only between two points. With via points the server refuses the request
+            # outright rather than degrading, and the refusal is a `NoRouteError` that
+            # this method would then swallow into an empty list - a detour that silently
+            # never happens.
+            alternatives=k if len(waypoints) == 2 else 0,
+        )
         try:
-            paths = self._paths(route_body(ends, alternatives=k), ends)
+            paths = self.paths(body, waypoints)
         except (RouterUnavailable, NoRouteError):
             # An alternatives failure degrades scope 8.1 step 6 to flag-but-don't-fix,
             # exactly as `NullRouter` does. It must never take a plan down.
@@ -219,6 +271,12 @@ class GraphHopperRouter:
             )
             response.raise_for_status()
             paths = response.json().get("paths") or []
+        except CacheMiss:
+            # Never swallowed. `CacheMiss` is a `LookupError`, so the bare handler below
+            # would turn an offline miss into a silent fall-back to geometric snapping -
+            # a wrong answer that looks exactly like a right one, in the one place the
+            # whole cassette design exists to make loud. Scope 4.4's rule, and M5.4's.
+            raise
         except Exception:  # noqa: BLE001 - matching is optional, geometry is not
             return track, [None] * len(track.points)
         if not paths:
@@ -229,7 +287,15 @@ class GraphHopperRouter:
 
     # --- transport ------------------------------------------------------
 
-    def _paths(self, body: dict[str, Any], waypoints: Sequence[LatLon]) -> list[dict[str, Any]]:
+    def paths(self, body: dict[str, Any], waypoints: Sequence[LatLon]) -> list[dict[str, Any]]:
+        """Post a routing request and return the server's **raw** path dicts.
+
+        Public since M5.4, and raw on purpose: a cached router records exactly what the
+        server said and `path_to_route` stays the single decoder, so a cassette holds the
+        bytes rather than one reading of them. The same argument `freeze-fixture` makes
+        about going through the production store, and M4's about caching a feed payload
+        rather than the features parsed out of it.
+        """
         import httpx
 
         try:

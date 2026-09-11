@@ -57,7 +57,19 @@ class NoRouteError(RoutingError):
 
 @runtime_checkable
 class Router(Protocol):
-    """What `core/` may ask of a routing engine."""
+    """What `core/` may ask of a routing engine.
+
+    `alternatives(gpx, around=(start_m, end_m))` asks for candidates that differ *around a
+    span* of the route and keep the rest. `around=None` asks for whole-route alternatives
+    between the same endpoints. Until M5.4 the argument was `segment_idx`, which appeared
+    in the signature, was referenced nowhere in any implementation, and whose docstring
+    said so - so every caller passed an index that meant nothing.
+
+    The costing arguments are carried for the same reason they exist on `route`: an
+    alternative drawn without the custom model the original was drawn with is not
+    comparable to it, and arbitrating between the two would be comparing two different
+    questions.
+    """
 
     def route(
         self,
@@ -67,7 +79,16 @@ class Router(Protocol):
         custom_model: CostingModel | None = None,
     ) -> Route: ...
 
-    def alternatives(self, gpx: Route, segment_idx: int, k: int = 3) -> list[Route]: ...
+    def alternatives(
+        self,
+        gpx: Route,
+        around: tuple[float, float] | None = None,
+        k: int = 3,
+        *,
+        profile: str = "foot",
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> list[Route]: ...
 
     def map_match(self, track: Route) -> tuple[Route, list[int | None]]: ...
 
@@ -94,7 +115,16 @@ class NullRouter:
             "no router configured: generate mode needs one, repair mode does not"
         )
 
-    def alternatives(self, gpx: Route, segment_idx: int, k: int = 3) -> list[Route]:
+    def alternatives(
+        self,
+        gpx: Route,
+        around: tuple[float, float] | None = None,
+        k: int = 3,
+        *,
+        profile: str = "foot",
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> list[Route]:
         return []
 
     def map_match(self, track: Route) -> tuple[Route, list[int | None]]:

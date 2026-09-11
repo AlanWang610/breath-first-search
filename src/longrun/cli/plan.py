@@ -149,9 +149,20 @@ def plan(
 
     score_route(route, request, out=out, **shared)
 
-    for index, candidate in enumerate(router.alternatives(route, 0, k=alternatives)[:alternatives]):
+    # `max_paths` is a total, not an extra: GraphHopper returns the primary path first, and
+    # in generate mode the primary path *is* the route just drawn. Asking for one more and
+    # skipping it is the difference between three alternatives and two plus a duplicate,
+    # which this scored - and wrote to its own directory - on every run until M5.4.
+    # And no request at all when none were asked for: `--alternatives 0` used to build a
+    # body, post it, and slice the answer away.
+    candidates = (
+        router.alternatives(route, None, k=alternatives + 1, custom_model=model)[1:]
+        if alternatives > 0
+        else []
+    )
+    for index, candidate in enumerate(candidates[:alternatives]):
         # Scored, not compared. Scope 8.1 step 6 chooses between candidates and that is
-        # arbitration's job with the agent driving it (M5); what this produces is the raw
+        # arbitration's job with the agent driving it (M5.5); what this produces is the raw
         # material — a scored plan per candidate, in its own directory.
         typer.echo(f"alternative {index}: {candidate.length_m / 1000:.2f} km")
         score_route(

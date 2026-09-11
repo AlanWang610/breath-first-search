@@ -134,10 +134,84 @@ def test_a_point_off_the_graph_fails_usefully(router: GraphHopperRouter) -> None
 def test_alternatives_are_distinct_routes(router: GraphHopperRouter) -> None:
     """Scope 8.1 step 6 needs candidates to score. Three copies of one route are not."""
     route = router.route([FERRY, DEYOUNG])
-    found = router.alternatives(route, 0, k=3)
+    found = router.alternatives(route, None, k=3)
     assert len(found) >= 2
     lengths = {round(alt.length_m) for alt in found}
     assert len(lengths) >= 2, lengths
+
+
+def test_the_first_whole_route_alternative_is_the_route_itself(
+    router: GraphHopperRouter,
+) -> None:
+    """`alternative_route.max_paths` is a total, not an extra.
+
+    Measured, because it decides what `--alternatives 3` means: the primary path comes
+    back first, and between the same two endpoints that is the original route. A caller
+    that already holds it - generate mode just drew it - asks for one more and skips the
+    first, which `cli/plan.py` did not until M5.4 and so scored the same route twice.
+    """
+    route = router.route([FERRY, DEYOUNG])
+    found = router.alternatives(route, None, k=3)
+    assert round(found[0].length_m) == round(route.length_m)
+
+
+def test_a_detour_leaves_the_span_it_was_asked_to_avoid(router: GraphHopperRouter) -> None:
+    """Scope 8.1 step 6's actual request: reroute what was flagged, keep the rest."""
+    from shapely.geometry import Point, shape
+
+    from longrun.core.routing.detour import detour_area
+
+    route = router.route([FERRY, DEYOUNG])
+    span = (route.length_m * 0.40, route.length_m * 0.50)
+    area = shape(detour_area(route, *span)["geometry"])
+
+    found = router.alternatives(route, span, k=1)
+
+    assert found, "a detour around a mid-route span in a dense grid should exist"
+    detour = found[0]
+    assert detour.length_m > route.length_m
+    assert not any(area.contains(Point(p.lon, p.lat)) for p in detour.points)
+
+
+def test_pinning_a_span_without_avoiding_it_returns_the_same_route(
+    router: GraphHopperRouter,
+) -> None:
+    """The control, and the reason the avoid-area exists.
+
+    The via points sit *on* the route, so a router asked to pass through them honours the
+    request by going exactly where it already went - measured at 0 m divergence. Without
+    this test the pins look like they are doing the work, and the first person to simplify
+    the avoid-area away would find every detour silently returning the original.
+    """
+    from longrun.core.routing.detour import detour_waypoints
+    from longrun.core.routing.graphhopper import route_body
+
+    route = router.route([FERRY, DEYOUNG])
+    span = (route.length_m * 0.40, route.length_m * 0.50)
+    pins = detour_waypoints(route, *span)
+
+    pinned = router.paths(route_body(pins), pins)
+
+    assert round(pinned[0]["distance"]) == round(route.length_m)
+
+
+def test_the_alternatives_algorithm_refuses_via_points(router: GraphHopperRouter) -> None:
+    """Why a detour is a single-answer request.
+
+    GraphHopper answers "alternative routes work only with start and end point", and it
+    refuses rather than degrading - so asking for both would make every detour an empty
+    list rather than a worse one. Pinned here because it is a property of the server, and
+    a server upgrade that lifted it is something this project would want to know about.
+    """
+    from longrun.core.routing.detour import detour_waypoints
+    from longrun.core.routing.graphhopper import route_body
+
+    route = router.route([FERRY, DEYOUNG])
+    pins = detour_waypoints(route, route.length_m * 0.40, route.length_m * 0.50)
+    assert len(pins) == 4
+
+    with pytest.raises(NoRouteError, match="start and end point"):
+        router.paths(route_body(pins, alternatives=3), pins)
 
 
 # --- R4: map matching --------------------------------------------------------
