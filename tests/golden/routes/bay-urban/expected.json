@@ -512,7 +512,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "e788eec633aa99b3fbe5f765cb20350ed4ae2c8662caa10a4e10010fa25ebcfd",
+  "measurements_sha256": "ff56fb7586a9102abc2b72953f6d45fdbc75afb0f8cd419d8cc4f709f1ff84f4",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -921,7 +921,7 @@
         "closures": 0,
         "jurisdictions_answered": 0,
         "jurisdictions_crossed": 5,
-        "jurisdictions_unanswered": 7
+        "jurisdictions_unanswered": 5
       },
       "worst": []
     },

@@ -574,3 +574,37 @@ def test_nobody_answering_skips_rather_than_passing(tmp_path: Any) -> None:
         tmp_path,
     )
     assert _check6(cl.closures(route, segments, ctx, [START] * len(segments))).status == "skipped"
+
+
+def test_the_jurisdiction_tally_counts_jurisdictions_not_coverage_lines() -> None:
+    """`answered + unanswered` must equal `crossed`, and the coverage list is not a proxy.
+
+    The same list carries statements *about* the scan - boundaries unavailable, no registry
+    configured, a park agency with no resolvable state - and counting those made the three
+    numbers disagree. Arithmetic that does not close is the cheapest available signal that a
+    count is measuring the wrong thing, so it is asserted rather than eyeballed.
+    """
+    from longrun.core.models.coverage import CoverageEntry
+    from longrun.core.models.measurement import ScorerResult
+    from longrun.core.scorers.closures import _summarise
+
+    result = ScorerResult(name="closures")
+    result.coverage.extend(
+        [
+            CoverageEntry(source="closures", kind="closures", checked=False, reason="about"),
+            CoverageEntry(
+                source="closures", kind="closures", checked=True, jurisdiction="tiger:state:29"
+            ),
+            CoverageEntry(
+                source="closures", kind="closures", checked=False, jurisdiction="padus:CITY"
+            ),
+        ]
+    )
+    summary = _summarise(result, [], {}, jurisdictions=2)
+    values = next(m.values for m in summary.measurements if m.segment_id == "route")
+    assert values["jurisdictions_answered"] == 1
+    assert values["jurisdictions_unanswered"] == 1
+    assert (
+        values["jurisdictions_answered"] + values["jurisdictions_unanswered"]
+        == values["jurisdictions_crossed"]
+    )

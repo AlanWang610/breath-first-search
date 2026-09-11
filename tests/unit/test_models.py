@@ -374,3 +374,22 @@ def test_result_lookup_by_scorer_name() -> None:
         route=_route(),
     )
     assert plan.result("legality") is None
+
+
+def test_a_checked_coverage_line_names_the_tier_that_answered() -> None:
+    """Scope 7.6 asks a plan to report "which tiers returned data for each jurisdiction
+    crossed", and tiers 3 and 4 are brittle by design. "checked" alone invites a reader to
+    trust an LLM reading a PDF as far as a state DOT's feed."""
+    from longrun.core.models.coverage import CoverageEntry
+
+    feed = CoverageEntry(
+        source="closures", kind="closures", checked=True, jurisdiction="Jackson", tier=1
+    )
+    assert str(feed) == "closures [Jackson]: checked (tier 1)"
+
+    # Nothing answered, so there is no tier to name - and a tier here would read as though
+    # one had.
+    silent = CoverageEntry(
+        source="closures", kind="closures", checked=False, jurisdiction="Rosedale", tier=None
+    )
+    assert "tier" not in str(silent)

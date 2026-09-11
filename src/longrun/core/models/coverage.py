@@ -36,10 +36,18 @@ class CoverageEntry(BaseModel):
     vintage: str | None = None
 
     def __str__(self) -> str:
+        """One line of the plan sheet's coverage section.
+
+        The tier is rendered, not just stored, because scope 7.6 asks a plan to report
+        "which tiers returned data for each jurisdiction crossed" — and tiers 3 and 4 are
+        brittle by design, so "checked" alone invites a reader to trust an LLM reading a
+        PDF exactly as far as they trust a state DOT's feed.
+        """
         state = "checked" if self.checked else "NOT CHECKED"
         where = f" [{self.jurisdiction}]" if self.jurisdiction else ""
+        how = f" (tier {self.tier})" if self.checked and self.tier is not None else ""
         why = f" - {self.reason}" if self.reason else ""
-        return f"{self.source}{where}: {state}{why}"
+        return f"{self.source}{where}: {state}{how}{why}"
 
 
 class CoverageManifest(BaseModel):

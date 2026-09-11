@@ -326,7 +326,11 @@ def _summarise(
                 confidence=1.0,
             )
         )
-    answered = sum(1 for c in result.coverage if c.checked)
+    # Only jurisdiction-scoped entries count toward the tally, because the same list also
+    # carries statements *about* the scan - boundaries unavailable, no registry configured,
+    # a park agency that could not be placed. Counting those made the three numbers fail to
+    # add up, which is the loudest possible sign that a count is measuring the wrong thing.
+    answered = sum(1 for c in result.coverage if c.checked and c.jurisdiction)
     result.measurements.append(
         SegmentMeasurement(
             segment_id=ROUTE_SUMMARY_ID,
@@ -334,7 +338,9 @@ def _summarise(
                 "closures": total,
                 "jurisdictions_crossed": jurisdictions,
                 "jurisdictions_answered": answered,
-                "jurisdictions_unanswered": sum(1 for c in result.coverage if not c.checked),
+                "jurisdictions_unanswered": sum(
+                    1 for c in result.coverage if not c.checked and c.jurisdiction
+                ),
             },
             confidence=1.0,
         )
