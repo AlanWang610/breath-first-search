@@ -62,6 +62,12 @@ longrun = "longrun.cli.main:app"
 # Jurisdiction adapters register here (scope 7.10). Third-party packages can add entries
 # under the same group; discovery is by entry point, not by import path.
 [project.entry-points."longrun.adapters"]
+# Tier 1: WZDx work-zone feeds, all three keyless and confirmed live 2026-09-10. The value
+# is an object, not a class - one module may export several kinds, and there is nothing to
+# instantiate, which is the same convention `SCORERS` uses with `getattr(module, "score")`.
+wzdx-modot = "longrun.adapters.wzdx.modot:CLOSURES"
+wzdx-kdot = "longrun.adapters.wzdx.kdot:CLOSURES"
+wzdx-maricopa = "longrun.adapters.wzdx.maricopa:CLOSURES"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/longrun"]

@@ -295,6 +295,12 @@ def freeze_cassette(
     spacing_m: float = typer.Option(
         DEFAULT_SPACING_M, "--spacing-m", help="Distance between forecast sites."
     ),
+    fixtures: Path | None = typer.Option(
+        None, "--fixtures", help="Layer directory, for the adapter pass."
+    ),
+    with_adapters: bool = typer.Option(
+        False, "--with-adapters", help="Also record jurisdiction adapter responses."
+    ),
 ) -> None:
     """Record a route's forecast into a cassette a golden run can replay.
 
@@ -312,11 +318,16 @@ def freeze_cassette(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 
+    # The forecast and air-quality passes read no layers, so this defaulted to the route
+    # directory and nobody noticed. An adapter pass needs `boundaries` and `parks`, which
+    # live in `<route>/fixtures/`, so the directory has to be nameable.
+    root = fixtures if fixtures is not None else gpx_path.parent
+
     out.parent.mkdir(parents=True, exist_ok=True)
     with SqliteCache(out, offline=False) as cache:
         ctx = ScorerContext(
-            layers=FileLayerStore(gpx_path.parent),
-            rasters=FileRasterStore(gpx_path.parent),
+            layers=FileLayerStore(root),
+            rasters=FileRasterStore(root),
             cache=cache,
             clock=FrozenClock(date),
             coverage=CoverageManifest(),
@@ -328,16 +339,51 @@ def freeze_cassette(
         # Recorded here rather than in a separate command because a golden needs both, and
         # a cassette that carries one and not the other is a route that half-scores.
         air = route_air_quality(route, ctx, date.date())
+        adapters = _record_adapters(route, ctx, date) if with_adapters else None
         recorded = len(cache.keys())
 
     for site in forecast.sites:
         state = site.provider if site.hours else f"none ({site.reason})"
         typer.echo(f"  site {site.site.index} at {site.site.cum_dist_m / 1000:.1f} km: {state}")
     typer.echo(f"  air quality: {sum(1 for s in air.sites if s.hours)} of {len(air.sites)} site(s)")
+    for line in adapters or []:
+        typer.echo(f"  {line}")
     typer.echo(f"wrote {out}: {recorded} key(s), {ctx.budget.api_calls_used} API call(s)")
     if not forecast.answered and not air.answered:
         typer.echo("error: nothing was recorded", err=True)
         raise typer.Exit(code=1)
+
+
+def _record_adapters(route: Any, ctx: Any, when: datetime) -> list[str]:
+    """Record every jurisdiction adapter this route would ask, into the same cassette.
+
+    The same argument as the forecast pass: this goes through the *production* registry, so
+    what lands in the cassette is exactly the keys a scorer will ask for. A hand-written one
+    would be a second implementation of the key derivation and would drift the first time a
+    rounding rule changed.
+
+    A WZDx feed for a past date can no more be re-fetched than a forecast can, so record
+    before the pinned date arrives and treat the file as permanent.
+    """
+    from longrun.adapters.registry import AdapterRegistry
+    from longrun.core.data.jurisdictions import route_jurisdictions
+    from longrun.core.geo.segments import corridor, corridor_polygon
+
+    scan = route_jurisdictions(route, ctx)
+    if not scan.jurisdictions:
+        return [f"adapters: nothing to ask - {'; '.join(scan.reasons) or 'no jurisdictions'}"]
+
+    registry = AdapterRegistry(ctx.cache, ctx.budget, offline=False)
+    polygon = corridor_polygon(corridor(route))
+    lines: list[str] = []
+    for kind in ("closures", "trail_status", "access_hours"):
+        found = registry.fetch(kind, scan.jurisdictions, polygon, when.date())
+        answered = sum(1 for a in found.answers if a.checked)
+        lines.append(
+            f"{kind}: {answered} of {len(found.answers)} jurisdiction(s) answered, "
+            f"{len(found.features)} feature(s)"
+        )
+    return lines
 
 
 def register(app: typer.Typer) -> None:
