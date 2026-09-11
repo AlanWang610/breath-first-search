@@ -1,10 +1,15 @@
 """511 SF Bay's WZDx feed (scope 7.6, 7.10).
 
-Tier 1 by content - it is a WZDx feed, and it reuses the same parser - but it needs a key,
-which is the whole difference between it and Missouri's. The Bay Area is this project's
-development region and the region for which `closures` reports nothing, and this module is
-why: not because the data does not exist, but because reaching it needs a credential this
-install may not have.
+**Tier 1**, because scope 7.10 defines the tier by *source type* - "1 WZDx, 2 511 API, 3
+open-data portal, 4 LLM extraction" - and this is a WZDx feed served through the same parser
+as Missouri's. It shipped at tier 2, which conflated "needs a key" with "is a worse kind of
+source". A credential is a reason a fetch *failed*; it says nothing about what the data is.
+
+That mistake had teeth. Tier decides the ladder, and `MIN_HARD_FLAG_TIER` is 2 - so a
+mis-tiered feed changes which sources may fail a route, not merely how the sheet reads.
+
+What is true is that reaching it needs a key, so the Bay Area reported no closures until one
+was supplied. Confirmed working on 2026-09-11: **954 work zones**, WZDx 4.1.
 
 `bayarea.yaml` already records the same fact about transit: *"511.org needs a key and the
 direct agency URLs are not all stable"*, so BART is the only feed loaded. The coverage
@@ -46,11 +51,11 @@ BAY_AREA_COUNTIES = (
 
 
 class SfBay511Closures:
-    name = "state511.sfbay"
+    name = "wzdx.sfbay"
     kind = "closures"
-    tier = 2
+    tier = 1
     jurisdictions = BAY_AREA_COUNTIES
-    source = "state511_sfbay"
+    source = "wzdx_sfbay"
     vintage: str | None = None
 
     def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult:

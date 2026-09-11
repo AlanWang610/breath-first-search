@@ -123,11 +123,17 @@ def test_a_partly_closed_road_does_not_block_pedestrians(short: str) -> None:
 
 def test_maricopa_declines_to_state_impact_and_that_is_reported_not_guessed() -> None:
     """A finding about the publisher, not the parser. MCDOT publishes
-    `vehicle_impact: "unknown"` on every one of its 2,628 features, so no Phoenix work zone
-    clears gate 1 on that field. Recorded as a test because it is the sort of fact a later
-    reader would otherwise rediscover by wondering why Phoenix never flags."""
-    from longrun.core.scorers.closures import blocks_pedestrians
+    `vehicle_impact: "unknown"` on every one of its ~2,626 features, so no Phoenix work zone
+    clears gate 1 *on that field*.
 
+    The qualifier is load-bearing and this test originally lacked it. Against the whole live
+    feed, 11 MCDOT work zones do clear gate 1 - `blocks_pedestrians` falls back to the
+    description when the impact field says nothing, and a handful of MCDOT descriptions name
+    a sidewalk closure. Asserting "none of them ever" on a nine-feature cassette would have
+    frozen a claim the full feed contradicts.
+
+    What is actually pinned here: an uninformative impact must not *become* the category.
+    """
     payload = _payload("maricopa")
     impacts = {(f["properties"] or {}).get("vehicle_impact") for f in payload["features"]}
     assert impacts == {"unknown"}
@@ -136,7 +142,6 @@ def test_maricopa_declines_to_state_impact_and_that_is_reported_not_guessed() ->
         "an uninformative impact must fall back to the event type, not become the category "
         "'unknown' - which reads like a classification rather than a refusal"
     )
-    assert not any(blocks_pedestrians(f) for f in features)
 
 
 def test_every_parsed_feature_carries_prose_a_reader_can_act_on() -> None:

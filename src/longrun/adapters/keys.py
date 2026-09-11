@@ -49,13 +49,11 @@ SF_BAY_511 = ApiKey(
     register_at="https://511.org/open-data/token",
 )
 
-#: Arizona's statewide 511. Maricopa County's WZDx feed is keyless and covers Phoenix, so
-#: this adds the rest of the state rather than unblocking it.
-AZ_511 = ApiKey(
-    env_var="LONGRUN_AZ511_API_KEY",
-    service="AZ511",
-    register_at="https://www.az511.com/developers",
-)
+# There is no AZ511 entry, and its absence is the correction. This project shipped one,
+# pointing at `https://www.az511.com/developers` - a URL that 302s to `/notfound` - for a
+# feed that turns out to need no key at all. Arizona's WZDx endpoint answers unauthenticated
+# (see `adapters/wzdx/azdot.py`), so asking anyone to register for it was asking them to do
+# work for nothing, in a file whose whole purpose is telling them what work to do.
 
 #: The National Park Service alerts API - what `trail_status` reads for any route crossing
 #: `padus:NPS` land, which PAD-US resolves for every national park in the country.
@@ -65,6 +63,6 @@ NPS = ApiKey(
     register_at="https://www.nps.gov/subjects/developer/get-started.htm",
 )
 
-ALL_KEYS = (SF_BAY_511, AZ_511, NPS)
+ALL_KEYS = (SF_BAY_511, NPS)
 
-__all__ = ["ALL_KEYS", "AZ_511", "NPS", "SF_BAY_511", "ApiKey"]
+__all__ = ["ALL_KEYS", "NPS", "SF_BAY_511", "ApiKey"]

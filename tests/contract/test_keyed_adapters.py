@@ -21,9 +21,9 @@ from typing import Any
 import pytest
 
 from longrun.adapters.base import AdapterContext
-from longrun.adapters.keys import ALL_KEYS, AZ_511, NPS, SF_BAY_511
+from longrun.adapters.keys import ALL_KEYS, NPS, SF_BAY_511
 from longrun.adapters.portals import nps as nps_portal
-from longrun.adapters.state511 import az511, sfbay
+from longrun.adapters.wzdx import azdot, sfbay
 from longrun.core.data.cache import SqliteCache, args_hash
 from longrun.core.models.context import Budget
 
@@ -32,9 +32,11 @@ pytestmark = pytest.mark.contract
 DAY = date(2026, 9, 15)
 CASSETTES = Path(__file__).parent / "cassettes"
 
+#: Adapters that genuinely need a credential. Arizona used to be here and is not: its WZDx
+#: endpoint answers unauthenticated, which calling it settled and reading the documentation
+#: did not.
 KEYED = [
     ("sfbay", sfbay.CLOSURES, SF_BAY_511),
-    ("az511", az511.CLOSURES, AZ_511),
     ("nps", nps_portal.TRAIL_STATUS, NPS),
 ]
 
@@ -81,14 +83,14 @@ def test_a_keyless_jurisdiction_is_never_reported_as_having_nothing(tmp_path: An
     from longrun.adapters.registry import AdapterRegistry
     from longrun.core.models.jurisdiction import Jurisdiction
 
-    arizona = Jurisdiction(id="tiger:state:04", level="state", name="Arizona")
+    san_francisco = Jurisdiction(id="tiger:county:06075", level="county", name="San Francisco")
     with SqliteCache() as cache:
-        registry = AdapterRegistry(cache, Budget(), adapters=[az511.CLOSURES])
-        found = registry.fetch("closures", [arizona], None, DAY)
+        registry = AdapterRegistry(cache, Budget(), adapters=[sfbay.CLOSURES])
+        found = registry.fetch("closures", [san_francisco], None, DAY)
     answer = found.answers[0]
     assert not answer.checked
     assert answer.tier is None, "an adapter that could not authenticate did not answer"
-    assert AZ_511.env_var in (answer.reason or "")
+    assert SF_BAY_511.env_var in (answer.reason or "")
 
 
 # --- keys are read at call time ---------------------------------------------
@@ -183,10 +185,16 @@ def test_the_nps_cache_key_is_stable_and_provider_scoped() -> None:
 # --- tiers and registration --------------------------------------------------
 
 
-def test_the_arizona_ladder_prefers_the_keyless_county_feed() -> None:
-    """Scope 7.10's ladder, working. A Phoenix route gets MCDOT at tier 1 and never reaches
-    AZ511; a Tucson route has nothing at tier 1 and falls to tier 2, where it is told which
-    key is missing. That is why `wzdx.maricopa` holds the county and `az511` the state."""
+def test_phoenix_is_asked_of_both_arizona_feeds_because_they_are_peers() -> None:
+    """Two tier-1 WZDx feeds with **disjoint `data_sources`**: MCDOT carries county roads,
+    AZDOT carries state highways. Neither subsumes the other, so the ladder - which exists to
+    stop a jurisdiction paying for a worse *tier* - must not pick between them.
+
+    It nearly did, by sort order. And the accident mattered: MCDOT publishes
+    `vehicle_impact: "unknown"` on every one of its features while AZDOT states it properly,
+    so whichever name sorted first decided whether an Arizona closure could ever clear
+    ADR 0013's gate 1.
+    """
     from longrun.adapters.registry import AdapterRegistry
     from longrun.adapters.wzdx import maricopa
     from longrun.core.models.jurisdiction import Jurisdiction
@@ -204,12 +212,45 @@ def test_the_arizona_ladder_prefers_the_keyless_county_feed() -> None:
         within=("tiger:county:04019", "tiger:state:04"),
     )
     with SqliteCache() as cache:
-        registry = AdapterRegistry(cache, Budget(), adapters=[maricopa.CLOSURES, az511.CLOSURES])
-        assert [a.name for a in registry.adapters_for("closures", phoenix)] == [
+        registry = AdapterRegistry(cache, Budget(), adapters=[maricopa.CLOSURES, azdot.CLOSURES])
+        assert sorted(a.name for a in registry.adapters_for("closures", phoenix)) == [
+            "wzdx.azdot",
             "wzdx.maricopa",
-            "state511.az511",
         ]
-        assert [a.name for a in registry.adapters_for("closures", tucson)] == ["state511.az511"]
+        assert sorted(registry._plan("closures", [phoenix])) == ["wzdx.azdot", "wzdx.maricopa"]
+        # Tucson is outside Maricopa County, so only the statewide feed covers it.
+        assert sorted(registry._plan("closures", [tucson])) == ["wzdx.azdot"]
+
+
+def test_arizona_needs_no_key_at_all() -> None:
+    """The correction the whole of this file's Arizona half used to encode the opposite of.
+
+    `LONGRUN_AZ511_API_KEY` sat in `.env.example` for a feed that answers unauthenticated -
+    asking a reader to register for nothing, in the one file whose purpose is telling them
+    what they must do.
+    """
+    assert not any("AZ511" in key.env_var for key in ALL_KEYS)
+    assert azdot.CLOSURES.tier == 1
+
+
+def test_every_wzdx_feed_is_tier_one_whether_or_not_it_needs_a_key() -> None:
+    """Scope 7.10 assigns the tier by *source type*: "1 WZDx, 2 511 API, 3 open-data portal,
+    4 LLM extraction". Two adapters shipped at tier 2 because they needed a credential, which
+    confuses a reason a fetch failed with what kind of source it is.
+
+    Not cosmetic. `MIN_HARD_FLAG_TIER` is 2, so the tier decides which sources are permitted
+    to fail a route - a mis-tiered WZDx feed is one silently barred from hard-flagging.
+    """
+    from longrun.adapters.wzdx import kdot, maricopa, modot
+
+    for adapter in (
+        modot.CLOSURES,
+        kdot.CLOSURES,
+        maricopa.CLOSURES,
+        azdot.CLOSURES,
+        sfbay.CLOSURES,
+    ):
+        assert adapter.tier == 1, f"{adapter.name} is a WZDx feed and must be tier 1"
 
 
 def test_the_bay_area_adapter_does_not_answer_for_the_whole_state() -> None:
@@ -242,8 +283,8 @@ def test_every_registered_adapter_is_discovered_and_licensed() -> None:
         "wzdx.modot",
         "wzdx.kdot",
         "wzdx.maricopa",
-        "state511.sfbay",
-        "state511.az511",
+        "wzdx.azdot",
+        "wzdx.sfbay",
         "portal.nps",
     }
     assert all(licence_for(a.source) is not None for a in found)

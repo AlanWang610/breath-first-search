@@ -203,9 +203,20 @@ class AdapterRegistry:
     ) -> dict[str, tuple[Adapter, list[Jurisdiction]]]:
         """Which adapter to ask, and which jurisdictions each answer covers.
 
-        One entry per adapter, however many jurisdictions it serves. A jurisdiction matched
-        by several tiers appears only under the best one, because the ladder stops at the
-        first success and a tier never reached did not fail.
+        One entry per adapter, however many jurisdictions it serves.
+
+        **The ladder is between tiers, not within one.** A jurisdiction is asked at the best
+        tier that covers it and no worse - a tier never reached did not fail, and reporting
+        it as though it had would misstate what was consulted. But *every* adapter at that
+        best tier is asked, because two sources of the same kind are peers rather than a
+        fallback, and stopping at the first would pick between them by sort order.
+
+        Arizona is why this is not hypothetical. `wzdx.maricopa` (the county) and
+        `wzdx.azdot` (the state) are both tier-1 WZDx with **disjoint `data_sources`**, so
+        each carries work zones the other does not. Under a first-match rule Phoenix silently
+        got whichever name sorted first - and since MCDOT publishes
+        `vehicle_impact: "unknown"` on every feature while AZDOT states it properly, that
+        accident decided whether an Arizona closure could clear ADR 0013's gate 1 at all.
 
         Keyed by `adapter.name` rather than by the adapter, because an adapter is any object
         satisfying a protocol and **need not be hashable** - a plain mutable dataclass is the
@@ -215,10 +226,13 @@ class AdapterRegistry:
         """
         chosen: dict[str, tuple[Adapter, list[Jurisdiction]]] = {}
         for jurisdiction in jurisdictions:
-            for adapter in self._adapters:  # already sorted by (tier, name)
-                if matches(adapter, kind, jurisdiction):
+            matching = [a for a in self._adapters if matches(a, kind, jurisdiction)]
+            if not matching:
+                continue
+            best = min(int(a.tier) for a in matching)
+            for adapter in matching:
+                if int(adapter.tier) == best:
                     chosen.setdefault(adapter.name, (adapter, []))[1].append(jurisdiction)
-                    break
         return chosen
 
     def _ask(
@@ -249,26 +263,44 @@ class AdapterRegistry:
     ) -> JurisdictionAnswer:
         from longrun.core.models.features import JurisdictionAnswer
 
-        for name, (adapter, covered) in plan.items():
-            if jurisdiction not in covered:
-                continue
-            result = results[name]
-            asked_for = covered[0]
+        asked = [
+            (adapter, covered, results[name])
+            for name, (adapter, covered) in plan.items()
+            if jurisdiction in covered
+        ]
+        if not asked:
+            return self._extracted(kind, jurisdiction, day)
+
+        answered = [entry for entry in asked if entry[2].answered]
+        if not answered:
+            # Every adapter covering this jurisdiction failed. Their reasons are different
+            # facts - one key missing, one feed down - so they are joined rather than
+            # reduced to the first, which is what a reader needs to act on either.
             return JurisdictionAnswer(
                 jurisdiction=jurisdiction.id,
                 name=jurisdiction.name,
                 kind=kind,
-                checked=result.answered,
-                tier=adapter.tier if result.answered else None,
-                adapter=adapter.name,
-                covered_by=asked_for.id if asked_for.id != jurisdiction.id else None,
-                count=sum(1 for f in result.features if f.jurisdiction in (None, jurisdiction.id))
-                if result.answered
-                else 0,
-                reason=result.reason,
-                vintage=result.vintage,
+                checked=False,
+                adapter="; ".join(a.name for a, _, _ in asked),
+                reason="; ".join(dict.fromkeys(r.reason or "no reason given" for _, _, r in asked)),
             )
-        return self._extracted(kind, jurisdiction, day)
+
+        count = 0
+        for _, _, result in answered:
+            count += sum(1 for f in result.features if f.jurisdiction in (None, jurisdiction.id))
+        first_covered = answered[0][1][0]
+        return JurisdictionAnswer(
+            jurisdiction=jurisdiction.id,
+            name=jurisdiction.name,
+            kind=kind,
+            checked=True,
+            tier=min(int(a.tier) for a, _, _ in answered),  # type: ignore[arg-type]
+            adapter="; ".join(a.name for a, _, _ in answered),
+            covered_by=first_covered.id if first_covered.id != jurisdiction.id else None,
+            count=count,
+            vintage="; ".join(dict.fromkeys(r.vintage for _, _, r in answered if r.vintage))
+            or None,
+        )
 
     def _extracted(
         self, kind: FeatureKind, jurisdiction: Jurisdiction, day: date
