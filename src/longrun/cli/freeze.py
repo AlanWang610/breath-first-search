@@ -177,9 +177,27 @@ def freeze_fixture(
         ",".join(DEFAULT_LAYERS), "--layers", help="Comma-separated layers to freeze."
     ),
     buffer_m: float = typer.Option(400.0, "--buffer-m", help="Corridor buffer (scope 5)."),
-    dem: str | None = typer.Option(None, "--dem", help="DEM to clip: a path or a /vsicurl/ URL."),
+    dem: str | None = typer.Option(
+        None,
+        "--dem",
+        help="DEM to clip: a path or a /vsicurl/ URL. A remote one may not exit; see below.",
+    ),
 ) -> None:
-    """Freeze a route's corridor from PostGIS into committed fixtures."""
+    """Freeze a route's corridor from PostGIS into committed fixtures.
+
+    **A `--dem` over `/vsicurl/` writes everything and then does not exit.** Observed on
+    Windows while freezing `kc-stateline`: every layer, the clipped GeoTIFF and
+    `snapshot.json` were complete, and the process then sat at **zero CPU for half an hour**.
+    GDAL keeps its CURL handles alive past the `with rasterio.open(...)` block, so the
+    interpreter never finishes tearing down.
+
+    The output is complete when the last line prints. Kill it. What makes this worth writing
+    down rather than shrugging at is the second-order effect: two such processes left over
+    from an earlier session held `Scripts/longrun.exe` open and made `uv sync` fail with
+    "Access is denied", which looks nothing like its cause.
+
+    Not worked around with `os._exit`, which would risk truncating a buffered write to save
+    a keystroke on a command run once per region."""
     try:
         import psycopg
     except ImportError as exc:  # pragma: no cover - psycopg is a declared dependency
