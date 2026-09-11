@@ -19,9 +19,13 @@ from longrun.core.plan.arbitrate import (
     score_candidate,
 )
 from longrun.core.plan.weighting import (
+    FLAT_BY_DEFAULT,
     FLAT_FRACTION,
     HEAT_MAX_WEIGHT,
     MAX_WEIGHT,
+    MEASUREMENT_ONLY,
+    NEVER_WEIGHTED,
+    POSITION_WEIGHTED,
     position_weight,
     weight_for,
     weighted_severity,
@@ -111,6 +115,70 @@ def test_legality_is_never_position_weighted() -> None:
 
 def test_unknown_scorer_is_not_weighted() -> None:
     assert weight_for("something_new", 1.0) == 1.0
+
+
+def test_every_scorer_has_a_declared_weighting() -> None:
+    """A scorer in neither collection falls through to 1.0 and *behaves* as never-weighted
+    while being documented as neither. `trail_status` did exactly that until M4 - it was
+    absent from both, so nobody had decided whether a trail alert compounds with fatigue,
+    and the default quietly decided it did not.
+
+    Imported here rather than in `core/` because the list of scorers lives in `cli/`, and
+    `core/` may not import it (scope 4.1).
+    """
+    from longrun.cli.repair import SCORERS
+
+    declared = NEVER_WEIGHTED | set(POSITION_WEIGHTED) | MEASUREMENT_ONLY | FLAT_BY_DEFAULT
+    undeclared = sorted(name for name in SCORERS if name not in declared)
+    assert not undeclared, (
+        f"these scorers fall through to the default weight without anyone having chosen "
+        f"it: {undeclared}. Put each in NEVER_WEIGHTED, POSITION_WEIGHTED, MEASUREMENT_ONLY "
+        f"or FLAT_BY_DEFAULT - the last one is still a decision, just a recorded one."
+    )
+
+
+def test_the_weighting_collections_do_not_overlap() -> None:
+    """A name in two of them is a contradiction `weight_for` resolves silently, by order."""
+    groups = {
+        "never": NEVER_WEIGHTED,
+        "position": set(POSITION_WEIGHTED),
+        "measurement_only": MEASUREMENT_ONLY,
+        "flat_by_default": FLAT_BY_DEFAULT,
+    }
+    for a, b in ((a, b) for a in groups for b in groups if a < b):
+        assert not (groups[a] & groups[b]), f"{a} and {b} both claim {groups[a] & groups[b]}"
+
+
+def test_measurement_only_scorers_really_emit_no_flags() -> None:
+    """The claim `MEASUREMENT_ONLY` makes is checkable, so check it rather than trusting the
+    comment: a scorer that grows its first flag must not keep a weighting exemption granted
+    on the grounds that it had none."""
+    import ast
+    from pathlib import Path
+
+    from longrun.cli.repair import SCORERS
+
+    for name in sorted(MEASUREMENT_ONLY):
+        module = SCORERS[name]
+        path = Path(*module.split(".")).with_suffix(".py")
+        source = (Path(__file__).resolve().parents[2] / "src" / path).read_text(encoding="utf-8")
+        calls = {
+            node.func.id
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert "Flag" not in calls, (
+            f"{name} is listed as MEASUREMENT_ONLY but constructs a Flag; it now needs a "
+            f"position weighting decision"
+        )
+
+
+def test_a_trail_alert_compounds_with_fatigue_but_a_closed_road_does_not() -> None:
+    """The M4 split, stated as behaviour. Mud at kilometre 80 is worse than mud at
+    kilometre 2; a road closed to pedestrians is equally closed at both."""
+    assert weight_for("trail_status", 1.0) > weight_for("trail_status", 0.0)
+    assert weight_for("closures", 1.0) == 1.0
+    assert weight_for("access_hours", 1.0) == 1.0
 
 
 def test_weighted_severity_grows_with_position() -> None:

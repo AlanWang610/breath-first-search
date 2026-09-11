@@ -39,9 +39,51 @@ POSITION_WEIGHTED: dict[str, float] = {
     "stop_density": MAX_WEIGHT,
     "surface_profile": MAX_WEIGHT,
     "heat_stress": HEAT_MAX_WEIGHT,
+    "trail_status": MAX_WEIGHT,
 }
 
+#: Scorers that emit no flags at all, so no position weight applies. Not an oversight:
+#: `air_quality` is ADR 0006's decision (section 8.3 has no air-quality row, and inventing
+#: a threshold would attach a sign to a measurement, which section 3.2 forbids), and the
+#: rest measure things the plan sheet reports without ever crossing a threshold.
+MEASUREMENT_ONLY = frozenset(
+    {
+        "air_quality",
+        "microclimate",
+        "services_along",
+        "crew_points",
+        "start_time_optimizer",
+    }
+)
+
+#: Scorers that *do* flag and whose position weighting nobody has chosen, so they take the
+#: flat 1.0 default.
+#:
+#: Listed rather than left to fall through, which is the whole point: an unlisted scorer is
+#: indistinguishable from one someone decided about, and `trail_status` sat in that state
+#: from M1 until M4 found it. Whether darkness at kilometre 80 should outweigh darkness at
+#: kilometre 2 is a real question and a `tuning.py` one (M6); until then the answer here is
+#: "no, and that was noticed rather than inherited".
+FLAT_BY_DEFAULT = frozenset(
+    {
+        "sun_exposure",
+        "lighting",
+        "resupply_schedule",
+        "transit",
+        "bailouts",
+        "cell_coverage",
+    }
+)
+
 #: Never position-weighted: legality does not become acceptable early in a run.
+#:
+#: `trail_status` is deliberately absent and belongs in `POSITION_WEIGHTED` instead. The
+#: three M4 scorers split on what kind of claim they make: a closed road and a locked gate
+#: are categorical facts about the ground, true at kilometre 2 and at kilometre 80 alike,
+#: while a trail alert is a *condition you endure* — mud, ice, overgrowth — which compounds
+#: with fatigue exactly as `surface_profile` does. Until M4 it was in neither collection and
+#: so behaved as never-weighted while being documented as neither, which
+#: `test_every_scorer_has_a_declared_weighting` now prevents recurring.
 NEVER_WEIGHTED = frozenset({"legality", "hazards", "closures", "access_hours"})
 
 

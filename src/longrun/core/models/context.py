@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # pragma: no cover
-    from longrun.core.data.base import Cache, LayerStore, RasterStore
+    from longrun.core.data.base import Cache, FeatureSource, LayerStore, RasterStore
     from longrun.core.models.coverage import CoverageManifest
     from longrun.core.models.profile import PreferenceProfile
 
@@ -102,6 +102,10 @@ class ScorerContext:
     profile: PreferenceProfile
     budget: Budget = field(default_factory=Budget)
     snapshot: dict[str, str] = field(default_factory=dict)
+    #: Jurisdiction adapters (scope 7.10). `None` rather than a `NullFeatureSource`
+    #: default, because "no registry was configured" and "a registry, but nobody covers
+    #: this county" are different claims and the sheet has to be able to make both.
+    features: FeatureSource | None = None
     #: Hours to add to a naive plan time to get UTC. `None` means nobody said, and a
     #: scorer that needs it derives one from the route's longitude and reports having
     #: guessed - an hour of error is fifteen degrees of solar azimuth, which moves a

@@ -278,6 +278,7 @@ def score_route(
             coverage=CoverageManifest(),
             profile=profile,
             budget=budget,
+            snapshot=snapshot.layer_vintages,
             utc_offset_hours=utc_offset,
         )
 

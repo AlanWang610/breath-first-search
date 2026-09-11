@@ -75,13 +75,24 @@ def record_coverage(
     kind: str,
     vintage: str | None = None,
     confidence: float | None = None,
+    *,
+    jurisdiction: str | None = None,
+    tier: AdapterTier | None = None,
 ) -> ScorerResult:
-    """Attach a `checked=True` entry to a scorer that did consult a source."""
+    """Attach a `checked=True` entry to a scorer that did consult a source.
+
+    `jurisdiction` and `tier` are keyword-only and arrived with M4: `unavailable()` has
+    accepted both since M1, so a scorer could say which jurisdiction it *failed* to check
+    and had no way to say which one it succeeded at. Keyword-only so that none of the
+    existing positional call sites move.
+    """
     result.coverage.append(
         CoverageEntry(
             source=source,
             kind=kind,
             checked=True,
+            jurisdiction=jurisdiction,
+            tier=tier,
             vintage=vintage,
             confidence=confidence,
         )
