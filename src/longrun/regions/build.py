@@ -350,13 +350,55 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
     for record in found:
         by_level[record.level] = by_level.get(record.level, 0) + 1
     names = ", ".join(f"{count} {level}" for level, count in sorted(by_level.items()))
+
+    covered, by_tier = adapter_coverage(found)
+    counts = dict(by_level)
+    counts["with_adapter"] = len(covered)
+    for tier, n in sorted(by_tier.items()):
+        counts[f"tier_{tier}"] = n
+
+    tiers = ", ".join(f"{n} at tier {tier}" for tier, n in sorted(by_tier.items()))
+    adapters = (
+        f"{len(covered)} of {len(found)} have a closure adapter ({tiers})"
+        if covered
+        else f"no closure adapter for any of {len(found)}"
+    )
     return StepRecord(
         status="done" if found else "blocked",
-        detail=(
-            f"{names or 'nothing'} crossed; no closure adapter for any of them (the registry is M4)"
-        ),
-        counts=by_level,
+        detail=f"{names or 'nothing'} crossed; {adapters}",
+        counts=counts,
     )
+
+
+def adapter_coverage(
+    jurisdictions: list[Jurisdiction],
+) -> tuple[list[Jurisdiction], dict[int, int]]:
+    """Which jurisdictions have a closure adapter, and at what tier (§13 step 4).
+
+    The half of step 4 that has said "the registry is M4" since M3. It asks the registry
+    through `adapters_for`, which performs no fetch and spends no budget - a region build has
+    no corridor, no date and no `ScorerContext` to spend one from.
+
+    Imported inside the function so `regions/` does not pay for entry-point scanning on a
+    build that stops in step 1, and so a third-party adapter that will not import cannot
+    break a region build that never asked for one. `discover()` reports rather than raises.
+    """
+    from longrun.adapters.registry import AdapterRegistry
+    from longrun.core.data.cache import SqliteCache
+    from longrun.core.models.context import Budget
+
+    with SqliteCache() as cache:
+        registry = AdapterRegistry(cache, Budget(), offline=True)
+        covered: list[Jurisdiction] = []
+        by_tier: dict[int, int] = {}
+        for jurisdiction in jurisdictions:
+            infos = registry.adapters_for("closures", jurisdiction)
+            if not infos:
+                continue
+            covered.append(jurisdiction)
+            best = min(int(i.tier) for i in infos)
+            by_tier[best] = by_tier.get(best, 0) + 1
+    return covered, by_tier
 
 
 def step_coverage_report(ctx: BuildContext) -> StepRecord:

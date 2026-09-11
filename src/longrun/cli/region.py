@@ -241,9 +241,65 @@ def build_region(
         typer.echo("incomplete: some steps have not run")
 
 
+def promote_adapter(
+    jurisdiction_id: str = typer.Argument(..., help="tiger:county:29095 or padus:NPS."),
+    name: str = typer.Option(..., "--name", help="What to call it in the draft."),
+    url: str = typer.Option(..., "--url", help="Where the jurisdiction publishes."),
+    kind: str = typer.Option("closures", "--kind", help="closures|trail_status|access_hours."),
+    out: Path | None = typer.Option(None, "--out", help="Where to write the module."),
+    notes: str | None = typer.Option(None, "--notes", help="What the extraction found."),
+) -> None:
+    """Draft an adapter for a jurisdiction, for a human to finish (scope 7.10).
+
+    Writes a module that does **not** work and says so, and prints the `pyproject.toml` line
+    somebody has to paste. Nothing is registered: automatic registration would let a guess
+    about a URL become a source of record, which inverts the point of tiers.
+    """
+    from longrun.adapters.base import valid_jurisdiction_id
+    from longrun.adapters.promote import draft_adapter, drafts_parse
+    from longrun.core.models.jurisdiction import Jurisdiction
+
+    if not valid_jurisdiction_id(jurisdiction_id):
+        typer.echo(
+            f"error: {jurisdiction_id!r} is not a jurisdiction id. Expected "
+            f"tiger:{{state|county|place}}:{{geoid}} or padus:{{CODE}}[:{{statefp}}].",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if kind not in ("closures", "trail_status", "access_hours", "speed_survey"):
+        typer.echo(f"error: unknown kind {kind!r}", err=True)
+        raise typer.Exit(code=2)
+
+    level = "park" if jurisdiction_id.startswith("padus:") else jurisdiction_id.split(":")[1]
+    draft = draft_adapter(
+        Jurisdiction(
+            id=jurisdiction_id,
+            level=level,  # type: ignore[arg-type]
+            name=name,
+            source="padus" if jurisdiction_id.startswith("padus:") else "tiger",
+        ),
+        kind,  # type: ignore[arg-type]
+        url,
+        notes=notes,
+    )
+    if not drafts_parse(draft):
+        typer.echo("error: the draft did not parse; this is a bug in promote.py", err=True)
+        raise typer.Exit(code=1)
+
+    destination = out or Path("src") / Path(*draft.module_name.split(".")).with_suffix(".py")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(draft.source, encoding="utf-8")
+    typer.echo(f"wrote {destination}")
+    typer.echo("")
+    typer.echo("Not registered. Review it, fill in fetch(), then add to pyproject.toml:")
+    typer.echo('  [project.entry-points."longrun.adapters"]')
+    typer.echo(f"  {draft.registration}")
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
     app.command("load-tiger")(load_tiger)
     app.command("load-nhd")(load_nhd)
     app.command("load-gtfs")(load_gtfs)
     app.command("build-region")(build_region)
+    app.command("promote-adapter")(promote_adapter)
