@@ -107,9 +107,12 @@ PAD-US unit ID"*, so an agency adapter that sees a structured closure emits
 **Check 6 becomes fail > skip > pass.**
 
 ```python
-if closure_offenders is None:   return skip("no closure data available for this route")
-if closure_offenders:           return fail(closure_offenders)
-if unanswered:                  return skip(f"no closure adapter for {', '.join(unanswered)}")
+if closure_offenders is None:
+    return skip("no closure data available for this route")
+if closure_offenders:
+    return fail(closure_offenders)
+if unanswered:
+    return skip(f"no closure adapter for {', '.join(unanswered)}")
 return pass_()
 ```
 
