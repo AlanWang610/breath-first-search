@@ -47,7 +47,14 @@ def render_markdown(
     verify: VerifyReport | None = None,
     pacing_caveats: list[str] | None = None,
 ) -> str:
-    """Render a plan as a markdown sheet."""
+    """Render a plan as a markdown sheet.
+
+    `pacing_caveats` defaults to the plan's own. Passing them explicitly is the older
+    path and still wins, so a caller holding a fresher `ETAVector` than the stored plan
+    can say so.
+    """
+    if pacing_caveats is None:
+        pacing_caveats = plan.pacing_caveats
     out: list[str] = []
     route = plan.route
 
@@ -215,6 +222,14 @@ def _manifest_section(plan: Plan) -> list[str]:
             f"- {len(plan.manifest.tool_calls)} tool calls, "
             f"{plan.manifest.total_elapsed_s:.1f} s total"
         )
+    # Always, including the zero. Scope 6.4 puts budgets in the manifest and scope 9 puts
+    # the manifest on the sheet, and "this plan replayed a cassette and called nothing" is
+    # the more interesting of the two readings - a number that only appears when it is
+    # non-zero cannot report that.
+    out.append(
+        f"- {plan.manifest.api_calls_used} external API call(s), "
+        f"{plan.manifest.imagery_tiles_used} imagery tile(s)"
+    )
     if plan.manifest.degradation:
         out.append(f"- Degraded: {', '.join(plan.manifest.degradation)}")
     out.append("")

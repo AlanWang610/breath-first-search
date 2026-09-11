@@ -29,6 +29,11 @@ from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.plan import SnapshotPins
 from longrun.core.models.profile import PreferenceProfile
 
+#: Scope 6.4: "target end-to-end latency <= ~3 min". Enforced from M5.2 rather than only
+#: measured by two `slow` tests - scope 8.1 runs up to five rounds of rerouting and
+#: re-scoring, so the first thing that can overrun the target is the loop.
+PLAN_LATENCY_BUDGET_S = 180.0
+
 
 @contextmanager
 def open_context(
@@ -42,6 +47,7 @@ def open_context(
     cache_path: Path | None = None,
     remote_rasters: bool = False,
     utc_offset: float | None = None,
+    latency_budget_s: float | None = PLAN_LATENCY_BUDGET_S,
 ) -> Iterator[ScorerContext]:
     """Open the one context a plan is scored against, and close its cache afterwards.
 
@@ -66,7 +72,7 @@ def open_context(
         # gaps - and a GDAL /vsicurl/ read bypasses the cache, the budget and
         # LONGRUN_OFFLINE, which is a hole worth keeping deliberate (ADR 0007).
         remote = remote_raster_map(route, remote_rasters)
-        budget = Budget()
+        budget = Budget(latency_budget_s=latency_budget_s)
         # Imported here rather than at module scope so `longrun --version` does not pay for
         # entry-point scanning, and so a third-party adapter that will not import cannot
         # break a command that never asked for one. `discover()` reports rather than raises,
@@ -98,4 +104,4 @@ def remote_raster_map(route: Any, enabled: bool) -> dict[str, str]:
     return {"dem": three_dep_url(middle.lat, middle.lon)}
 
 
-__all__ = ["open_context", "remote_raster_map"]
+__all__ = ["PLAN_LATENCY_BUDGET_S", "open_context", "remote_raster_map"]

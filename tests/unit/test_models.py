@@ -329,11 +329,22 @@ def test_imagery_cap_is_enforced() -> None:
         b.spend_imagery_tile()
 
 
-def test_deadline_is_checked_against_the_injected_clock() -> None:
-    b = Budget(deadline=datetime(2026, 3, 15, 7, 0))
-    b.check_deadline(FrozenClock(datetime(2026, 3, 15, 6, 59)))
-    with pytest.raises(BudgetExceeded, match="deadline"):
-        b.check_deadline(FrozenClock(datetime(2026, 3, 15, 7, 1)))
+def test_the_latency_budget_measures_elapsed_time_not_the_plans_clock() -> None:
+    """Scope 6.4's ~3 minutes is a duration, and the injected clock does not advance.
+
+    This replaced `check_deadline(clock)` in M5.2. That version compared `clock.now()`
+    against a `datetime`, and the clock a real plan carries is `FrozenClock(start_at)` -
+    pinned at the route's start time so the plan is reproducible. So the check could only
+    ever answer a question about the route's schedule, never about how long the process
+    had been running, and nothing ever called it.
+    """
+    assert Budget().latency_budget_s is None
+    Budget(latency_budget_s=3600.0).check_deadline()
+
+    spent = Budget(latency_budget_s=0.0)
+    assert spent.elapsed_s >= 0.0
+    with pytest.raises(BudgetExceeded, match="latency budget"):
+        spent.check_deadline()
 
 
 # --- plan -------------------------------------------------------------------

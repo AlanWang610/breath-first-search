@@ -12,6 +12,7 @@ golden route non-reproducible, so `core/` contains no concrete system clock at a
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -55,7 +56,13 @@ class Budget:
     early rather than discovered late.
     """
 
-    deadline: datetime | None = None
+    #: Wall-clock seconds one plan may take - scope 6.4's "~3 min" - measured with a
+    #: monotonic counter rather than against the injected `Clock`. Those are different
+    #: questions and only one of them advances: the production clock is
+    #: `FrozenClock(start_at)`, pinned at the route's start time so a plan is
+    #: reproducible, so a deadline compared against it could never pass. This field
+    #: replaced a `deadline: datetime` in M5.2 that nothing called and nothing could.
+    latency_budget_s: float | None = None
     api_calls_max: int = 200
     imagery_tiles_max: int = 10
     #: Windowed COG reads over `/vsicurl/`. Metered separately from API calls because
@@ -66,6 +73,13 @@ class Budget:
     api_calls_used: int = 0
     imagery_tiles_used: int = 0
     raster_windows_used: int = 0
+    #: Set when the budget is constructed, which is when the plan starts.
+    started_at: float = field(default_factory=time.perf_counter, repr=False)
+
+    @property
+    def elapsed_s(self) -> float:
+        """How long this plan has been running. A duration, never a date."""
+        return time.perf_counter() - self.started_at
 
     def spend_api_call(self, n: int = 1) -> None:
         if self.api_calls_used + n > self.api_calls_max:
@@ -85,9 +99,17 @@ class Budget:
             raise BudgetExceeded(f"imagery budget exhausted ({self.imagery_tiles_max} tiles)")
         self.imagery_tiles_used += n
 
-    def check_deadline(self, clock: Clock) -> None:
-        if self.deadline is not None and clock.now() > self.deadline:
-            raise BudgetExceeded(f"plan deadline {self.deadline.isoformat()} passed")
+    def check_deadline(self) -> None:
+        """Raise once the plan has outrun scope 6.4's latency target.
+
+        Raised rather than degraded in place, for the reason `BudgetExceeded` gives: the
+        caller picks the rung of the ladder to drop to, and records the choice.
+        """
+        if self.latency_budget_s is not None and self.elapsed_s > self.latency_budget_s:
+            raise BudgetExceeded(
+                f"plan latency budget exhausted ({self.latency_budget_s:.0f} s); "
+                f"{self.elapsed_s:.0f} s elapsed"
+            )
 
 
 @dataclass

@@ -183,6 +183,15 @@ def digest(plan: Plan) -> dict[str, Any]:
             }
             for check in (plan.verify.results if plan.verify else [])
         ],
+        # Added in M5.2. Both numbers were written by nothing and read by nothing until
+        # then, so `plan.json` reported zero external calls whether or not a plan made any -
+        # and a golden replaying a cassette must spend nothing, which is a second and much
+        # cheaper `_block_network` at the level of the plan rather than the socket.
+        "budget": {
+            "api_calls_used": plan.manifest.api_calls_used,
+            "imagery_tiles_used": plan.manifest.imagery_tiles_used,
+            "degradation": list(plan.manifest.degradation),
+        },
         "coverage": [
             {
                 "source": entry.source,

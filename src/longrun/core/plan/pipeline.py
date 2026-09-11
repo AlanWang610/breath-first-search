@@ -172,6 +172,13 @@ def _score_pass(
         elevations=elevations,
         snapped_distances_m=snapped,
     )
+    if manifest is not None:
+        # Scope 6.4: "budgets are recorded in the manifest". These two fields have existed
+        # since M1 and were written by nothing and read by nothing, so every plan ever
+        # produced reported zero external calls whether or not it made any.
+        manifest.api_calls_used = ctx.budget.api_calls_used
+        manifest.imagery_tiles_used = ctx.budget.imagery_tiles_used
+
     return ScoredRoute(
         route=route,
         segments=segments,
@@ -206,6 +213,7 @@ def build_plan(
         verify=scored.verify,
         elevation=scored.elevation,
         manifest=manifest,
+        pacing_caveats=scored.caveats,
     )
 
 

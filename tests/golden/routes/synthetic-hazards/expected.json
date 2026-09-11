@@ -1,4 +1,9 @@
 {
+  "budget": {
+    "api_calls_used": 0,
+    "degradation": [],
+    "imagery_tiles_used": 0
+  },
   "coverage": [
     {
       "checked": true,

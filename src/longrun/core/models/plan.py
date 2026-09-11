@@ -101,6 +101,13 @@ class Plan(BaseModel):
     residual_flags: list[Flag] = Field(default_factory=list)
     trade_offs: list[TradeOff] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    #: Scope 6.2's obligations about the pacing model itself - the population curve
+    #: disclosure, and "longest recorded effort is 42 km against a 100 km plan".
+    #: Produced with the ETAs and stored here rather than handed straight to the
+    #: renderer, which is what `repair` did until M5.2: `longrun export` re-rendered a
+    #: stored plan without them, and `tools/` and `api/` return this schema, so every
+    #: later consumer would have been blind to the extrapolation warning.
+    pacing_caveats: list[str] = Field(default_factory=list)
     coverage: CoverageManifest = CoverageManifest()
     manifest: Manifest = Manifest()
     #: The scope 7.9 checklist as run against this plan. `None` means verification

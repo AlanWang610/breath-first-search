@@ -384,6 +384,8 @@ def _verify_table(plan: Plan) -> str:
 
 def render_html(plan: Plan, pacing_caveats: list[str] | None = None) -> str:
     """One self-contained HTML document. No network, at render time or at view time."""
+    if pacing_caveats is None:
+        pacing_caveats = plan.pacing_caveats
     title = plan.route.name or plan.id
     strips = "".join(
         _band_svg(plan, label, _segment_series(plan, scorer, key), colour)

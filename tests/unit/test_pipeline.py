@@ -17,13 +17,15 @@ from pathlib import Path
 
 from longrun.core.data.cache import SqliteCache
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore
+from longrun.core.export.sheet_md import render_markdown
 from longrun.core.models.context import Budget, FrozenClock, ScorerContext
 from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.geometry import Route, RoutePoint
-from longrun.core.models.plan import Manifest
+from longrun.core.models.plan import Manifest, Plan
 from longrun.core.models.request import PlanRequest
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.preferences.store import load_defaults
+from longrun.core.scorers.registry import SCORERS
 
 START = datetime(2026, 3, 15, 7, 30)
 
@@ -139,3 +141,71 @@ def test_a_pass_becomes_a_plan_carrying_that_passs_coverage(tmp_path: Path) -> N
     # Every scorer is timed into the manifest (scope 6.4), including the ones that report
     # unavailable - "which scorer is slow" must not become unanswerable on a bare fixture.
     assert manifest.tool_calls, "a pass records what it ran"
+
+
+# --- the manifest, which until M5.2 reported numbers nobody wrote -----------------------
+
+
+def test_the_manifest_reports_what_the_budget_spent(tmp_path: Path) -> None:
+    """Scope 6.4: "budgets are recorded in the manifest".
+
+    `Manifest.api_calls_used` has existed since M1, was written by nothing and read by
+    nothing, and the sheet renders it - so every plan ever produced reported zero external
+    calls whether or not it made any.
+    """
+    budget = Budget()
+    ctx = _ctx(tmp_path, budget)
+    manifest = Manifest()
+
+    budget.spend_api_call(2)
+    score_once(_route(), _request(), ctx, start_at=START, manifest=manifest)
+
+    assert manifest.api_calls_used == 2
+
+
+def test_a_plan_that_outruns_its_latency_budget_names_the_scorers_that_did_not_run(
+    tmp_path: Path,
+) -> None:
+    """Scope 6.4's ladder, at its simplest rung: stop, and say so.
+
+    The failure this prevents is a sheet that is quietly shorter. A scorer dropped for want
+    of time and a scorer that found nothing look identical on a sheet that does not say
+    which happened, which is scope 3.6's whole subject.
+    """
+    ctx = _ctx(tmp_path, Budget(latency_budget_s=0.0))
+    manifest = Manifest()
+
+    scored = score_once(_route(), _request(), ctx, start_at=START, manifest=manifest)
+
+    assert len(scored.results) == len(SCORERS), "every scorer is accounted for, run or not"
+    assert manifest.degradation, "the manifest names the degradation it chose"
+    assert "latency budget" in manifest.degradation[0]
+    reasons = [entry.reason or "" for entry in scored.coverage.entries]
+    assert all(not entry.checked for entry in scored.coverage.entries)
+    assert any("not scored" in reason for reason in reasons)
+
+
+def test_a_stored_plan_still_carries_its_pacing_caveats(tmp_path: Path) -> None:
+    """The scope 6.2 warning has to survive `plan.json`, not just the first render.
+
+    `repair` passed the caveats straight to the renderer, so `longrun export` re-rendered a
+    stored plan without them - and `tools/` and `api/` return this schema, so every later
+    consumer would have inherited the same blindness the moment history-derived curves made
+    the warning mean something.
+    """
+    ctx = _ctx(tmp_path, Budget())
+    request = _request()
+    manifest = Manifest()
+
+    scored = score_once(_route(), request, ctx, start_at=START, manifest=manifest)
+    plan = build_plan(
+        scored, request, profile=load_defaults(), coverage=scored.coverage, manifest=manifest
+    )
+
+    assert plan.pacing_caveats == scored.caveats
+    assert plan.pacing_caveats, "a plan with no run history says so"
+
+    reloaded = Plan.model_validate_json(plan.model_dump_json())
+    sheet = render_markdown(reloaded)
+    for caveat in plan.pacing_caveats:
+        assert caveat in sheet

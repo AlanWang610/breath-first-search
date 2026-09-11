@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 from typing import Any, cast
 
-from longrun.core.models.context import ScorerContext
+from longrun.core.models.context import BudgetExceeded, ScorerContext
 from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Manifest, ToolCall
 from longrun.core.scorers.base import unavailable
@@ -115,8 +115,25 @@ def run_scorers(
     profiler could answer, and only on a machine that had one.
     """
     results: list[ScorerResult] = []
+    #: Set once the plan outruns scope 6.4's latency target. Every scorer after that is
+    #: reported as not run rather than dropped, because a sheet that is quietly shorter is
+    #: the failure scope 3.6 exists to prevent - and the degradation is named in the
+    #: manifest, which is the field scope 6.4 asks for and nothing wrote until M5.2.
+    exhausted: str | None = None
 
     for name, module_path in SCORERS.items():
+        if exhausted is None:
+            try:
+                ctx.budget.check_deadline()
+            except BudgetExceeded as exc:
+                exhausted = str(exc)
+                if manifest is not None:
+                    manifest.degradation.append(
+                        f"stopped scoring after {len(results)} of {len(SCORERS)}: {exhausted}"
+                    )
+        if exhausted is not None:
+            results.append(unavailable(name, f"not scored: {exhausted}"))
+            continue
         func = load_scorer(module_path)
         if func is None:
             results.append(unavailable(name, "scorer not implemented yet"))
