@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from longrun.core.models.jurisdiction import (
+    FEDERAL_AGENCY_CODES,
     Jurisdiction,
     is_unknown_agency,
     padus_id,
@@ -118,6 +119,46 @@ def _column(row: Any, name: str) -> str | None:
     return None if not text or text.lower() in {"nan", "none", "<na>"} else text
 
 
+def _state_lookup(boundaries: Any) -> list[tuple[Any, str]]:
+    """Boundary polygons paired with the state they belong to.
+
+    A state row carries its own FIPS in `geoid`; a county or place carries it in `statefp`.
+    Rows with neither, or with no geometry, cannot qualify anything and are left out.
+    """
+    if boundaries is None or not len(boundaries):
+        return []
+    out: list[tuple[Any, str]] = []
+    for _, row in boundaries.iterrows():
+        statefp = _column(row, "statefp")
+        if statefp is None and _column(row, "level") == "state":
+            statefp = _column(row, "geoid")
+        geometry = getattr(row, "geometry", None)
+        if statefp and geometry is not None and not geometry.is_empty:
+            out.append((geometry, statefp))
+    return out
+
+
+def _state_of(geometry: Any, lookup: list[tuple[Any, str]]) -> str | None:
+    """Which state a park sits in, by intersecting the boundaries already resolved.
+
+    **This is a read, not a guess**, and the distinction is the whole point. Both frames are
+    already in hand, so "which state is this park in" is a point-in-polygon test against
+    polygons this plan has already fetched — not an inference from the route's states.
+
+    Zero matches, or more than one, leaves the park unqualified. Zero is ordinary: `parks`
+    comes from a corridor buffer and `boundaries` from the route line, so a park beside the
+    route can sit in a county the route never enters. More than one is a park that genuinely
+    straddles a state line, and naming either half would be wrong.
+    """
+    if geometry is None:
+        return None
+    try:
+        states = {fips for shape, fips in lookup if shape.intersects(geometry)}
+    except Exception:  # noqa: BLE001 - an invalid geometry is unqualified, never fatal
+        return None
+    return states.pop() if len(states) == 1 else None
+
+
 def jurisdictions_from_frames(
     boundaries: GeoDataFrame | None,
     parks: GeoDataFrame | None = None,
@@ -140,20 +181,29 @@ def jurisdictions_from_frames(
             record = from_tiger_row(level, geoid, name, _column(row, "statefp"))
             found.setdefault(record.id, record)
 
-    # A park's state comes from the boundaries already resolved, so a park is qualified by
-    # the state the *route* is in rather than by a spatial join nobody asked for. On a
-    # state-line route there may be two, and a park matching neither stays unqualified and
-    # says so.
+    # A park's state is resolved against the boundary polygons already fetched, because
+    # `padus.units` carries no `statefp` of its own and a non-federal code without a state
+    # claims the whole country: `padus:CITY` would match a city-parks adapter in any of the
+    # fifty. The route's own state is only the fallback, and only when there is exactly one
+    # - which is precisely the case a state-line route does not have. Kansas City is what
+    # found this: with Missouri and Kansas both in play the fallback yields nothing, and
+    # four KC parks were reporting national scope.
+    lookup = _state_lookup(boundaries)
     states = sorted({j.id.rsplit(":", 1)[-1] for j in found.values() if j.level == "state"})
     only_state = states[0] if len(states) == 1 else None
 
     if parks is not None and len(parks):
         for _, row in parks.iterrows():
+            statefp = (
+                _column(row, "statefp")
+                or _state_of(getattr(row, "geometry", None), lookup)
+                or only_state
+            )
             park = from_padus_row(
                 _column(row, "agency"),
                 _column(row, "name") or "",
                 _column(row, "agency_type"),
-                _column(row, "statefp") or only_state,
+                statefp,
             )
             if park is not None:
                 found.setdefault(park.id, park)
@@ -180,6 +230,10 @@ class JurisdictionScan:
     #: rather than dropped, because "no managed land here" and "managed land whose manager
     #: this data cannot name" are different sentences and only the first is an all-clear.
     unattributed_parks: int = 0
+    #: Park agencies whose state could not be resolved, so their id claims national scope.
+    #: `padus:CITY` matches a city-parks adapter in any of the fifty states, so this is a
+    #: correctness hazard the moment such an adapter exists - reported, never inferred.
+    unqualified_agencies: list[str] = field(default_factory=list)
 
     @property
     def answered(self) -> bool:
@@ -208,6 +262,16 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
         reasons.append(f"no parks layer: {_describe(exc)}")
 
     found = jurisdictions_from_frames(boundaries, parks)
+    # A park agency that could not be tied to a state is reportable, not silent. Its id
+    # claims national scope, so an adapter registered for one state's city parks would
+    # match it - the coverage manifest has to say which agencies are in that state.
+    unqualified = sorted(
+        {
+            j.agency or j.id
+            for j in found
+            if j.source == "padus" and not j.within and j.agency not in FEDERAL_AGENCY_CODES
+        }
+    )
     named = sum(1 for j in found if j.source == "padus")
     return JurisdictionScan(
         jurisdictions=found,
@@ -215,6 +279,24 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
         parks_checked=parks is not None,
         reasons=reasons,
         unattributed_parks=max(0, len(parks) - named) if parks is not None else 0,
+        unqualified_agencies=unqualified,
+    )
+
+
+def unqualified_reason(scan: JurisdictionScan) -> str | None:
+    """The sentence a plan owes when a park agency could not be tied to a state.
+
+    Written once here rather than three times in the scorers, because all three read the
+    same jurisdiction set and the claim is about the set, not about closures or trails.
+    """
+    if not scan.unqualified_agencies:
+        return None
+    codes = scan.unqualified_agencies
+    shown = ", ".join(codes[:4]) + ("..." if len(codes) > 4 else "")
+    return (
+        f"{len(codes)} park agency code{'' if len(codes) == 1 else 's'} could not be tied to "
+        f"a state ({shown}); a non-federal PAD-US code without one names every such manager "
+        f"in the country, so no adapter may be matched to it"
     )
 
 
@@ -238,5 +320,6 @@ __all__ = [
     "from_padus_row",
     "from_tiger_row",
     "jurisdictions_from_frames",
+    "unqualified_reason",
     "route_jurisdictions",
 ]

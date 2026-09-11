@@ -226,6 +226,15 @@
       "vintage": null
     },
     {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "closures",
+      "reason": "1 park agency code could not be tied to a state (CITY); a non-federal PAD-US code without one names every such manager in the country, so no adapter may be matched to it",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
       "checked": true,
       "jurisdiction": "Johnson (tiger:county:20091)",
       "kind": "closures",
@@ -272,7 +281,7 @@
     },
     {
       "checked": false,
-      "jurisdiction": "Neighborhood 407 (padus:CITY)",
+      "jurisdiction": "Rosedale (padus:CITY)",
       "kind": "closures",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "closures",
@@ -280,35 +289,62 @@
       "vintage": null
     },
     {
-      "checked": false,
-      "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO)",
+      "checked": true,
+      "jurisdiction": "Granada (padus:CITY:20)",
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": null,
       "source": "closures",
+      "tier": 1,
+      "vintage": "wzdx-4.0"
+    },
+    {
+      "checked": true,
+      "jurisdiction": "Neighborhood 407 (padus:CITY:29)",
+      "kind": "closures",
+      "reason": null,
+      "source": "closures",
+      "tier": 1,
+      "vintage": "wzdx-4.1"
+    },
+    {
+      "checked": true,
+      "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO:29)",
+      "kind": "closures",
+      "reason": null,
+      "source": "closures",
+      "tier": 1,
+      "vintage": "wzdx-4.1"
+    },
+    {
+      "checked": true,
+      "jurisdiction": "Shawnee Indian Mission (padus:OTHS:20)",
+      "kind": "closures",
+      "reason": null,
+      "source": "closures",
+      "tier": 1,
+      "vintage": "wzdx-4.0"
+    },
+    {
+      "checked": true,
+      "jurisdiction": "Legacy (padus:PVT:29)",
+      "kind": "closures",
+      "reason": null,
+      "source": "closures",
+      "tier": 1,
+      "vintage": "wzdx-4.1"
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "trail_status",
+      "reason": "1 park agency code could not be tied to a state (CITY); a non-federal PAD-US code without one names every such manager in the country, so no adapter may be matched to it",
+      "source": "trail_status",
       "tier": null,
       "vintage": null
     },
     {
       "checked": false,
-      "jurisdiction": "Shawnee Indian Mission (padus:OTHS)",
-      "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
-      "source": "closures",
-      "tier": null,
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "jurisdiction": "Legacy (padus:PVT)",
-      "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
-      "source": "closures",
-      "tier": null,
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "jurisdiction": "Neighborhood 407 (padus:CITY)",
+      "jurisdiction": "Rosedale (padus:CITY)",
       "kind": "trail_status",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "trail_status",
@@ -317,7 +353,7 @@
     },
     {
       "checked": false,
-      "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO)",
+      "jurisdiction": "Granada (padus:CITY:20)",
       "kind": "trail_status",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "trail_status",
@@ -326,7 +362,7 @@
     },
     {
       "checked": false,
-      "jurisdiction": "Shawnee Indian Mission (padus:OTHS)",
+      "jurisdiction": "Neighborhood 407 (padus:CITY:29)",
       "kind": "trail_status",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "trail_status",
@@ -335,7 +371,7 @@
     },
     {
       "checked": false,
-      "jurisdiction": "Legacy (padus:PVT)",
+      "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO:29)",
       "kind": "trail_status",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "trail_status",
@@ -344,7 +380,34 @@
     },
     {
       "checked": false,
-      "jurisdiction": "Neighborhood 407 (padus:CITY)",
+      "jurisdiction": "Shawnee Indian Mission (padus:OTHS:20)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Legacy (padus:PVT:29)",
+      "kind": "trail_status",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "access_hours",
+      "reason": "1 park agency code could not be tied to a state (CITY); a non-federal PAD-US code without one names every such manager in the country, so no adapter may be matched to it",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Rosedale (padus:CITY)",
       "kind": "access_hours",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "access_hours",
@@ -353,7 +416,7 @@
     },
     {
       "checked": false,
-      "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO)",
+      "jurisdiction": "Granada (padus:CITY:20)",
       "kind": "access_hours",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "access_hours",
@@ -362,7 +425,7 @@
     },
     {
       "checked": false,
-      "jurisdiction": "Shawnee Indian Mission (padus:OTHS)",
+      "jurisdiction": "Neighborhood 407 (padus:CITY:29)",
       "kind": "access_hours",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "access_hours",
@@ -371,7 +434,25 @@
     },
     {
       "checked": false,
-      "jurisdiction": "Legacy (padus:PVT)",
+      "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO:29)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Shawnee Indian Mission (padus:OTHS:20)",
+      "kind": "access_hours",
+      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "source": "access_hours",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": "Legacy (padus:PVT:29)",
       "kind": "access_hours",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "access_hours",
@@ -494,7 +575,7 @@
     "min_m": 254.7,
     "samples_missing": 0
   },
-  "measurements_sha256": "90151db03cbe4f219fed96858f534fe888edfed973a33af14d8af2b22048f0cc",
+  "measurements_sha256": "a0a78262bf235453b348b321bd9f50013e6809f3ac640d4184e9edf341eb36ca",
   "pacing": {
     "duration_s": 1130.3,
     "finish": "2026-09-15T08:18:50"
@@ -1062,7 +1143,7 @@
       "summary": {
         "access_violations": 0,
         "agencies_answered": 0,
-        "agencies_crossed": 4
+        "agencies_crossed": 6
       },
       "worst": []
     },
@@ -1117,9 +1198,9 @@
       "measured_segments": 64,
       "summary": {
         "closures": 0,
-        "jurisdictions_answered": 5,
-        "jurisdictions_crossed": 9,
-        "jurisdictions_unanswered": 4
+        "jurisdictions_answered": 10,
+        "jurisdictions_crossed": 11,
+        "jurisdictions_unanswered": 2
       },
       "worst": []
     },
@@ -1445,7 +1526,7 @@
       "measured_segments": 64,
       "summary": {
         "agencies_answered": 0,
-        "agencies_crossed": 4,
+        "agencies_crossed": 6,
         "trail_alerts": 0
       },
       "worst": []

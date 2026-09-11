@@ -19,20 +19,27 @@ from longrun.core.data.jurisdictions import (
     from_tiger_row,
     jurisdictions_from_frames,
     route_jurisdictions,
+    unqualified_reason,
 )
 from longrun.core.models.geometry import Route, RoutePoint
 
 
-def _frame(rows: list[dict[str, Any]]) -> Any:
-    """A GeoDataFrame with unit-square geometry - nothing here tests geometry, because the
-    spatial join is the store's job and is covered against a real database in
-    `tests/contract/test_national_load.py`."""
+def _frame(rows: list[dict[str, Any]], boxes: list[Any] | None = None) -> Any:
+    """A GeoDataFrame, unit-square by default.
+
+    The default overlaps everything, which is what the non-spatial cases want. `boxes` is
+    for the cases that *are* spatial: qualifying a park to a state is a point-in-polygon
+    test between two frames both already in hand, and it has no other owner. An earlier
+    version of this helper asserted "the spatial join is the store's job" - the store joins
+    boundaries against the *corridor*, and never answers which state a park is in.
+    """
     import geopandas as gpd
     from shapely.geometry import box
 
     if not rows:
         return gpd.GeoDataFrame({}, geometry=[], crs="EPSG:4326")
-    return gpd.GeoDataFrame(rows, geometry=[box(0, 0, 1, 1) for _ in rows], crs="EPSG:4326")
+    shapes = boxes if boxes is not None else [box(0, 0, 1, 1) for _ in rows]
+    return gpd.GeoDataFrame(rows, geometry=shapes, crs="EPSG:4326")
 
 
 def _boundary(level: str, geoid: str, name: str, statefp: str | None = None) -> dict[str, Any]:
@@ -158,6 +165,101 @@ def test_a_park_on_a_two_state_route_stays_unqualified_rather_than_picking_one()
     )
     assert any(j.id == "padus:CITY" for j in found)
     assert not any(j.id in ("padus:CITY:29", "padus:CITY:20") for j in found)
+
+
+def test_a_park_on_a_two_state_route_is_qualified_by_the_state_it_sits_in() -> None:
+    """The Kansas City case, and the one the fallback could never answer.
+
+    `padus.units` carries no `statefp`, so before this the only source of a park's state was
+    "the route's state, if it has exactly one" - which a state-line route by definition does
+    not. Four KC parks came back as `padus:CITY`, claiming every city park in America. Both
+    frames are in hand and the answer is a point-in-polygon test.
+    """
+    from shapely.geometry import box
+
+    found = jurisdictions_from_frames(
+        _frame(
+            [
+                _boundary("state", "29", "Missouri", "29"),
+                _boundary("state", "20", "Kansas", "20"),
+            ],
+            boxes=[box(0, 0, 1, 1), box(2, 0, 3, 1)],
+        ),
+        _frame(
+            [{"agency": "CITY", "name": "Westport Park"}],
+            boxes=[box(0.2, 0.2, 0.4, 0.4)],  # inside Missouri, nowhere near Kansas
+        ),
+    )
+    assert any(j.id == "padus:CITY:29" for j in found), [j.id for j in found]
+    assert not any(j.id == "padus:CITY" for j in found)
+
+
+def test_a_park_straddling_the_state_line_stays_unqualified() -> None:
+    """Two adapters own it and naming either half would be wrong."""
+    from shapely.geometry import box
+
+    found = jurisdictions_from_frames(
+        _frame(
+            [
+                _boundary("state", "29", "Missouri", "29"),
+                _boundary("state", "20", "Kansas", "20"),
+            ],
+            boxes=[box(0, 0, 1, 1), box(1, 0, 2, 1)],
+        ),
+        _frame([{"agency": "CITY", "name": "State Line Park"}], boxes=[box(0.9, 0.2, 1.1, 0.4)]),
+    )
+    assert any(j.id == "padus:CITY" for j in found)
+
+
+def test_a_federal_agency_is_never_split_by_state() -> None:
+    """`padus:NPS` is the National Park Service everywhere; qualifying it per state would
+    fragment one body into fifty and ask each of them separately."""
+    from shapely.geometry import box
+
+    found = jurisdictions_from_frames(
+        _frame([_boundary("state", "29", "Missouri", "29")], boxes=[box(0, 0, 1, 1)]),
+        _frame([{"agency": "NPS", "name": "A Battlefield"}], boxes=[box(0.2, 0.2, 0.4, 0.4)]),
+    )
+    assert any(j.id == "padus:NPS" for j in found)
+
+
+def test_a_park_agency_with_no_resolvable_state_is_reported_not_hidden() -> None:
+    """An id claiming national scope has to reach the manifest, or a plan silently lets one
+    state's city-parks adapter answer for another's.
+
+    The gap is invisible precisely when everything else worked: the route's own boundaries
+    resolve, the DOT feeds answer, and one park beside the route sits in a county the route
+    never entered. So the reason is emitted on every run, not only when nothing resolved.
+    """
+    assert unqualified_reason(JurisdictionScan()) is None
+
+    reason = unqualified_reason(JurisdictionScan(unqualified_agencies=["CITY"]))
+    assert reason is not None
+    # The agency *code* is what claims national scope, so it is what gets named - a park
+    # name standing in for it would tell a reader nothing about which adapter is at risk.
+    assert "CITY" in reason and "state" in reason
+
+
+def test_the_scan_names_which_park_agencies_could_not_be_placed() -> None:
+    """Derived from the resolved set rather than counted, so the sheet can name them."""
+    from shapely.geometry import box
+
+    boundaries = _frame(
+        [
+            _boundary("state", "29", "Missouri", "29"),
+            _boundary("state", "20", "Kansas", "20"),
+        ],
+        boxes=[box(0, 0, 1, 1), box(2, 0, 3, 1)],
+    )
+    placed = jurisdictions_from_frames(
+        boundaries, _frame([{"agency": "CITY", "name": "Placed"}], boxes=[box(0.2, 0.2, 0.4, 0.4)])
+    )
+    assert any(j.id == "padus:CITY:29" for j in placed)
+
+    stranded = jurisdictions_from_frames(
+        boundaries, _frame([{"agency": "CITY", "name": "Stranded"}], boxes=[box(9, 9, 10, 10)])
+    )
+    assert any(j.id == "padus:CITY" for j in stranded)
 
 
 def test_a_fixture_frozen_before_the_agency_column_existed_reads_as_unknown() -> None:

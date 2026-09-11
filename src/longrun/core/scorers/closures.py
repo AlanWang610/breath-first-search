@@ -29,7 +29,7 @@ import math
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from longrun.core.data.jurisdictions import route_jurisdictions
+from longrun.core.data.jurisdictions import route_jurisdictions, unqualified_reason
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, SegmentMeasurement, Tier
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, segment_at
@@ -193,6 +193,15 @@ def closures(
 
     result = ScorerResult(name=name)
     scan = route_jurisdictions(route, ctx)
+
+    # A park agency with no resolvable state is a jurisdiction this plan cannot safely match
+    # an adapter to. Reported on every run rather than only when nothing resolved: the route
+    # around it is fully covered, which is exactly what would make the gap invisible.
+    unqualified = unqualified_reason(scan)
+    if unqualified:
+        result.coverage.append(
+            CoverageEntry(source=name, kind=name, checked=False, reason=unqualified)
+        )
 
     if not scan.answered:
         for reason in scan.reasons or ["jurisdictions could not be resolved"]:

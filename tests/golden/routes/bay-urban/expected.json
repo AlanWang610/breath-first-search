@@ -229,6 +229,15 @@
       "checked": false,
       "jurisdiction": null,
       "kind": "closures",
+      "reason": "4 park agency codes could not be tied to a state (CITY, JNT, NGO, PVT); a non-federal PAD-US code without one names every such manager in the country, so no adapter may be matched to it",
+      "source": "closures",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "closures",
       "reason": "no boundaries layer: not in this fixture",
       "source": "closures",
       "tier": null,
@@ -281,6 +290,15 @@
     },
     {
       "checked": false,
+      "jurisdiction": null,
+      "kind": "trail_status",
+      "reason": "4 park agency codes could not be tied to a state (CITY, JNT, NGO, PVT); a non-federal PAD-US code without one names every such manager in the country, so no adapter may be matched to it",
+      "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
       "jurisdiction": "South Park (padus:CITY)",
       "kind": "trail_status",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
@@ -321,6 +339,15 @@
       "kind": "trail_status",
       "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
       "source": "trail_status",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "access_hours",
+      "reason": "4 park agency codes could not be tied to a state (CITY, JNT, NGO, PVT); a non-federal PAD-US code without one names every such manager in the country, so no adapter may be matched to it",
+      "source": "access_hours",
       "tier": null,
       "vintage": null
     },
@@ -485,7 +512,7 @@
     "min_m": -1.1,
     "samples_missing": 0
   },
-  "measurements_sha256": "313fb2a27a0102e04df4b4d73c7da07dcebd15dd3980d040a5878d2e426076e6",
+  "measurements_sha256": "e788eec633aa99b3fbe5f765cb20350ed4ae2c8662caa10a4e10010fa25ebcfd",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -894,7 +921,7 @@
         "closures": 0,
         "jurisdictions_answered": 0,
         "jurisdictions_crossed": 5,
-        "jurisdictions_unanswered": 6
+        "jurisdictions_unanswered": 7
       },
       "worst": []
     },
