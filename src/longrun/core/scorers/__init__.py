@@ -4,6 +4,10 @@ Each returns per-segment measurements plus a worst-N list with reasons. Severity
 [0, 1] with a soft/hard marker; thresholds marked "(profile)" in scope 8.3 are read from
 the preference profile, hard thresholds are fixed safety floors.
 
+`registry.py` is the list itself - which scorers exist and the order scope 8.1 step 5 runs
+them in - and it lives here rather than in `cli/` because the agent loop and the MCP tool
+layer need the same list and may not import a CLI command.
+
 Planned modules, by scope section:
     7.2 runnability   hostility.py, crossings.py, stop_density.py, surface.py, cue_sheet.py
     7.4 environment   sun.py, heat.py, microclimate.py, air_quality.py, lighting.py

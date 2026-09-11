@@ -14,9 +14,9 @@ import pytest
 from typer.testing import CliRunner
 
 from longrun.cli.main import app
-from longrun.cli.repair import NOT_YET_IMPLEMENTED, SCORERS
 from longrun.core.geo.gpx import gpx_write
 from longrun.core.models.geometry import Route, RoutePoint
+from longrun.core.scorers.registry import NOT_YET_IMPLEMENTED, SCORERS
 
 runner = CliRunner()
 
@@ -245,17 +245,21 @@ def test_the_offline_env_var_reaches_the_command(
 
     Golden and contract runs rely on the environment variable alone, so a flag-only
     implementation would leave them quietly able to reach the network.
+
+    Spies on `longrun.runtime` rather than on the command: since M5.1 the composition root
+    opens the cache, because the agent loop scores several candidates against one of them.
+    The command still resolves the flag against the environment, which is what this asserts.
     """
-    from longrun.cli import repair as repair_mod
+    from longrun import runtime as runtime_mod
 
     seen: list[bool] = []
-    real = repair_mod.SqliteCache
+    real = runtime_mod.SqliteCache
 
     def spy(*args: object, offline: bool = False, **kwargs: object) -> object:
         seen.append(offline)
         return real(*args, offline=offline, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(repair_mod, "SqliteCache", spy)
+    monkeypatch.setattr(runtime_mod, "SqliteCache", spy)
     monkeypatch.setenv("LONGRUN_OFFLINE", "1")
     runner.invoke(app, ["repair", str(route_file), "--date", "2026-03-15", "--start", "07:30"])
     assert seen == [True]

@@ -123,10 +123,12 @@ def test_every_scorer_has_a_declared_weighting() -> None:
     absent from both, so nobody had decided whether a trail alert compounds with fatigue,
     and the default quietly decided it did not.
 
-    Imported here rather than in `core/` because the list of scorers lives in `cli/`, and
-    `core/` may not import it (scope 4.1).
+    Imported inside the test rather than at module scope because the registry is a dict
+    of module *paths* and resolving them is `load_scorer`'s job. Until M5.1 the import had
+    a second reason: the list lived in `cli/`, which `core/` may not import (scope 4.1).
+    It lives in `core/` now, and this test is one of the three that said otherwise.
     """
-    from longrun.cli.repair import SCORERS
+    from longrun.core.scorers.registry import SCORERS
 
     declared = NEVER_WEIGHTED | set(POSITION_WEIGHTED) | MEASUREMENT_ONLY | FLAT_BY_DEFAULT
     undeclared = sorted(name for name in SCORERS if name not in declared)
@@ -156,7 +158,7 @@ def test_measurement_only_scorers_really_emit_no_flags() -> None:
     import ast
     from pathlib import Path
 
-    from longrun.cli.repair import SCORERS
+    from longrun.core.scorers.registry import SCORERS
 
     for name in sorted(MEASUREMENT_ONLY):
         module = SCORERS[name]

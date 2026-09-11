@@ -1,6 +1,8 @@
 """Plan state, arbitration, and plan sheet contents (scope 8.4, 9).
 
 Planned modules:
+    pipeline.py      one scoring pass over one route against an open context: scope 8.1
+                     steps 4, 5 and 9. The loop runs it once per candidate per round
     scratchpad.py    current GPX, per-segment measurements, ETAs, locks, active profile;
                      read and written between tool calls; persisted for needs_input resume
     manifest.py      data-snapshot pins (OSM extract date, HPMS vintage, DEM resolution,
