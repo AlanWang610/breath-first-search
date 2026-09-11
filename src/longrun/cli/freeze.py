@@ -54,8 +54,10 @@ POINT_LAYERS = frozenset({"nodes", "amenities", "transit_stops"})
 #: committed fixture size is what keeps the golden suite fast.
 #:
 #: `railways` and `flowlines` joined when `hazards` landed and started reading them.
-#: `boundaries` has not, because no *scorer* reads it — jurisdiction discovery is the
-#: region build's step 4 and the M4 adapters', both of which have a live database.
+#: `boundaries` joined in M4, when jurisdiction discovery stopped being something only a
+#: region build did. The note that used to stand here - "no *scorer* reads it ... both of
+#: which have a live database" - was true until `closures` needed to know whose closure
+#: feed to consult, and a golden route has no database at all.
 DEFAULT_LAYERS: tuple[str, ...] = (
     "ways",
     "nodes",
@@ -64,7 +66,14 @@ DEFAULT_LAYERS: tuple[str, ...] = (
     "railways",
     "flowlines",
     "transit_stops",
+    "boundaries",
 )
+
+#: Boundary levels a fixture carries. States are excluded deliberately: every row of
+#: `tiger.boundaries` carries `statefp`, so a route's state is a column read off the
+#: counties it crosses, and a state polygon is megabytes of coastline for a fact already
+#: in hand. `FROZEN_BOUNDARY_LEVELS` is why adding `boundaries` costs kilobytes.
+FROZEN_BOUNDARY_LEVELS = frozenset({"county", "place"})
 
 
 def _everything_in_corridor(store: PostGISLayerStore, layer: str, box: Corridor) -> GeoDataFrame:
@@ -76,7 +85,12 @@ def _everything_in_corridor(store: PostGISLayerStore, layer: str, box: Corridor)
     """
     if layer in POINT_LAYERS:
         return store.points_in_corridor(box, [], layer=layer)
-    return store.polygons_intersecting(box, layer)
+    frame = store.polygons_intersecting(box, layer)
+    if layer == "boundaries" and "level" in frame.columns:
+        # See FROZEN_BOUNDARY_LEVELS: a state polygon is the whole coastline of California
+        # to establish a fact `statefp` already carries on every county row.
+        frame = frame[frame["level"].isin(FROZEN_BOUNDARY_LEVELS)]
+    return frame
 
 
 def _write_layer(frame: GeoDataFrame, path: Path) -> int:

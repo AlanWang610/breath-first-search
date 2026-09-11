@@ -29,6 +29,9 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from longrun.core.data.jurisdictions import from_padus_row, from_tiger_row
+from longrun.core.models.jurisdiction import Jurisdiction
+
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
@@ -336,14 +339,16 @@ def _degrees(low: float, high: float) -> list[float]:
 def step_jurisdictions(ctx: BuildContext) -> StepRecord:
     """§13 step 4: which jurisdictions the region crosses, and which have an adapter.
 
-    The first half works: TIGER is loaded and the polygon is a query. The second half is
-    M4's registry, and until it exists the honest answer for every jurisdiction is the same
-    one — which is exactly what scope 7.6's tiered reporting is for.
+    Both halves of the question are census boundaries *and park agencies* — §13 names both
+    and this step only ever asked TIGER, so a region could cross Yosemite and report three
+    counties. The PAD-US half arrived in M4 along with something to look the agencies up in.
+
+    "Which adapters exist" is still answered by nobody here; M4.8 wires the registry in.
     """
     found = jurisdictions_in(ctx)
     by_level: dict[str, int] = {}
-    for row in found:
-        by_level[row["level"]] = by_level.get(row["level"], 0) + 1
+    for record in found:
+        by_level[record.level] = by_level.get(record.level, 0) + 1
     names = ", ".join(f"{count} {level}" for level, count in sorted(by_level.items()))
     return StepRecord(
         status="done" if found else "blocked",
@@ -386,16 +391,54 @@ def states_touching(ctx: BuildContext) -> list[str]:
         return [row[0] for row in cursor.fetchall()]
 
 
-def jurisdictions_in(ctx: BuildContext) -> list[dict[str, str]]:
-    """Every boundary the region meets, at every level TIGER carries."""
+def jurisdictions_in(ctx: BuildContext) -> list[Jurisdiction]:
+    """Every jurisdiction the region meets: census boundaries and park agencies.
+
+    The SQL stays here rather than moving to `core/data/jurisdictions.py`, because a region
+    polygon is not a route and cannot be asked with `lines_crossing`. What is shared is the
+    *vocabulary*: both callers build their records through `from_tiger_row` and
+    `from_padus_row`, so an id minted here and an id minted by a scorer are the same string
+    for the same ground. That is the whole of what stops them drifting.
+    """
+    polygon = ctx.spec.shape().wkt
+    found: dict[str, Jurisdiction] = {}
+
     with ctx.connection.cursor() as cursor:
         cursor.execute(
-            "SELECT level, geoid, name FROM tiger.boundaries "
+            "SELECT level, geoid, name, statefp FROM tiger.boundaries "
             "WHERE ST_Intersects(geom, ST_GeomFromText(%s, 4326)) "
             "ORDER BY level, name",
-            (ctx.spec.shape().wkt,),
+            (polygon,),
         )
-        return [{"level": a, "geoid": b, "name": c} for a, b, c in cursor.fetchall()]
+        for level, geoid, name, statefp in cursor.fetchall():
+            record = from_tiger_row(level, geoid, name or geoid, statefp)
+            found.setdefault(record.id, record)
+
+    states = sorted(j.id.rsplit(":", 1)[-1] for j in found.values() if j.level == "state")
+    only_state = states[0] if len(states) == 1 else None
+
+    if _table_exists(ctx, "padus", "units"):
+        with ctx.connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT agency, agency_type FROM padus.units "
+                "WHERE ST_Intersects(geom, ST_GeomFromText(%s, 4326))",
+                (polygon,),
+            )
+            for agency, agency_type in cursor.fetchall():
+                park = from_padus_row(agency, agency or "", agency_type, only_state)
+                if park is not None:
+                    found.setdefault(park.id, park)
+
+    return sorted(found.values(), key=lambda j: (j.level, j.id))
+
+
+def _table_exists(ctx: BuildContext, schema: str, table: str) -> bool:
+    """Whether a layer's table has been created. A region built before PAD-US loaded has
+    no `padus.units`, and step 4 reporting only census boundaries is the honest answer."""
+    with ctx.connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass(%s)", (f"{schema}.{table}",))
+        row = cursor.fetchone()
+    return bool(row and row[0])
 
 
 def coverage_report(ctx: BuildContext) -> list[str]:
