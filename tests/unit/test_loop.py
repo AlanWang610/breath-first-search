@@ -222,9 +222,14 @@ def test_a_same_tier_conflict_parks_the_job_and_says_what_it_asked(
     assert outcome.needs_input
     assert outcome.plan is None, "a parked plan is not a finished one"
     assert pad.question is not None
-    assert pad.question.kind == "trade_off"
     assert len(pad.question.options) == 2
-    assert pad.trade_offs
+    assert pad.trade_offs, "the conflict is recorded whichever way it was asked"
+    # `segment_hostility` maps to `traffic_tolerance`, which is `default` on a fresh
+    # profile - so scope 6.3 permits the better question, and M5.11 asks it. The route
+    # choice is still the answer; what changes is which of the two is settled by it.
+    assert pad.question.kind == "preference"
+    assert pad.question.axis == "traffic_tolerance"
+    assert pad.questions_asked == 1
 
 
 def test_a_parked_job_resumes_from_disk_and_locks_what_was_chosen(
@@ -324,8 +329,10 @@ def test_the_model_writes_the_comparison_and_not_the_choice(tmp_path: Path, tied
 
     assert seen, "the describer was called"
     assert outcome.needs_input, "and it did not get to decide"
-    assert outcome.scratchpad.question is not None
-    assert "sidewalk" in outcome.scratchpad.question.prompt
+    pad = outcome.scratchpad
+    assert pad.question is not None
+    assert pad.trade_offs, "the comparison it wrote is recorded on the trade-off"
+    assert "sidewalk" in pad.trade_offs[0].comparison
 
 
 # --- step 8 --------------------------------------------------------------------

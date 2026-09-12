@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from longrun.core.geo.segments import locked_segment_ids
-from longrun.core.models.plan import PendingQuestion, Plan
+from longrun.core.models.plan import PendingQuestion, Plan, TradeOff
 from longrun.core.plan.arbitrate import arbitrate, rank_flags, score_candidate
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.plan.scratchpad import Scratchpad
@@ -375,14 +375,7 @@ def _arbitrate(
 
     if decision.needs_input and decision.trade_off is not None:
         pad.trade_offs.append(decision.trade_off)
-        pad.question = PendingQuestion(
-            id=uuid.uuid4().hex[:8],
-            kind="trade_off",
-            prompt=decision.trade_off.comparison,
-            options=[decision.trade_off.option_a, decision.trade_off.option_b],
-            trade_off=decision.trade_off,
-            segment_id=decision.trade_off.segment_id,
-        )
+        pad.question = _ask(pad, decision.trade_off, field, sites, segment_id)
         pad.status = "needs_input"
         return None
 
@@ -409,6 +402,63 @@ def _arbitrate(
     return decision.winner, chosen
 
 
+def _ask(
+    pad: Scratchpad,
+    trade_off: TradeOff,
+    field: list[Candidate],
+    sites: CallSites,
+    segment_id: str,
+) -> PendingQuestion:
+    """What to stop and ask: a preference, when scope 6.3 permits one; else the choice.
+
+    A preference question is the better one when it is allowed, because its answer settles
+    this plan *and* every plan afterwards - where a route choice settles one segment of
+    one run. Scope 6.3's conditions are narrow by construction and most rounds will fall
+    through to the trade-off.
+    """
+    from longrun.core.preferences.elicitation import question_for
+
+    at_km = _distance_of(pad, segment_id) / 1000.0
+    elicited = (
+        question_for(field[0], field[1], pad.profile, asked=pad.questions_asked, at_km=at_km)
+        if len(field) > 1
+        else None
+    )
+    if elicited is not None:
+        pad.questions_asked += 1
+        return PendingQuestion(
+            id=uuid.uuid4().hex[:8],
+            kind="preference",
+            prompt=_phrase(elicited, sites),
+            options=elicited.options,
+            axis=elicited.axis,
+            segment_id=segment_id,
+            trade_off=trade_off,
+        )
+    return PendingQuestion(
+        id=uuid.uuid4().hex[:8],
+        kind="trade_off",
+        prompt=trade_off.comparison,
+        options=[trade_off.option_a, trade_off.option_b],
+        trade_off=trade_off,
+        segment_id=trade_off.segment_id,
+    )
+
+
+def _phrase(question: Any, sites: CallSites) -> str:
+    """The words, from a model when there is one and a template when there is not."""
+    from longrun.agent.questions import template, write
+
+    if sites.write_question is None:
+        return template(question.axis, question.options, at_km=question.at_km)
+    return write(question.axis, question.options, at_km=question.at_km, detail=question.detail)
+
+
+def _distance_of(pad: Scratchpad, segment_id: str) -> float:
+    segment = next((s for s in pad.segments if s.id == segment_id), None)
+    return segment.cum_start_m if segment is not None else 0.0
+
+
 def _apply_answer(pad: Scratchpad) -> None:
     """A resolved trade-off auto-locks (scope 8.4).
 
@@ -424,7 +474,18 @@ def _apply_answer(pad: Scratchpad) -> None:
     if choice is None:
         return
 
-    if question.kind == "trade_off" and question.segment_id:
+    # Both kinds of answer choose a route, so both auto-lock: scope 8.4 says the chosen
+    # alternative locks, and it says nothing about *why* the runner was asked.
+    #
+    # What is deliberately not done here is writing the profile. Scope 6.3 stores an
+    # elicited answer as `stated`, and the answer to "which of these two routes" is a
+    # route - turning that into a *value* needs a direction table saying what choosing the
+    # calmer route implies about `traffic_tolerance`, and inventing one here would file a
+    # guess under the provenance that is meant to record that somebody said it.
+    # `elicitation.record_answer` is the write path and it is tested; what it wants is a
+    # value. M6 fits preference parameters against real pairs, and that is where the
+    # direction table belongs.
+    if question.segment_id:
         segment = next((s for s in pad.segments if s.id == question.segment_id), None)
         if segment is not None:
             pad.lock(
