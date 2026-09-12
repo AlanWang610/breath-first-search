@@ -57,7 +57,11 @@ class NullExtractor:
     sheet saying so is the truthful form of that answer.
     """
 
-    reason = "tier-4 extraction is not wired up (M5 owns the model call sites)"
+    reason = (
+        "tier-4 extraction is not wired up: a model extractor exists "
+        "(adapters/extraction/model.py) and nothing in this build searches for or fetches "
+        "a jurisdiction's closure page for it to read"
+    )
 
     def extract(self, request: ExtractionRequest, ctx: AdapterContext) -> AdapterResult:
         from longrun.adapters.base import AdapterResult

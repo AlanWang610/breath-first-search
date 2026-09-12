@@ -288,7 +288,7 @@
       "checked": false,
       "jurisdiction": "Rosedale (padus:CITY)",
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "closures",
       "tier": null,
       "vintage": null
@@ -351,7 +351,7 @@
       "checked": false,
       "jurisdiction": "Rosedale (padus:CITY)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -360,7 +360,7 @@
       "checked": false,
       "jurisdiction": "Granada (padus:CITY:20)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -369,7 +369,7 @@
       "checked": false,
       "jurisdiction": "Neighborhood 407 (padus:CITY:29)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -378,7 +378,7 @@
       "checked": false,
       "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO:29)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -387,7 +387,7 @@
       "checked": false,
       "jurisdiction": "Shawnee Indian Mission (padus:OTHS:20)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -396,7 +396,7 @@
       "checked": false,
       "jurisdiction": "Legacy (padus:PVT:29)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -414,7 +414,7 @@
       "checked": false,
       "jurisdiction": "Rosedale (padus:CITY)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -423,7 +423,7 @@
       "checked": false,
       "jurisdiction": "Granada (padus:CITY:20)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -432,7 +432,7 @@
       "checked": false,
       "jurisdiction": "Neighborhood 407 (padus:CITY:29)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -441,7 +441,7 @@
       "checked": false,
       "jurisdiction": "The Nelson-Atkins Museum Of Art (padus:NGO:29)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -450,7 +450,7 @@
       "checked": false,
       "jurisdiction": "Shawnee Indian Mission (padus:OTHS:20)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -459,7 +459,7 @@
       "checked": false,
       "jurisdiction": "Legacy (padus:PVT:29)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -579,6 +579,17 @@
     "max_m": 303.8,
     "min_m": 254.7,
     "samples_missing": 0
+  },
+  "loop": {
+    "locked": [],
+    "pacing_caveats": [
+      "Pacing uses a population grade-adjusted curve (Minetti) with a default fatigue drift; no run history was supplied.",
+      "No recorded effort to compare against 3 km; projected times are a guess."
+    ],
+    "pacing_provenance": "population",
+    "rounds": null,
+    "status": "complete",
+    "trade_offs": []
   },
   "measurements_sha256": "4eed49c3bc0ed99d2f875ebae674d47085eff8c4cc08b0cc4ee805ad0c00c322",
   "pacing": {

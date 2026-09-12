@@ -46,7 +46,7 @@ def test_the_golden_suite_is_not_empty() -> None:
 def test_the_route_directory_is_complete(name: str) -> None:
     """A missing pin is a run that is not reproducible, so it fails before it runs."""
     directory = harness.ROUTES_DIR / name
-    missing = [f for f in harness.REQUIRED_FILES if not (directory / f).exists()]
+    missing = [f for f in harness.required_files(directory) if not (directory / f).exists()]
     assert not missing, f"{name} is missing {', '.join(missing)}"
 
 
@@ -71,7 +71,7 @@ def test_the_request_pins_an_absolute_date(name: str) -> None:
 def test_the_route_matches_its_expectation(name: str, tmp_path: Path, update_golden: bool) -> None:
     directory = harness.ROUTES_DIR / name
     run = harness.run(directory, tmp_path / "out")
-    actual = digest(run.plan)
+    actual = digest(run.plan, run.scratchpad)
     expected_path = directory / "expected.json"
 
     if update_golden:

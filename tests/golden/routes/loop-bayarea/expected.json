@@ -1,7 +1,9 @@
 {
   "budget": {
     "api_calls_used": 0,
-    "degradation": [],
+    "degradation": [
+      "step 8 skipped: no imagery provider is configured"
+    ],
     "imagery_tiles_used": 0
   },
   "coverage": [
@@ -9,7 +11,7 @@
       "checked": true,
       "jurisdiction": null,
       "kind": "osm_tags",
-      "reason": null,
+      "reason": "174 of 270 points matched by the router",
       "source": "way_matching",
       "tier": null,
       "vintage": null
@@ -21,7 +23,7 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -30,7 +32,7 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -39,25 +41,25 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "traffic_signals",
-      "reason": null,
+      "reason": "no node layer: crossings reported without signalization",
       "source": "nodes",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
-      "kind": "osm_stops",
-      "reason": null,
-      "source": "nodes",
+      "kind": "stop_density",
+      "reason": "no nodes layer: stops not established",
+      "source": "stop_density",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": null
     },
     {
       "checked": true,
@@ -66,7 +68,7 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -75,40 +77,40 @@
       "reason": null,
       "source": "nodes",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "park_boundaries",
-      "reason": null,
+      "reason": "no park layer: park containment not established",
       "source": "parks",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": null
     },
     {
       "checked": true,
       "jurisdiction": null,
       "kind": "forecast",
-      "reason": "2 of 2 sites along the route",
+      "reason": "3 of 3 sites along the route",
       "source": "open_meteo",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "surface_model",
-      "reason": "2 footprint read(s) across tiles carried no height and were not raised",
+      "reason": "no buildings layer in this store",
       "source": "overture",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "surface_model",
-      "reason": null,
+      "reason": "no canopy raster in this store",
       "source": "canopy",
       "tier": null,
       "vintage": null
@@ -135,7 +137,7 @@
       "checked": true,
       "jurisdiction": null,
       "kind": "forecast",
-      "reason": "2 of 2 sites along the route",
+      "reason": "3 of 3 sites along the route",
       "source": "open_meteo",
       "tier": null,
       "vintage": null
@@ -147,7 +149,7 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -174,7 +176,16 @@
       "reason": null,
       "source": "nodes",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "opening_hours",
+      "reason": "5 service(s) carry opening_hours this parser does not read; counted as available rather than closed",
+      "source": "nodes",
+      "tier": null,
+      "vintage": null
     },
     {
       "checked": true,
@@ -183,40 +194,40 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "rail_crossings",
-      "reason": null,
+      "reason": "no railways layer: at-grade rail crossings not established",
       "source": "railways",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "water_crossings",
-      "reason": null,
+      "reason": "no flowlines layer: water crossings not established",
       "source": "flowlines",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "cattle_grids",
-      "reason": null,
+      "reason": "no nodes layer: cattle grids not established",
       "source": "nodes",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "seasonal_snow",
-      "reason": null,
+      "reason": "82 segment(s) have no elevation; snow not established",
       "source": "dem",
       "tier": null,
       "vintage": null
@@ -232,57 +243,57 @@
     },
     {
       "checked": false,
-      "jurisdiction": "San Francisco County (tiger:county:06075)",
+      "jurisdiction": null,
       "kind": "closures",
-      "reason": "LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token)",
+      "reason": "no boundaries layer: not in this fixture",
       "source": "closures",
       "tier": null,
       "vintage": null
     },
     {
       "checked": false,
-      "jurisdiction": "San Francisco (tiger:place:0667000)",
+      "jurisdiction": null,
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
+      "reason": "no parks layer: not in this fixture",
       "source": "closures",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "trail_status",
-      "reason": "1 park polygon(s) on this route name no managing agency, so there was nobody to ask",
+      "reason": "no parks layer: not in this fixture",
       "source": "trail_status",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "access_hours",
-      "reason": "1 park polygon(s) on this route name no managing agency, so there was nobody to ask",
+      "reason": "no parks layer: not in this fixture",
       "source": "access_hours",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": false,
+      "checked": true,
       "jurisdiction": null,
-      "kind": "transit",
-      "reason": "no transit stops layer: getting to and from not established",
-      "source": "transit",
-      "tier": null,
-      "vintage": null
-    },
-    {
-      "checked": false,
-      "jurisdiction": null,
-      "kind": "bailout_transit",
-      "reason": "no transit stops layer: exits measured from roads only",
+      "kind": "transit_service",
+      "reason": null,
       "source": "transit_stops",
       "tier": null,
-      "vintage": null
+      "vintage": "gtfs-bart"
+    },
+    {
+      "checked": true,
+      "jurisdiction": null,
+      "kind": "bailout_transit",
+      "reason": null,
+      "source": "transit_stops",
+      "tier": null,
+      "vintage": "gtfs-bart"
     },
     {
       "checked": true,
@@ -291,7 +302,7 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -300,7 +311,7 @@
       "reason": null,
       "source": "amenities",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": true,
@@ -309,7 +320,7 @@
       "reason": null,
       "source": "ways",
       "tier": null,
-      "vintage": "2026-09-01"
+      "vintage": "2026-09-04"
     },
     {
       "checked": false,
@@ -321,19 +332,19 @@
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "surface_model",
-      "reason": "2 footprint read(s) across tiles carried no height and were not raised",
+      "reason": "no buildings layer in this store",
       "source": "overture",
       "tier": null,
       "vintage": null
     },
     {
-      "checked": true,
+      "checked": false,
       "jurisdiction": null,
       "kind": "surface_model",
-      "reason": null,
+      "reason": "no canopy raster in this store",
       "source": "canopy",
       "tier": null,
       "vintage": null
@@ -357,15 +368,6 @@
       "vintage": null
     },
     {
-      "checked": false,
-      "jurisdiction": null,
-      "kind": "start_time_transit",
-      "reason": "no transit stops layer: the finish is not compared across start times",
-      "source": "transit_stops",
-      "tier": null,
-      "vintage": null
-    },
-    {
       "checked": true,
       "jurisdiction": null,
       "kind": "solar_geometry",
@@ -385,171 +387,114 @@
     }
   ],
   "elevation": {
-    "gain_m": 57.6,
+    "gain_m": 10.3,
     "loss_m": 0.0,
-    "max_m": 65.1,
-    "min_m": 5.1,
-    "samples_missing": 0
+    "max_m": 14.0,
+    "min_m": 2.8,
+    "samples_missing": 223
   },
   "loop": {
-    "locked": [],
+    "locked": [
+      {
+        "end_m": 5934.3,
+        "reason": "round 1: rerouted",
+        "start_m": 5925.8
+      }
+    ],
     "pacing_caveats": [
       "Pacing uses a population grade-adjusted curve (Minetti) with a default fatigue drift; no run history was supplied.",
-      "No recorded effort to compare against 4 km; projected times are a guess."
+      "No recorded effort to compare against 8 km; projected times are a guess.",
+      "Elevation missing at 223 of 270 points; those stretches were paced as flat."
     ],
     "pacing_provenance": "population",
-    "rounds": null,
+    "rounds": 1,
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "0707386ca72b30e9ed70f27f20b8ce2484e97985bf736f701498ebb0f30b3eda",
+  "measurements_sha256": "31ca6705cf79f8ad7e36df1f1338616d69ecf9758c215316f7b4350c30e2e04a",
   "pacing": {
-    "duration_s": 1544.9,
-    "finish": "2026-09-12T07:25:44"
+    "duration_s": 2864.0,
+    "finish": "2026-09-15T08:47:44"
   },
   "residual_flags": [
     {
-      "kind": "hard",
-      "reason_code": "lts_4",
-      "scorer": "segment_hostility",
-      "segment_id": "s00013",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
-      "kind": "hard",
-      "reason_code": "lts_4",
-      "scorer": "segment_hostility",
-      "segment_id": "s00012",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
-      "kind": "hard",
-      "reason_code": "unsignalized_primary_crossing",
-      "scorer": "crossings",
-      "segment_id": "s00004",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
-      "kind": "hard",
-      "reason_code": "lts_4",
-      "scorer": "segment_hostility",
-      "segment_id": "s00006",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
-      "kind": "hard",
-      "reason_code": "lts_4",
-      "scorer": "segment_hostility",
-      "segment_id": "s00007",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
-      "kind": "hard",
-      "reason_code": "motorway",
-      "scorer": "legality",
-      "segment_id": "s00012",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
-      "kind": "hard",
-      "reason_code": "motorway",
-      "scorer": "legality",
-      "segment_id": "s00013",
-      "severity": 1.0,
-      "tier": "safety"
-    },
-    {
       "kind": "soft",
-      "reason_code": "stops_per_km_above_tolerance",
-      "scorer": "stop_density",
-      "segment_id": "s00015",
-      "severity": 1.0,
+      "reason_code": "finish_unserved",
+      "scorer": "transit",
+      "segment_id": "route",
+      "severity": 0.7,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "stops_per_km_above_tolerance",
-      "scorer": "stop_density",
-      "segment_id": "s00016",
-      "severity": 0.667,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00117",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "stops_per_km_above_tolerance",
-      "scorer": "stop_density",
-      "segment_id": "s00014",
-      "severity": 0.667,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00118",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "stops_per_km_above_tolerance",
-      "scorer": "stop_density",
-      "segment_id": "s00013",
-      "severity": 0.667,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00119",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "sustained_unpaved",
-      "scorer": "surface_profile",
-      "segment_id": "s00008",
-      "severity": 0.791,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00120",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "stops_per_km_above_tolerance",
-      "scorer": "stop_density",
-      "segment_id": "s00018",
-      "severity": 0.333,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00121",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "stops_per_km_above_tolerance",
-      "scorer": "stop_density",
-      "segment_id": "s00017",
-      "severity": 0.333,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00122",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "unsignalized_secondary_crossing",
-      "scorer": "crossings",
-      "segment_id": "s00008",
-      "severity": 0.5,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00123",
+      "severity": 0.6,
       "tier": "comfort"
     },
     {
       "kind": "soft",
-      "reason_code": "rail_at_grade",
-      "scorer": "hazards",
-      "segment_id": "s00002",
-      "severity": 0.5,
-      "tier": "comfort"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "possible_water_crossing",
-      "scorer": "hazards",
-      "segment_id": "s00014",
-      "severity": 0.4,
+      "reason_code": "no_bailout_in_reach",
+      "scorer": "bailouts",
+      "segment_id": "s00124",
+      "severity": 0.6,
       "tier": "comfort"
     }
   ],
   "route": {
-    "length_m": 3954.0,
-    "point_count": 101,
-    "segment_count": 19,
-    "segments_matched_to_a_way": 19
+    "length_m": 7893.5,
+    "point_count": 270,
+    "segment_count": 125,
+    "segments_matched_to_a_way": 116
   },
   "scorers": {
     "access_hours": {
@@ -558,7 +503,7 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "measured_segments": 126,
       "summary": {
         "access_violations": 0,
         "agencies_answered": 0,
@@ -572,7 +517,7 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "measured_segments": 126,
       "summary": {
         "max_us_aqi": 56.0,
         "mean_us_aqi": 56.0,
@@ -585,18 +530,54 @@
     "bailouts": {
       "flags": {
         "hard": 0,
-        "soft": 0
+        "soft": 8
       },
-      "mean_confidence": 0.62,
-      "measured_segments": 20,
+      "mean_confidence": 1.0,
+      "measured_segments": 126,
       "summary": {
         "reach_m": 2000.0,
         "roads_checked": true,
-        "segments_out_of_reach": 0,
-        "transit_checked": false,
-        "worst_exit_m": 673.5
+        "segments_out_of_reach": 8,
+        "transit_checked": true,
+        "worst_exit_m": 3586.2
       },
-      "worst": []
+      "worst": [
+        {
+          "kind": "soft",
+          "reason_code": "no_bailout_in_reach",
+          "segment_id": "s00117",
+          "severity": 0.6,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "no_bailout_in_reach",
+          "segment_id": "s00118",
+          "severity": 0.6,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "no_bailout_in_reach",
+          "segment_id": "s00119",
+          "severity": 0.6,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "no_bailout_in_reach",
+          "segment_id": "s00120",
+          "severity": 0.6,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "no_bailout_in_reach",
+          "segment_id": "s00121",
+          "severity": 0.6,
+          "tier": "comfort"
+        }
+      ]
     },
     "cell_coverage": {
       "flags": {
@@ -614,12 +595,12 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "measured_segments": 126,
       "summary": {
         "closures": 0,
         "jurisdictions_answered": 0,
-        "jurisdictions_crossed": 2,
-        "jurisdictions_unanswered": 2
+        "jurisdictions_crossed": 0,
+        "jurisdictions_unanswered": 0
       },
       "worst": []
     },
@@ -629,10 +610,10 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 1,
+      "measured_segments": 110,
       "summary": {
-        "largest_gap_m": 3954.0,
-        "meet_points": 0,
+        "largest_gap_m": 4797.3,
+        "meet_points": 109,
         "reach_m": 400.0,
         "road_access_checked": true
       },
@@ -640,78 +621,46 @@
     },
     "crossings": {
       "flags": {
-        "hard": 1,
-        "soft": 1
+        "hard": 0,
+        "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "mean_confidence": 0.96,
+      "measured_segments": 126,
       "summary": {
-        "crossings": 3,
-        "crossings_per_km": 0.759,
+        "crossings": 10,
+        "crossings_per_km": 1.267,
         "grade_separated": 0,
-        "signals_checked": true,
-        "unsignalized": 2
+        "signals_checked": false,
+        "unsignalized": null
       },
-      "worst": [
-        {
-          "kind": "hard",
-          "reason_code": "unsignalized_primary_crossing",
-          "segment_id": "s00004",
-          "severity": 1.0,
-          "tier": "safety"
-        },
-        {
-          "kind": "soft",
-          "reason_code": "unsignalized_secondary_crossing",
-          "segment_id": "s00008",
-          "severity": 0.5,
-          "tier": "comfort"
-        }
-      ]
+      "worst": []
     },
     "hazards": {
       "flags": {
         "hard": 0,
-        "soft": 2
+        "soft": 0
       },
-      "mean_confidence": 0.975,
-      "measured_segments": 20,
+      "mean_confidence": 0.675,
+      "measured_segments": 126,
       "summary": {
-        "hazards": 2,
-        "possible_water_crossing": 1,
-        "rail_at_grade": 1,
-        "sources_checked": 5,
-        "sources_missing": 1
+        "hazards": 0,
+        "sources_checked": 1,
+        "sources_missing": 5
       },
-      "worst": [
-        {
-          "kind": "soft",
-          "reason_code": "rail_at_grade",
-          "segment_id": "s00002",
-          "severity": 0.5,
-          "tier": "comfort"
-        },
-        {
-          "kind": "soft",
-          "reason_code": "possible_water_crossing",
-          "segment_id": "s00014",
-          "severity": 0.4,
-          "tier": "comfort"
-        }
-      ]
+      "worst": []
     },
     "heat_stress": {
       "flags": {
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.7,
-      "measured_segments": 20,
+      "mean_confidence": 0.603,
+      "measured_segments": 126,
       "summary": {
         "formula": "ACSM/BoM approximation: temperature and humidity only",
         "hard_floor_c": 30.0,
-        "max_wbgt_c": 18.651,
-        "mean_wbgt_c": 18.149,
+        "max_wbgt_c": 18.504,
+        "mean_wbgt_c": 18.298,
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
@@ -719,33 +668,18 @@
     },
     "legality": {
       "flags": {
-        "hard": 2,
+        "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "mean_confidence": 0.522,
+      "measured_segments": 126,
       "summary": {
-        "length_m": 3954.002,
-        "prohibited_m": 395.4,
-        "prohibited_segments": 2,
-        "unknown_m": 0.0
+        "length_m": 7893.462,
+        "prohibited_m": 0.0,
+        "prohibited_segments": 0,
+        "unknown_m": 6688.494
       },
-      "worst": [
-        {
-          "kind": "hard",
-          "reason_code": "motorway",
-          "segment_id": "s00012",
-          "severity": 1.0,
-          "tier": "safety"
-        },
-        {
-          "kind": "hard",
-          "reason_code": "motorway",
-          "segment_id": "s00013",
-          "severity": 1.0,
-          "tier": "safety"
-        }
-      ]
+      "worst": []
     },
     "lighting": {
       "flags": {
@@ -753,7 +687,7 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "measured_segments": 126,
       "summary": {
         "dark_m": 0.0,
         "finishes_in_daylight": true,
@@ -772,14 +706,14 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "mean_confidence": 0.997,
+      "measured_segments": 126,
       "summary": {
-        "max_temp_c": 16.4,
-        "min_temp_c": 14.637,
-        "providers": "open-meteo:2",
-        "sites": 2,
-        "sites_answered": 2,
+        "max_temp_c": 15.4,
+        "min_temp_c": 14.845,
+        "providers": "open-meteo:3",
+        "sites": 3,
+        "sites_answered": 3,
         "spacing_m": 5000.0
       },
       "worst": []
@@ -789,82 +723,53 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "mean_confidence": 0.6,
+      "measured_segments": 126,
       "summary": {
         "carry_capacity_ml": 500.0,
-        "max_dry_gap_min": 21.37,
-        "max_food_gap_min": 17.256,
-        "max_toilet_gap_min": 21.89,
-        "services_with_unreadable_hours": 0,
-        "suggested_carry_ml": 213.699,
+        "max_dry_gap_min": 39.923,
+        "max_food_gap_min": 28.78,
+        "max_toilet_gap_min": 36.545,
+        "services_with_unreadable_hours": 5,
+        "suggested_carry_ml": 399.234,
         "water_hard_threshold_min": 150.0,
         "water_soft_threshold_min": 90.0,
-        "wbgt_used_c": 18.651
+        "wbgt_used_c": 18.504
       },
       "worst": []
     },
     "segment_hostility": {
       "flags": {
-        "hard": 4,
+        "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.955,
-      "measured_segments": 20,
+      "mean_confidence": 0.515,
+      "measured_segments": 126,
       "summary": {
-        "fraction_lts3_plus": 0.2,
-        "length_m": 3954.002,
-        "lts4_count": 4,
-        "scored_m": 3954.002,
+        "fraction_lts3_plus": 0.0,
+        "length_m": 7893.462,
+        "lts4_count": 0,
+        "scored_m": 1204.968,
         "traffic_tolerance": 2
       },
-      "worst": [
-        {
-          "kind": "hard",
-          "reason_code": "lts_4",
-          "segment_id": "s00006",
-          "severity": 1.0,
-          "tier": "safety"
-        },
-        {
-          "kind": "hard",
-          "reason_code": "lts_4",
-          "segment_id": "s00007",
-          "severity": 1.0,
-          "tier": "safety"
-        },
-        {
-          "kind": "hard",
-          "reason_code": "lts_4",
-          "segment_id": "s00012",
-          "severity": 1.0,
-          "tier": "safety"
-        },
-        {
-          "kind": "hard",
-          "reason_code": "lts_4",
-          "segment_id": "s00013",
-          "severity": 1.0,
-          "tier": "safety"
-        }
-      ]
+      "worst": []
     },
     "services_along": {
       "flags": {
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "mean_confidence": 0.802,
+      "measured_segments": 126,
       "summary": {
         "buffer_m": 200.0,
-        "food_count": 1,
-        "max_food_gap_m": 2649.183,
-        "max_toilet_gap_m": 3360.903,
-        "max_water_gap_m": 3281.821,
-        "parks_checked": true,
-        "toilet_count": 1,
-        "water_count": 2
+        "food_count": 252,
+        "max_food_gap_m": 4835.446,
+        "max_toilet_gap_m": 6123.631,
+        "max_water_gap_m": 6687.497,
+        "parks_checked": false,
+        "toilet_count": 11,
+        "water_count": 6
       },
       "worst": []
     },
@@ -877,9 +782,9 @@
       "measured_segments": 14,
       "summary": {
         "candidates": 13,
-        "coolest_start": "10:00",
-        "requested_start": "07:00",
-        "shadiest_start": "04:00",
+        "coolest_start": "11:00",
+        "requested_start": "08:00",
+        "shadiest_start": "05:00",
         "step_minutes": 30.0,
         "window_hours": 3.0
       },
@@ -888,68 +793,26 @@
     "stop_density": {
       "flags": {
         "hard": 0,
-        "soft": 6
+        "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
-      "summary": {
-        "gates": 1,
-        "signals": 6,
-        "stops": 7,
-        "stops_per_km": 1.77,
-        "stops_tolerance": 3.0
-      },
-      "worst": [
-        {
-          "kind": "soft",
-          "reason_code": "stops_per_km_above_tolerance",
-          "segment_id": "s00015",
-          "severity": 1.0,
-          "tier": "comfort"
-        },
-        {
-          "kind": "soft",
-          "reason_code": "stops_per_km_above_tolerance",
-          "segment_id": "s00013",
-          "severity": 0.667,
-          "tier": "comfort"
-        },
-        {
-          "kind": "soft",
-          "reason_code": "stops_per_km_above_tolerance",
-          "segment_id": "s00014",
-          "severity": 0.667,
-          "tier": "comfort"
-        },
-        {
-          "kind": "soft",
-          "reason_code": "stops_per_km_above_tolerance",
-          "segment_id": "s00016",
-          "severity": 0.667,
-          "tier": "comfort"
-        },
-        {
-          "kind": "soft",
-          "reason_code": "stops_per_km_above_tolerance",
-          "segment_id": "s00017",
-          "severity": 0.333,
-          "tier": "comfort"
-        }
-      ]
+      "mean_confidence": null,
+      "measured_segments": 0,
+      "summary": null,
+      "worst": []
     },
     "sun_exposure": {
       "flags": {
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.997,
-      "measured_segments": 20,
+      "mean_confidence": 0.146,
+      "measured_segments": 126,
       "summary": {
-        "mean_sky_view_factor": 0.908,
-        "peak_irradiance_w_m2": 45.541,
+        "mean_sky_view_factor": 1.0,
+        "peak_irradiance_w_m2": 310.531,
         "raycast_rung": "full",
-        "shaded_fraction": 0.218,
-        "surface": "shade measured from buildings, canopy and dem",
+        "shaded_fraction": 0.0,
+        "surface": "shade measured from dem; buildings and canopy unavailable",
         "utc_offset_guessed": false,
         "utc_offset_hours": -7.0,
         "utc_offset_source": "stated"
@@ -959,28 +822,20 @@
     "surface_profile": {
       "flags": {
         "hard": 0,
-        "soft": 1
+        "soft": 0
       },
-      "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "mean_confidence": 0.5,
+      "measured_segments": 126,
       "summary": {
-        "paved_fraction": 0.8,
-        "paved_m": 3163.201,
-        "surface_preference": "paved",
-        "unknown_fraction": 0.0,
-        "unknown_m": 0.0,
-        "unpaved_fraction": 0.2,
-        "unpaved_m": 790.8
+        "paved_fraction": 0.139,
+        "paved_m": 1098.214,
+        "surface_preference": "mixed",
+        "unknown_fraction": 0.861,
+        "unknown_m": 6795.249,
+        "unpaved_fraction": 0.0,
+        "unpaved_m": 0.0
       },
-      "worst": [
-        {
-          "kind": "soft",
-          "reason_code": "sustained_unpaved",
-          "segment_id": "s00008",
-          "severity": 0.791,
-          "tier": "comfort"
-        }
-      ]
+      "worst": []
     },
     "trail_status": {
       "flags": {
@@ -988,7 +843,7 @@
         "soft": 0
       },
       "mean_confidence": 1.0,
-      "measured_segments": 20,
+      "measured_segments": 126,
       "summary": {
         "agencies_answered": 0,
         "agencies_crossed": 0,
@@ -999,12 +854,28 @@
     "transit": {
       "flags": {
         "hard": 0,
-        "soft": 0
+        "soft": 1
       },
-      "mean_confidence": null,
-      "measured_segments": 0,
-      "summary": null,
-      "worst": []
+      "mean_confidence": 1.0,
+      "measured_segments": 1,
+      "summary": {
+        "finish_served": false,
+        "finish_stop": "Powell Street (Blue-S,Green-S,Red-S,Yellow-S)",
+        "finish_stop_m": 5558.7,
+        "start_served": true,
+        "start_stop": "Embarcadero (Blue-N,Green-N,Red-N,Yellow-N)",
+        "start_stop_m": 422.4,
+        "stops_in_corridor": 6
+      },
+      "worst": [
+        {
+          "kind": "soft",
+          "reason_code": "finish_unserved",
+          "segment_id": "route",
+          "severity": 0.7,
+          "tier": "comfort"
+        }
+      ]
     }
   },
   "verify": [
@@ -1035,8 +906,8 @@
     {
       "name": "no_illegal_ways",
       "number": 5,
-      "offenders": 2,
-      "status": "failed"
+      "offenders": 0,
+      "status": "passed"
     },
     {
       "name": "no_active_closures",
@@ -1048,13 +919,13 @@
       "name": "distance_in_tolerance",
       "number": 7,
       "offenders": 0,
-      "status": "passed"
+      "status": "skipped"
     },
     {
       "name": "no_dangerous_crossings",
       "number": 8,
-      "offenders": 1,
-      "status": "failed"
+      "offenders": 0,
+      "status": "skipped"
     },
     {
       "name": "time_constraints",

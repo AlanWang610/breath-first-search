@@ -123,8 +123,8 @@ def measurements_hash(plan: Plan) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def digest(plan: Plan) -> dict[str, Any]:
-    """The full expectation for one plan."""
+def digest(plan: Plan, scratchpad: Any = None) -> dict[str, Any]:
+    """The full expectation for one plan, and for the loop that produced it."""
     duration_s = (plan.etas[-1] - plan.etas[0]).total_seconds() if len(plan.etas) > 1 else None
     return {
         "route": {
@@ -183,6 +183,35 @@ def digest(plan: Plan) -> dict[str, Any]:
             }
             for check in (plan.verify.results if plan.verify else [])
         ],
+        # Added in M5.12. Without these the golden suite is blind to everything the M5
+        # loop does - it could run five rounds, adopt a worse route and park on a question
+        # nobody answered, and every number above would be unchanged. Exactly the gap M4
+        # closed for jurisdiction and tier.
+        "loop": {
+            "status": plan.status,
+            # From the scratchpad, because `Plan` records what the loop produced and not
+            # what it did: a golden reading only the plan cannot tell one round from five,
+            # nor notice that a lock stopped being applied.
+            "rounds": getattr(scratchpad, "round", None),
+            "locked": [
+                {"start_m": round(r.start_m, 1), "end_m": round(r.end_m, 1), "reason": r.reason}
+                for r in getattr(scratchpad, "locked", [])
+            ],
+            "trade_offs": [
+                {
+                    "segment_id": t.segment_id,
+                    "option_a": t.option_a,
+                    "option_b": t.option_b,
+                    # The comparison text is *not* pinned: with a model configured it is
+                    # prose, and a golden that froze one wording would fail on a rephrasing
+                    # rather than on a regression. Its presence is what matters.
+                    "has_comparison": bool(t.comparison),
+                }
+                for t in plan.trade_offs
+            ],
+            "pacing_provenance": plan.profile.pacing.value.provenance,
+            "pacing_caveats": list(plan.pacing_caveats),
+        },
         # Added in M5.2. Both numbers were written by nothing and read by nothing until
         # then, so `plan.json` reported zero external calls whether or not a plan made any -
         # and a golden replaying a cassette must spend nothing, which is a second and much

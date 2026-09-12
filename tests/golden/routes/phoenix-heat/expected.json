@@ -252,7 +252,7 @@
       "checked": false,
       "jurisdiction": "East Lake Park (padus:CITY)",
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "closures",
       "tier": null,
       "vintage": null
@@ -261,7 +261,7 @@
       "checked": false,
       "jurisdiction": "State Trust Land (padus:SDOL)",
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "closures",
       "tier": null,
       "vintage": null
@@ -279,7 +279,7 @@
       "checked": false,
       "jurisdiction": "East Lake Park (padus:CITY)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -288,7 +288,7 @@
       "checked": false,
       "jurisdiction": "State Trust Land (padus:SDOL)",
       "kind": "trail_status",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null
@@ -306,7 +306,7 @@
       "checked": false,
       "jurisdiction": "East Lake Park (padus:CITY)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -315,7 +315,7 @@
       "checked": false,
       "jurisdiction": "State Trust Land (padus:SDOL)",
       "kind": "access_hours",
-      "reason": "tier-4 extraction is not wired up (M5 owns the model call sites)",
+      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "access_hours",
       "tier": null,
       "vintage": null
@@ -435,6 +435,17 @@
     "max_m": 337.5,
     "min_m": 329.3,
     "samples_missing": 0
+  },
+  "loop": {
+    "locked": [],
+    "pacing_caveats": [
+      "Pacing uses a population grade-adjusted curve (Minetti) with a default fatigue drift; no run history was supplied.",
+      "No recorded effort to compare against 5 km; projected times are a guess."
+    ],
+    "pacing_provenance": "population",
+    "rounds": null,
+    "status": "complete",
+    "trade_offs": []
   },
   "measurements_sha256": "30dcdbbea60c3e0ff7663a0cd989856a507283756e39962682764c7d3178572a",
   "pacing": {
