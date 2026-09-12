@@ -117,6 +117,24 @@ LICENCES: dict[str, SourceLicence] = {
         licence="CC-BY 4.0",
         attribution="Weather and air quality: Open-Meteo.com",
     ),
+    # Nominatim serves OSM, so ODbL flows through and the share-alike trailer applies
+    # (ADR 0018). Scope 14 has no geocoder row at all - again the scope's omission, and
+    # again not a statement that nothing is owed.
+    "nominatim": SourceLicence(
+        source="nominatim",
+        licence="ODbL 1.0",
+        attribution="Geocoding: Nominatim / OpenStreetMap contributors",
+        share_alike=True,
+    ),
+    # `forecast.py` records its *unanswered* sites under this name, and it resolved to no
+    # licence at all - so a plan on which every forecast site failed printed
+    # `LICENCE NOT RECORDED` and would have failed `test_every_recorded_source_has_a_licence`.
+    # A latent bug since M2, found while checking what a new source owes.
+    "forecast": SourceLicence(
+        source="forecast",
+        licence="see nws and open_meteo",
+        attribution="Forecast: NWS and Open-Meteo.com",
+    ),
     "noaa_coops": SourceLicence(source="noaa_coops", licence="US public domain"),
     "fcc_bdc": SourceLicence(source="fcc_bdc", licence="US public domain"),
     "canopy": SourceLicence(

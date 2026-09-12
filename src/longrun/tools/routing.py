@@ -13,6 +13,34 @@ from longrun.tools.base import ToolSettings, read_route, start_of, unavailable
 
 
 def register(server: Any, settings: ToolSettings) -> None:
+    @server.tool(name="geocode", description="Scope 8.1 step 1: a place name to a point.")
+    def geocode_tool(query: str, limit: int = 5) -> dict[str, Any]:
+        """The last thing standing between a sentence and a `PlanRequest`."""
+        from longrun.core.data.geocode import geocode
+        from longrun.core.models.geometry import Route, RoutePoint
+        from longrun.tools.base import scoring_context, start_of
+
+        # A geocode needs a cache and a budget, which live on a context, and a context is
+        # built around a route. A one-point stand-in is honest about that rather than
+        # opening a second door for this one tool to use.
+        stand_in = Route(
+            id="geocode",
+            points=[
+                RoutePoint(lat=0.0, lon=0.0, cum_dist_m=0.0),
+                RoutePoint(lat=0.0, lon=0.001, cum_dist_m=111.0),
+            ],
+        )
+        with scoring_context(settings, stand_in, start_of("2026-01-01")) as ctx:
+            found = geocode(query, ctx, limit=limit)
+        return {
+            "query": found.query,
+            "checked": found.answered,
+            "reason": found.reason,
+            "places": [
+                {"name": p.name, "lat": p.lat, "lon": p.lon, "kind": p.kind} for p in found.places
+            ],
+        }
+
     @server.tool(name="route", description="Scope 7.1: draw a pedestrian route.")
     def route(points: list[list[float]], profile: str = "foot") -> dict[str, Any]:
         """`points` are [lat, lon], the order everything outside the router uses."""

@@ -379,6 +379,7 @@ Relevant because the project is open source and some outputs are derivative data
 | AirNow | Public, attribution requested | Attribution |
 | PurpleAir | API key + terms | Per-user key; not redistributed |
 | GTFS feeds | Per agency, mostly permissive | Record per feed |
+| Nominatim (geocoding) | ODbL (serves OSM) | Attribution; contact string required by its usage policy (ADR 0018) |
 | Strava/Garmin exports | User's own data | Processed locally; never redistributed; Strava API data not used for cross-user modeling |
 | Strava heatmap | Not open; cookie-gated | Optional adapter, user-supplied credentials, off by default |
 
