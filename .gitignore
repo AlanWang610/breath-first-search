@@ -29,6 +29,12 @@ ui/.vite/
 .env.local
 *.local.yaml
 
+# Personal run history. Scope 3.7 is local-first: raw activity files are read where they
+# sit, never copied, and only derived curves are kept. `.gitattributes` has marked these
+# binary since M0, which is not the same as refusing to commit one.
+*.fit
+*.tcx
+
 # Local run artifacts
 *.log
 scratch/

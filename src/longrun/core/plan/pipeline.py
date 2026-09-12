@@ -164,7 +164,12 @@ def _score_pass(
         }
     )
 
-    eta_vector = pacing_model(route, start_at, elevations=elevations)
+    # The profile's curves, which until M5.10 nothing passed: `pacing_model` has taken a
+    # `curves` argument since M1 and every production call let it default, so every plan
+    # ever produced ran on the population curve whether or not history existed.
+    eta_vector = pacing_model(
+        route, start_at, curves=ctx.profile.pacing.value, elevations=elevations
+    )
     results = run_scorers(route, segments, ctx, eta_vector.etas, manifest)
 
     # Verification runs before the plan is assembled so the plan can carry its own report:

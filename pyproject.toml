@@ -141,5 +141,7 @@ module = [
   "pandas.*",
   "duckdb.*",
   "osmium.*",
+  # `fitdecode` ships no stubs and no py.typed marker; the `history` extra, same rule.
+  "fitdecode.*",
 ]
 ignore_missing_imports = true

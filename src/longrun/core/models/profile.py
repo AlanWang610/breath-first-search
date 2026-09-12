@@ -21,6 +21,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from longrun.core.pacing.curves import PacingCurves
+
 #: -1..+1 throughout: negative avoids, positive seeks, 0 reports without scoring.
 Weight = Annotated[float, Field(ge=-1.0, le=1.0)]
 
@@ -109,6 +111,17 @@ class PreferenceProfile(BaseModel):
     stops_tolerance: PreferenceEntry[float] = PreferenceEntry(value=3.0)
     darkness_tolerance: PreferenceEntry[bool] = PreferenceEntry(value=False)
     scenery_vs_directness: PreferenceEntry[float] = PreferenceEntry(value=0.0)
+    #: Scope 6.3's table has listed this since the first draft and the model has never had
+    #: it, so a history-derived curve had nowhere to live and `pacing_model`'s `curves`
+    #: argument was never passed by anything.
+    #:
+    #: Two provenance vocabularies meet here and they answer different questions.
+    #: `PacingCurves.provenance` is "population" or "history" - *what measured this*.
+    #: `PreferenceEntry.provenance` is DEFAULT/INFERRED/STATED - *who said so*. A measured
+    #: curve is INFERRED on the outside and "history" on the inside: derived, and therefore
+    #: overridable by a runner who says otherwise, which is scope 6.3's rule that `stated`
+    #: always beats `inferred`.
+    pacing: PreferenceEntry[PacingCurves] = PreferenceEntry(value=PacingCurves())
 
     @property
     def scores_sun(self) -> bool:

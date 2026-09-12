@@ -80,3 +80,19 @@ scenery_vs_directness:
   value: 0.0
   weight: 0.0
   provenance: 0
+
+# Scope 6.3: "derived curves from 6.2", defaulting to the population curve. Everything here
+# is the Minetti default, so a profile with no run history behind it produces exactly the
+# ETAs this project has always produced - and says so, because `provenance: population` is
+# what makes `_caveats` emit the disclosure.
+pacing:
+  value:
+    flat_speed_ms: 2.7777777777777777
+    fatigue_drift_pct_per_10km: 4.0
+    fatigue_onset_m: 10000.0
+    unpaved_factor: 0.93
+    provenance: population
+    longest_effort_m: null
+    speed_by_grade_bin: {}
+  weight: 0.0
+  provenance: 0
