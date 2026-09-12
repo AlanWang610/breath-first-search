@@ -63,6 +63,16 @@ NPS = ApiKey(
     register_at="https://www.nps.gov/subjects/developer/get-started.htm",
 )
 
-ALL_KEYS = (SF_BAY_511, NPS)
+#: The model key, which is a key-gated external source like any other - it just happens to
+#: gate four call sites rather than one feed. Listed here so the two contract tests that
+#: keep every other key honest keep this one honest too: blank in `.env.example`, and a
+#: registration URL somebody can actually follow.
+ANTHROPIC = ApiKey(
+    env_var="ANTHROPIC_API_KEY",
+    service="the LLM call sites and tier-4 extraction",
+    register_at="https://console.anthropic.com/settings/keys",
+)
+
+ALL_KEYS = (SF_BAY_511, NPS, ANTHROPIC)
 
 __all__ = ["ALL_KEYS", "NPS", "SF_BAY_511", "ApiKey"]

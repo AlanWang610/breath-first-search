@@ -280,7 +280,7 @@ def _iterate(
     several candidates per round against **one** budget and one cache - which is what
     M5.1 took `score_route` apart for.
     """
-    from longrun.agent.loop import plan_route
+    from longrun.agent.loop import call_sites_from_env, plan_route
     from longrun.core.export.sheet_md import render_markdown
     from longrun.runtime import open_context
 
@@ -305,6 +305,9 @@ def _iterate(
             profile=shared["profile"],
             snapshot=shared["snapshot"],
             max_rounds=rounds,
+            # Whatever the environment supports. With no key this is `NO_MODEL` and the
+            # plan is identical apart from a terser trade-off line (ADR 0015).
+            sites=call_sites_from_env(shared["budget"]),
         )
 
     pad = outcome.scratchpad

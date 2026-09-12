@@ -54,7 +54,36 @@ def _block_network(request: pytest.FixtureRequest) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _block_model(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Fail non-`network` tests that reach a language model (ADR 0015).
+
+    The socket block above would catch it too, eventually and obscurely. This makes it a
+    loud, specific failure at the layer that caused it - `RuntimeError: Model requests are
+    not allowed` - which is what `_block_network` does for sockets and for the same reason.
+
+    It also matters that the *loop* never needs one: every call site has a deterministic
+    path, so a suite that silently acquired a model dependency would still pass on a
+    developer's machine and fail in CI. This makes it fail on both.
+    """
+    if request.node.get_closest_marker("network"):
+        yield
+        return
+    try:
+        from pydantic_ai import models
+    except ImportError:  # pragma: no cover - the `agent` extra is not installed
+        yield
+        return
+
+    previous = models.ALLOW_MODEL_REQUESTS
+    models.ALLOW_MODEL_REQUESTS = False
+    try:
+        yield
+    finally:
+        models.ALLOW_MODEL_REQUESTS = previous
+
+
+@pytest.fixture(autouse=True)
+def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
     """Run every test against a clean `LONGRUN_*` environment.
 
     Ambient configuration is exactly the kind of thing that makes a suite pass on one
@@ -64,6 +93,14 @@ def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for name in [key for key in os.environ if key.startswith("LONGRUN_")]:
         monkeypatch.delenv(name, raising=False)
+    # `ANTHROPIC_API_KEY` does not start with `LONGRUN_`, so the loop above never saw it -
+    # and a developer with a real key exported would have had tests reaching a model that
+    # pass in CI, which is the exact difference this fixture exists to prevent.
+    #
+    # Kept for `network` tests, which are the ones allowed to use it: a live test that
+    # cleared the credential it needs would skip forever and look like it was passing.
+    if not request.node.get_closest_marker("network"):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 
 @pytest.fixture(scope="session")

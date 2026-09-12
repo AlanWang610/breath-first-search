@@ -43,7 +43,7 @@ from longrun.core.plan.scratchpad import Scratchpad
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import date, datetime
 
-    from longrun.core.models.context import ScorerContext
+    from longrun.core.models.context import Budget, ScorerContext
     from longrun.core.models.geometry import Route, Segment
     from longrun.core.models.plan import Manifest, SnapshotPins
     from longrun.core.models.profile import PreferenceProfile
@@ -113,6 +113,23 @@ class CallSites:
 
 #: What every golden route and every test runs with.
 NO_MODEL = CallSites()
+
+
+def call_sites_from_env(budget: Budget | None = None) -> CallSites:
+    """Whatever the environment can support, which is often nothing.
+
+    Returns `NO_MODEL` when no key is configured, rather than raising: ADR 0015 makes an
+    absent model a degradation and not an error, and a CLI that refused to plan without one
+    would contradict every golden route in the suite.
+    """
+    from longrun.agent.model import settings_from_env
+
+    if not settings_from_env().available:
+        return NO_MODEL
+
+    from longrun.agent.tradeoffs import describer
+
+    return CallSites(describe=describer(budget))
 
 
 @dataclass(frozen=True)
