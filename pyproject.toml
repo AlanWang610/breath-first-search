@@ -42,8 +42,14 @@ history = ["fitdecode>=0.10"]
 # Region-build ingest (scope 13): duckdb reads Overture GeoParquet, osmium clips the
 # state extract to a region polygon and writes the offline LTS tag back into the pbf.
 ingest = ["duckdb>=1.1", "osmium>=4.3"]
-tools = ["mcp>=1.2"]
-agent = ["pydantic-ai>=0.0.14", "anthropic>=0.40"]
+# `mcp>=1.2` admitted a major version this code cannot use: in mcp 2.x `FastMCP` is
+# `MCPServer` and `mcp.server.fastmcp` raises a ModuleNotFoundError naming the migration
+# guide. The same class of error as M0's `requires-python = ">=3.11"` against rasterio.
+tools = ["mcp>=2,<3"]
+# Floors raised to what the lock actually holds, for the same reason. Note `pydantic-ai`
+# depends on `pydantic-ai-slim[...mcp...]`, so the agent extra installs the MCP stack
+# whatever the tools extra says - the two are not separable.
+agent = ["pydantic-ai>=2,<3", "anthropic>=1,<2"]
 api = ["fastapi>=0.115", "uvicorn[standard]>=0.32"]
 dev = [
   "pytest>=8",

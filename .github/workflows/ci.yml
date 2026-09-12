@@ -31,7 +31,10 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Sync dependencies
-        run: uv sync --frozen --extra dev
+        # M5's extras are synced so mypy can see `tools/`, `agent/` and the history
+        # ingest. `uv run mypy` type-checks the whole `longrun` package, and a gate that
+        # cannot see the code it guards is not a gate - M4.4a's lesson in a new costume.
+        run: uv sync --frozen --extra dev --extra tools --extra agent --extra history
 
       - name: Lint
         run: uv run ruff check .

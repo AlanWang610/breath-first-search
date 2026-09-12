@@ -10,7 +10,7 @@ from __future__ import annotations
 import typer
 
 from longrun import __version__
-from longrun.cli import export, freeze, jobs, plan, region, repair
+from longrun.cli import export, freeze, jobs, plan, region, repair, serve
 
 app = typer.Typer(
     name="longrun",
@@ -45,6 +45,7 @@ export.register(app)
 region.register(app)
 plan.register(app)
 jobs.register(app)
+serve.register(app)
 
 
 if __name__ == "__main__":  # pragma: no cover
