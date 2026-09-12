@@ -14,7 +14,17 @@ import pytest
 SRC = Path(__file__).resolve().parents[2] / "src" / "longrun"
 
 # scope 4.1: core/ is the deterministic library. Nothing above it may be imported from it.
-FORBIDDEN_FROM_CORE = ("longrun.agent", "longrun.tools", "longrun.cli", "longrun.api")
+#
+# `longrun.jobs` joined the list in M5.5. The tuple is hand-maintained and was written
+# before `jobs/` was a layer anyone could import, so `core/` importing it would have passed
+# this test - and M5.6 is the milestone that makes the import possible.
+FORBIDDEN_FROM_CORE = (
+    "longrun.agent",
+    "longrun.tools",
+    "longrun.cli",
+    "longrun.api",
+    "longrun.jobs",
+)
 
 
 def _python_files(package: str) -> list[Path]:
