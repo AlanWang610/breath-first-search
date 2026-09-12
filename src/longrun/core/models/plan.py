@@ -63,6 +63,11 @@ class Manifest(BaseModel):
     tool_calls: list[ToolCall] = Field(default_factory=list)
     api_calls_used: int = 0
     imagery_tiles_used: int = 0
+    #: Scope 6.4 names no model budget - the scope defines no token cost anywhere - but a
+    #: plan that cannot say what it spent on a model is the scope 3.6 failure in a new
+    #: currency. Zero on every plan that ran without one, which is most of them (ADR 0015).
+    model_calls_used: int = 0
+    model_tokens_used: int = 0
     degradation: list[str] = Field(default_factory=list)
 
     def record(self, call: ToolCall) -> None:
@@ -87,6 +92,32 @@ class TradeOff(BaseModel):
     option_a: str
     option_b: str
     comparison: str
+
+
+class PendingQuestion(BaseModel):
+    """What a job stopped to ask, so that a resume knows what it is answering.
+
+    `status = "needs_input"` records *that* the loop stopped and never *what it asked*,
+    which is enough for one process and not enough for two - and scope 4.2 designs for
+    two: the scratchpad persists, the job parks, and something else comes back to it.
+
+    `kind` separates the two reasons a plan may stop. A `trade_off` is scope 8.1 step 6's
+    same-tier conflict, where the answer names a route. A `preference` is scope 6.3's
+    in-context elicitation, where the answer sets a profile axis and is stored as
+    `stated`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    kind: Literal["trade_off", "preference"]
+    prompt: str
+    options: list[str] = Field(default_factory=list)
+    trade_off: TradeOff | None = None
+    #: The profile key a preference question is about (scope 6.3), never set for a
+    #: trade-off - a route choice is not a preference and must not be stored as one.
+    axis: str | None = None
+    segment_id: str | None = None
 
 
 class Plan(BaseModel):

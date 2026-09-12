@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import ScorerResult
-from longrun.core.models.plan import Manifest, TradeOff
+from longrun.core.models.plan import Manifest, PendingQuestion, TradeOff
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import LockedRange, PlanRequest
 
@@ -33,7 +33,14 @@ class Scratchpad(BaseModel):
 
     plan_id: str
     request: PlanRequest
-    route: Route
+    #: Optional, because a job can stop before it has a route. Scope 6.3's two first-use
+    #: questions and any intent clarification come *before* scope 8.1 step 3, and a
+    #: scratchpad that could not hold them would have nothing to persist at the one moment
+    #: scope 4.2 designed it for.
+    route: Route | None = None
+    #: Distinct from `plan_id`: a job is a run, and a run can be resumed, retried or
+    #: abandoned while the plan it is building keeps its identity.
+    job_id: str | None = None
     profile: PreferenceProfile = PreferenceProfile()
     segments: list[Segment] = Field(default_factory=list)
     results: list[ScorerResult] = Field(default_factory=list)
@@ -44,6 +51,14 @@ class Scratchpad(BaseModel):
     manifest: Manifest = Field(default_factory=Manifest)
     round: int = 0
     status: JobStatus = "running"
+    #: What the loop stopped to ask, and what came back. `status` alone records that it
+    #: stopped; across a process boundary that is not enough to resume.
+    question: PendingQuestion | None = None
+    answers: dict[str, str] = Field(default_factory=dict)
+    #: Scope 6.3 caps preference questions at three *per plan*, and a plan outlives the
+    #: process that started it - so the count is persisted or the cap is unenforceable
+    #: across exactly the boundary it is meant to survive.
+    questions_asked: int = 0
 
     def lock(self, start_m: float, end_m: float, reason: str | None = None) -> None:
         """Exclude a range from rerouting (scope 6.4).

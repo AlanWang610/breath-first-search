@@ -32,6 +32,7 @@ from typing import Any
 
 import typer
 
+from longrun.agent.loop import MAX_ROUNDS
 from longrun.cli.repair import score_route
 from longrun.core.data.cache import CacheMiss, SqliteCache, cache_path_from_env, offline_from_env
 from longrun.core.models.context import Budget
@@ -62,10 +63,13 @@ def _point(text: str, label: str) -> LatLon:
 
 
 def plan(
-    start_point: str = typer.Option(..., "--from", help="Origin as lat,lon."),
+    request_file: Path | None = typer.Argument(
+        None, help="Request YAML (scope 10.1). Its keys stand in for the options below."
+    ),
+    start_point: str | None = typer.Option(None, "--from", help="Origin as lat,lon."),
     end_point: str | None = typer.Option(None, "--to", help="Destination as lat,lon."),
     via: list[str] = typer.Option([], "--via", help="Intermediate point, repeatable."),
-    date: datetime = typer.Option(..., "--date", formats=["%Y-%m-%d"], help="Run date."),
+    date: datetime | None = typer.Option(None, "--date", formats=["%Y-%m-%d"], help="Run date."),
     start: str = typer.Option("07:00", "--start", help="Start time, HH:MM."),
     target_km: float | None = typer.Option(None, "--target-km", help="Target distance."),
     avoid_high_stress: bool = typer.Option(
@@ -73,6 +77,9 @@ def plan(
     ),
     alternatives: int = typer.Option(
         0, "--alternatives", help="Also score N router alternatives between the same ends."
+    ),
+    rounds: int = typer.Option(
+        MAX_ROUNDS, "--rounds", help="Scope 8.1 step 6's cap. 0 scores the route once."
     ),
     router_url: str | None = typer.Option(None, "--router", help="GraphHopper base URL."),
     profile_path: Path | None = typer.Option(None, "--profile", help="Preference profile YAML."),
@@ -86,8 +93,29 @@ def plan(
     ),
     utc_offset: float | None = typer.Option(None, "--utc-offset", help="Hours from UTC."),
 ) -> None:
-    """Route between points and score the result (scope 6.1 generate mode)."""
+    """Route between points and score the result through the scope 8.1 loop."""
     from longrun.core.routing.graphhopper import GraphHopperRouter
+
+    if request_file is not None:
+        try:
+            asked = _read_request(request_file)
+        except (OSError, ValueError) as exc:
+            typer.echo(f"error: could not read {request_file}: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
+        start_point = start_point or asked.get("from")
+        end_point = end_point or asked.get("to")
+        via = via or [str(v) for v in asked.get("via", [])]
+        date = date or _as_datetime(asked.get("date"))
+        start = asked.get("start", start) if start == "07:00" else start
+        target_km = target_km if target_km is not None else asked.get("target_km")
+        utc_offset = utc_offset if utc_offset is not None else asked.get("utc_offset_hours")
+
+    if not start_point:
+        typer.echo("error: give --from, or a request file with a `from` key", err=True)
+        raise typer.Exit(code=2)
+    if date is None:
+        typer.echo("error: give --date, or a request file with a `date` key", err=True)
+        raise typer.Exit(code=2)
 
     waypoints = [_point(start_point, "from")]
     waypoints.extend(_point(text, "via") for text in via)
@@ -178,7 +206,10 @@ def plan(
             "budget": budget,
         }
 
-        score_route(route, request, out=out, **shared)
+        if rounds > 0:
+            _iterate(request, route, shared, rounds=rounds, out=out)
+        else:
+            score_route(route, request, out=out, **shared)
 
         # `max_paths` is a total, not an extra: GraphHopper returns the primary path first,
         # and in generate mode the primary path *is* the route just drawn. Asking for one
@@ -202,6 +233,110 @@ def plan(
                 out=(out / f"alt-{index}") if out else None,
                 **shared,
             )
+
+
+def _as_datetime(value: Any) -> datetime | None:
+    """A request file's `date`, whatever YAML decided it was.
+
+    `yaml.safe_load` returns a `date` for an unquoted 2026-09-15 and a `str` for a quoted
+    one, and a golden route's `request.yaml` is hand-written - so both arrive.
+    """
+    from datetime import date as date_type
+
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date_type):
+        return datetime(value.year, value.month, value.day)
+    return datetime.strptime(str(value), "%Y-%m-%d")
+
+
+def _read_request(path: Path) -> dict[str, Any]:
+    """Scope 10.1's `longrun plan request.yaml`, which the CLI has never accepted.
+
+    The same three keys a golden route's `request.yaml` already carries, plus the two
+    endpoints - so a generate-mode golden needs no second schema.
+    """
+    import yaml
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        raise ValueError("a request file is a mapping")
+    return raw
+
+
+def _iterate(
+    request: PlanRequest,
+    route: Any,
+    shared: dict[str, Any],
+    *,
+    rounds: int,
+    out: Path | None,
+) -> None:
+    """Scope 8.1's loop, through the same pieces `repair` scores one pass with.
+
+    The context is opened here rather than inside `score_route` because the loop scores
+    several candidates per round against **one** budget and one cache - which is what
+    M5.1 took `score_route` apart for.
+    """
+    from longrun.agent.loop import plan_route
+    from longrun.core.export.sheet_md import render_markdown
+    from longrun.runtime import open_context
+
+    with open_context(
+        route=route,
+        root=shared["root"],
+        snapshot=shared["snapshot"],
+        start_at=shared["start_at"],
+        profile=shared["profile"],
+        offline=shared["offline"],
+        remote_rasters=shared["remote_rasters"],
+        utc_offset=shared["utc_offset"],
+        cache=shared["cache"],
+        budget=shared["budget"],
+    ) as ctx:
+        outcome = plan_route(
+            request,
+            ctx,
+            start_at=shared["start_at"],
+            route=route,
+            router=shared["router"],
+            profile=shared["profile"],
+            snapshot=shared["snapshot"],
+            max_rounds=rounds,
+        )
+
+    pad = outcome.scratchpad
+    typer.echo(f"loop: {pad.round} round(s), status {pad.status}")
+
+    if out:
+        out.mkdir(parents=True, exist_ok=True)
+        pad.save(out / "scratchpad.json")
+
+    if outcome.needs_input and pad.question is not None:
+        # Scope 4.2: the pause is a state, not an error. The scratchpad is on disk and the
+        # exit code says a person is needed - which is different from a failure.
+        typer.echo(f"needs input: {pad.question.prompt}")
+        for option in pad.question.options:
+            typer.echo(f"  - {option}")
+        raise typer.Exit(code=6)
+
+    if outcome.plan is None:  # pragma: no cover - a failed route already exited
+        typer.echo("error: no plan was produced", err=True)
+        raise typer.Exit(code=4)
+
+    sheet = render_markdown(
+        outcome.plan,
+        elevation=outcome.scored.elevation if outcome.scored else None,
+        verify=outcome.scored.verify if outcome.scored else None,
+    )
+    if out:
+        (out / "sheet.md").write_text(sheet, encoding="utf-8")
+        (out / "plan.json").write_text(outcome.plan.model_dump_json(indent=2), encoding="utf-8")
+        typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
+    else:
+        typer.echo(sheet)
 
 
 def _snapshot(path: Path | None) -> SnapshotPins:

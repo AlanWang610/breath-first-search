@@ -74,15 +74,24 @@ def sample_elevation(route: Route, rasters: RasterStore, layer: str = "dem") -> 
     """
     from longrun.core.geo.projections import bbox_of
 
-    window = rasters.read_window(layer, bbox_of(route, pad_deg=0.01))
+    # `read_window_meta` rather than `read_window`, which is a wrapper that returns the
+    # array and transform and **throws the nodata value away**. That omission made this
+    # function contradict its own docstring for four milestones: a windowed read is
+    # `boundless=True, fill_value=src.nodata`, so every point outside the raster's
+    # coverage came back as the fill - and a fixture DEM with nodata -999999 turned a
+    # route that left its corridor into 1,000,012 m of descent. Found by reading the sheet
+    # the M5.5 loop produced on a router-drawn route, which was the first route in this
+    # project's history not cut to fit the DEM frozen for it.
+    window = rasters.read_window_meta(layer, bbox_of(route, pad_deg=0.01))
     if window is None:
         return [None] * len(route.points)
-    return _sample_window(route, window)
+    return _sample_window(route, window.array, window.transform, window.nodata)
 
 
-def _sample_window(route: Route, window: tuple[Any, Any]) -> list[float | None]:
-    """Read one value per route point from an (array, affine transform) window."""
-    array, transform = window
+def _sample_window(
+    route: Route, array: Any, transform: Any, nodata: float | None = None
+) -> list[float | None]:
+    """Read one value per route point, `None` where the raster has nothing to say."""
     inverse = ~transform
     out: list[float | None] = []
     rows, cols = array.shape[-2], array.shape[-1]
@@ -92,7 +101,8 @@ def _sample_window(route: Route, window: tuple[Any, Any]) -> list[float | None]:
         r, c = int(row), int(col)
         if 0 <= r < rows and 0 <= c < cols:
             value = float(band[r, c])
-            out.append(None if value != value else value)  # NaN check without numpy
+            missing = value != value or (nodata is not None and value == nodata)
+            out.append(None if missing else value)  # `!=` itself is the NaN check
         else:
             out.append(None)
     return out

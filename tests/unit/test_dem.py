@@ -187,3 +187,40 @@ def test_profile_serializes() -> None:
     assert ElevationProfile.model_validate_json(profile.model_dump_json()).gain_m == pytest.approx(
         profile.gain_m
     )
+
+
+def test_a_point_outside_the_raster_is_unknown_and_not_a_nodata_reading() -> None:
+    """The bug the M5.5 loop found by routing off the edge of a fixture DEM.
+
+    `read_window` reads `boundless=True, fill_value=src.nodata`, so a point outside
+    coverage comes back as the fill value rather than as nothing. With a nodata of
+    -999999 that is not a small error: the observed sheet reported **1,000,012 m of
+    descent** over 8 km, and `sample_elevation`'s own docstring already forbade it -
+    "a hole in the DEM is unknown elevation, and zero would read as sea level and invent
+    thousands of metres of gain".
+
+    Every golden route sits inside the DEM frozen for it, which is why four milestones of
+    green goldens never touched this. The first route not cut to fit its raster found it
+    immediately.
+    """
+    import numpy as np
+    from affine import Affine
+
+    from longrun.core.geo.dem import _sample_window
+
+    nodata = -999999.0
+    band = np.array([[10.0, nodata], [nodata, 12.0]], dtype="float32")
+    transform = Affine.translation(-122.0, 37.5) * Affine.scale(0.01, -0.01)
+    route = Route(
+        id="edge",
+        points=[
+            RoutePoint(lat=37.495, lon=-121.995, cum_dist_m=0.0),
+            RoutePoint(lat=37.495, lon=-121.985, cum_dist_m=100.0),
+            RoutePoint(lat=37.485, lon=-121.985, cum_dist_m=200.0),
+        ],
+    )
+
+    assert _sample_window(route, band, transform, nodata) == [10.0, None, 12.0]
+    # And without being told the nodata value, the fill reads as a measurement - which is
+    # exactly what `read_window` did by discarding it.
+    assert _sample_window(route, band, transform, None) == [10.0, nodata, 12.0]

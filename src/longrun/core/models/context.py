@@ -70,9 +70,17 @@ class Budget:
     #: GDAL rather than by us - but metered, because a DSM over a 100 km corridor is
     #: tens of range requests per tile and nothing else would notice.
     raster_windows_max: int = 500
+    #: Scope 4.1 fixes the LLM to five call sites and scope 6.4 budgets everything else,
+    #: so this is the ceiling the scope implies and does not state. Twelve: one intent
+    #: parse, up to five trade-off comparisons across five rounds, three elicitation
+    #: questions, a preference proposal, and slack. Tier-4 extraction is capped
+    #: separately, by the adapter fetch limits it already lives behind.
+    model_calls_max: int = 12
     api_calls_used: int = 0
     imagery_tiles_used: int = 0
     raster_windows_used: int = 0
+    model_calls_used: int = 0
+    model_tokens_used: int = 0
     #: Set when the budget is constructed, which is when the plan starts.
     started_at: float = field(default_factory=time.perf_counter, repr=False)
 
@@ -98,6 +106,18 @@ class Budget:
         if self.imagery_tiles_used + n > self.imagery_tiles_max:
             raise BudgetExceeded(f"imagery budget exhausted ({self.imagery_tiles_max} tiles)")
         self.imagery_tiles_used += n
+
+    def spend_model_call(self, tokens: int = 0) -> None:
+        """Charge one call at a fixed LLM call site (scope 4.1).
+
+        Tokens are recorded and not capped: what a plan must be able to say is *how much*
+        it asked a model for, and a cap on tokens would refuse a long answer halfway
+        through, which is a worse failure than an expensive one.
+        """
+        if self.model_calls_used + 1 > self.model_calls_max:
+            raise BudgetExceeded(f"model call budget exhausted ({self.model_calls_max} calls)")
+        self.model_calls_used += 1
+        self.model_tokens_used += max(0, tokens)
 
     def check_deadline(self) -> None:
         """Raise once the plan has outrun scope 6.4's latency target.
