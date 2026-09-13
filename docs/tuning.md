@@ -41,18 +41,32 @@ the detour ratio needs a live router and was measured against the Bay Area LTS g
 | Route | Length | LTS ≥ 3 | LTS 4 | Detour ratio | Scored |
 |---|---|---|---|---|---|
 | `synthetic-hazards` | 3954 m | 20.0% | 4 | — | 100% |
-| `bay-urban` | 2027 m | 5.7% | 2 | — | 62% |
+| `bay-urban` | 2027 m | 5.7% | 2 | **0.990×** | 62% |
 | `kc-stateline` | 3195 m | 1.8% | 1 | — | 76% |
 | `phoenix-heat` | 5188 m | 0.0% | 0 | — | 100% |
 | `loop-bayarea` | 7894 m | 0.0% | 0 | **1.043×** | 15% |
 
-Two of these need reading rather than scanning.
+Three of these need reading rather than scanning.
 
-**`loop-bayarea` is the only row with a detour ratio**, because it is the only reference
-route drawn by a router this project can still reach. The shortest legal route between its
-endpoints is 7567.7 m; the loop adopted 7893.5 m. So §8.1 step 6 bought **4.3% of extra
-distance and took the route's LTS ≥ 3 fraction to zero** — the loop's trade, made legible
-for the first time. That is what an acceptance metric is for.
+**The two blanks are the two routes outside the Bay Area LTS graph.** Phoenix has its own
+graph and Kansas City has none built — §13's graph step is a JVM step the region build
+does not run. A blank here is "no router could answer", which is why it is blank and not 1.0.
+
+**`loop-bayarea` is the loop's own trade, made legible.** The shortest legal route between
+its endpoints is 7567.7 m; the loop adopted 7893.5 m. So §8.1 step 6 bought **4.3% of extra
+distance and took the route's LTS ≥ 3 fraction to zero**. That is what an acceptance metric
+is for.
+
+**`bay-urban` measures 0.990× — shorter than the shortest legal route — and that is a
+defect in the route, not a triumph over the router.** A hand-drawn GPX is not on the graph:
+it cuts corners across plazas and parks along lines that are not ways, so it measures
+shorter than any path a router can actually construct. Verification check 2 says the same
+thing from the other direction, and has since M3: `on_network` **fails with 64 offenders**,
+16–27 m off the network.
+
+So **a detour ratio below 1.0 is a diagnostic**. It means the route is not on the network,
+and two independent measurements now agree about this one. Worth stating because the
+obvious misreading — "this route beat the router" — is flattering and wrong.
 
 **A blank detour ratio is not 1.0.** `AcceptanceMetrics.detour_ratio` is `None` when nobody
 measured, and the sheet prints "not measured". A 1.0 would read as "this route is already
