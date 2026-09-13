@@ -1,0 +1,45 @@
+{
+ "type": "FeatureCollection",
+ "name": "ozarks",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+  }
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "Mark Twain National Forest - Current River, Shannon County MO"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -91.55,
+       37.05
+      ],
+      [
+       -91.15,
+       37.05
+      ],
+      [
+       -91.15,
+       37.4
+      ],
+      [
+       -91.55,
+       37.4
+      ],
+      [
+       -91.55,
+       37.05
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

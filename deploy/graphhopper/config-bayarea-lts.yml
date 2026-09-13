@@ -1,0 +1,125 @@
+# GraphHopper config for the Bay Area spike region, WITH the custom `lts` encoded value.
+#
+# Identical to config-bayarea.yml except for three lines: the input pbf (which has the
+# synthetic `lts=1..4` tag written onto every highway way), the graph location, and `lts`
+# in graph.encoded_values.
+#
+# The graph MUST be built with the wrapper, which is the only thing that knows what `lts`
+# is:  ./deploy/graphhopper/import-lts.ps1
+# Once built, the stock graphhopper-web jar serves it:
+#   ./deploy/graphhopper/run.ps1 -Config deploy/graphhopper/config-bayarea-lts.yml
+#
+# Built for scope 4.3 / 7.1: flexible + LM mode with CH switched off, so the custom model
+# is a query-time parameter and not baked into a contraction hierarchy.
+#
+# Paths are relative to the repository root -- start the server from there, or use
+# deploy/graphhopper/run.ps1 which does the cd for you.
+#
+# Extract: data/osm/bayarea.osm.pbf, produced by
+#   uv run python deploy/graphhopper/scripts/clip_pbf.py \
+#       data/osm/norcal-latest.osm.pbf data/osm/bayarea.osm.pbf "--bbox=-123.2,36.9,-121.5,38.5"
+
+graphhopper:
+  datareader.file: data/osm/bayarea-lts.osm.pbf
+  graph.location: data/graphhopper/bayarea-lts-gh
+
+  # Keep footways, paths, steps and cycleways: this graph is primarily pedestrian.
+  # (The shipped example excludes them, which is only right for motor-vehicle-only graphs.)
+  import.osm.ignored_highways: ""
+
+  graph.dataaccess.default_type: RAM_STORE
+
+  profiles:
+    # Pedestrian profile. The base model here is deliberately thin: everything that varies
+    # per user or per request (surface aversion, hill aversion, LTS multipliers) is sent at
+    # query time in `custom_model`, which is only possible because CH is off.
+    - name: foot
+      weighting: custom
+      custom_model:
+        distance_influence: 70
+        priority:
+          # scope 7.1 hard excludes: foot=no, access=private, motorway, and anything
+          # GraphHopper's foot access already rejects (motorway, railway ROW, ...).
+          - if: "!foot_access"
+            multiply_by: "0"
+          - if: "foot_road_access == PRIVATE || foot_road_access == NO"
+            multiply_by: "0"
+          - if: "road_access == PRIVATE"
+            multiply_by: "0"
+          - if: "road_class == MOTORWAY"
+            multiply_by: "0"
+          - if: "hike_rating >= 2"
+            multiply_by: "0"
+          - else: ""
+            multiply_by: "foot_priority"
+        speed:
+          - if: "true"
+            limit_to: "foot_average_speed"
+
+    # Car profile exists only for crew_points drive times (scope 7.7). Turn costs are off:
+    # drive-time estimates at this resolution do not need them and they cost import time.
+    - name: car
+      weighting: custom
+      custom_model:
+        distance_influence: 90
+        priority:
+          - if: "!car_access"
+            multiply_by: "0"
+        speed:
+          - if: "true"
+            limit_to: "car_average_speed"
+
+  # CH off: a contraction hierarchy would freeze the custom model into the preparation.
+  profiles_ch: []
+  # LM on: hybrid mode keeps the query-time custom model and still beats plain Dijkstra.
+  profiles_lm:
+    - profile: foot
+    - profile: car
+
+  # Everything a custom model or a path detail may reference must be listed here at import.
+  #
+  #  - foot_* / car_*      : the two profiles
+  #  - osm_way_id          : scope 6.2 accepted-road set == map-matched OSM ways (risk R4)
+  #  - surface, smoothness,
+  #    track_type          : scope 7.2 surface_profile
+  #  - max_speed, lanes,
+  #    road_class,
+  #    road_environment    : scope 7.2 segment_hostility inputs / LTS cross-checks
+  #  - crossing            : scope 7.2 crossings
+  #  - toll, road_access   : legality (scope 7.6)
+  graph.encoded_values: >
+    foot_access, foot_priority, foot_average_speed, foot_road_access,
+    car_access, car_average_speed,
+    road_access, road_class, road_class_link, road_environment,
+    surface, smoothness, track_type, max_speed, lanes, crossing, footway, toll,
+    hike_rating, mtb_rating, osm_way_id,
+    lts
+
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 4
+  routing.snap_preventions_default: tunnel, bridge, ferry
+  routing.non_ch.max_waypoint_distance: 1000000
+
+  # Elevation is off for the spike (scope 7.1 wants the region DEM here). Turning it on
+  # changes nothing about how `lts` behaves; it only adds import time.
+  # graph.elevation.provider: srtm
+  # graph.elevation.cache_dir: data/srtm/
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: localhost
+      max_request_header_size: 50k
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: localhost
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{HH:mm:ss.SSS} %-5level %logger{20} - %msg%n"

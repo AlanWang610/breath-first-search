@@ -1,0 +1,5 @@
+# Region builds, raster tiles, OSM extracts, caches: large, regenerable, never committed.
+# Everything here is produced by `longrun build-region` or the runtime cache.
+*
+!.gitignore
+!README.md

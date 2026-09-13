@@ -1,0 +1,21 @@
+# Whether a runner would run this route, and what in the numbers says so.
+#
+# `by` is required and is not decoration: a label this project wrote about its own
+# output is not the same claim as one a runner made (ADR 0022).
+#
+# `would_run` is quoted because YAML 1.1 reads a bare yes/no as a boolean, and an
+# unquoted `no` would arrive as False and match none of the three legal values.
+
+golden: loop-bayarea
+would_run: "yes"
+by: claude
+reason: >-
+  The loop's own output: it found a flagged segment, detoured around it and adopted the
+  result. 0% at LTS 3 or worse and no LTS 4 segments, bought for 198 m of extra distance -
+  a 1.043x detour against the shortest legal route, measured against a live router. That
+  is the trade scope 8.1 step 6 exists to make, and it came out well.
+
+bounds:
+  fraction_lts3_plus_max: 0.02
+  lts4_count_max: 0
+  detour_ratio_max: 1.15

@@ -1,0 +1,27 @@
+# Bay Area - the development region, and scope 11's test region 1.
+#
+# Every path is relative to this file, so the region moves with its data. Committed
+# because scope 6.4 wants two plans comparable: a region built from a spec in version
+# control can be rebuilt, and one built from whatever someone typed cannot.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   uv run longrun build-region deploy/regions/bayarea.yaml
+
+name: bayarea
+polygon: bayarea.geojson
+
+# Clipped from Geofabrik norcal by deploy/graphhopper/scripts/clip_pbf.py (M0.4).
+osm_extract: ../../data/osm/bayarea.osm.pbf
+
+# San Francisco Bay. Declared rather than derived: deriving it needs the Watershed
+# Boundary Dataset, which is one more national download to answer a question the person
+# writing this file already knows.
+huc4:
+  - "1805"
+
+# BART only. Muni, AC Transit, Caltrain and SamTrans all serve this region and are not
+# here: 511.org needs a key and the direct agency URLs are not all stable. `transit` and
+# `bailouts` therefore make a statement about the loaded feeds, not about the Bay Area,
+# and the coverage report is where that distinction has to survive.
+gtfs:
+  bart: ../../data/gtfs/bart.zip

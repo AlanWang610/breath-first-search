@@ -1,0 +1,16 @@
+# Phoenix, mid-July, midday. Scope 11's test region 2, and the case ADR 0004 named as the
+# trigger for revisiting the WBGT formulation: "if Phoenix in July produces WBGT figures
+# that stay under 30 C on exposed arterials at midday, the approximation is failing".
+#
+# 2026-07-15 is deliberately a **past** date. A golden pins an absolute date forever and
+# this one was chosen for its weather, not for when it was recorded - which means the
+# cassette comes from Open-Meteo's archive rather than its forecast endpoint. That is what
+# `forecast.open_meteo_root` decides, and it is what makes a July golden recordable at all.
+date: 2026-07-15
+start: "12:00"
+
+# Arizona does not observe daylight saving, so Phoenix is UTC-7 all year. Pinned rather
+# than looked up because that is precisely the trap ADR 0008 recorded: longitude gives -7
+# here by accident, so a route that used the rule of thumb would be right for the wrong
+# reason and would tell nobody when the rule broke elsewhere.
+utc_offset_hours: -7

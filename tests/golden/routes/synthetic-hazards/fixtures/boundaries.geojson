@@ -1,0 +1,55 @@
+{
+  "type": "FeatureCollection",
+  "name": "boundaries",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "geoid": "06075",
+        "level": "county",
+        "name": "San Francisco County",
+        "statefp": "06",
+        "lsad": "06"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-122.55, 37.70], [-122.34, 37.70], [-122.34, 37.84], [-122.55, 37.84], [-122.55, 37.70]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "geoid": "0667000",
+        "level": "place",
+        "name": "San Francisco",
+        "statefp": "06",
+        "lsad": "25"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-122.52, 37.71], [-122.35, 37.71], [-122.35, 37.83], [-122.52, 37.83], [-122.52, 37.71]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "geoid": "06081",
+        "level": "county",
+        "name": "San Mateo County",
+        "statefp": "06",
+        "lsad": "06"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-122.50, 37.40], [-122.10, 37.40], [-122.10, 37.69], [-122.50, 37.69], [-122.50, 37.40]
+        ]]
+      }
+    }
+  ]
+}

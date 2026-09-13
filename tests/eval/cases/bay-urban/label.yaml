@@ -1,0 +1,24 @@
+# Whether a runner would run this route, and what in the numbers says so.
+#
+# `by` is required and is not decoration: a label this project wrote about its own
+# output is not the same claim as one a runner made (ADR 0022).
+#
+# `would_run` is quoted because YAML 1.1 reads a bare yes/no as a boolean, and an
+# unquoted `no` would arrive as False and match none of the three legal values.
+
+golden: bay-urban
+would_run: "yes"
+by: claude
+reason: >-
+  A 2 km city route with 5.7% of its scored length at LTS 3 or worse and two LTS 4
+  segments, both short crossings of an arterial rather than stretches run along one. A
+  runner would run this; they would also want to know about those two segments, which the
+  sheet flags hard.
+
+bounds:
+  fraction_lts3_plus_max: 0.15
+  lts4_count_max: 4
+
+note: >-
+  Only 62% of the route matched a way, so the LTS fraction is of what was scored, not of
+  the route.

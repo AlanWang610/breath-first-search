@@ -1,0 +1,516 @@
+{
+ "road_event_feed_info": {
+  "publisher": "KDOTCastleRock",
+  "contact_name": "Dale Kirmer",
+  "contact_email": "dale.kirmer@ks.gov",
+  "update_frequency": 60,
+  "update_date": "2026-09-11T00:49:59.966398Z",
+  "version": "4.0",
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "data_sources": [
+   {
+    "data_source_id": "CARS",
+    "organization_name": "KDOT",
+    "contact_name": "Dale Kirmer",
+    "contact_email": "dale.kirmer@ks.gov",
+    "update_frequency": 60,
+    "update_date": "2026-09-10T21:33:51.698155Z"
+   }
+  ]
+ },
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "CARS5-10360",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "relationship": {
+      "children": [
+       "CARS5-10360-D1",
+       "CARS5-10360-D2"
+      ]
+     },
+     "road_names": [
+      "I-135"
+     ],
+     "direction": "northbound",
+     "description": "Bridge Is Closed, Long Term Road Construction, Traffic Congestion",
+     "update_date": "2026-01-02T14:03:08.639917Z"
+    },
+    "beginning_milepost": 6.635118077266001,
+    "ending_milepost": 6.635118077266001,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-01-05T06:00:00Z",
+    "end_date": "2027-09-04T04:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "all-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "roadside-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      -97.312603,
+      37.679534
+     ]
+    ]
+   },
+   "bbox": [
+    37.6684189,
+    -97.31628,
+    37.68994,
+    -97.31226000000001
+   ]
+  },
+  {
+   "id": "CARS5-11905-1",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "SE Monroe St"
+     ],
+     "direction": "northbound",
+     "description": "Closed, Construction Work",
+     "update_date": "2026-09-08T12:05:05.075891Z"
+    },
+    "beginning_milepost": 361.83959309042905,
+    "ending_milepost": 361.83959309042905,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-05-19T05:00:00Z",
+    "end_date": "2026-12-25T05:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "all-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "roadside-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      -95.669462,
+      39.053311
+     ]
+    ]
+   },
+   "bbox": [
+    39.053311195806195,
+    -95.66946233439329,
+    39.053311195806195,
+    -95.66946233439329
+   ]
+  },
+  {
+   "id": "CARS5-11905-2",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "SE Monroe St"
+     ],
+     "direction": "southbound",
+     "description": "Closed, Construction Work",
+     "update_date": "2026-09-08T12:05:05.075891Z"
+    },
+    "beginning_milepost": 361.83959309042905,
+    "ending_milepost": 361.83959309042905,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-05-19T05:00:00Z",
+    "end_date": "2026-12-25T05:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "all-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "roadside-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      -95.669462,
+      39.053311
+     ]
+    ]
+   }
+  },
+  {
+   "id": "CARS5-12545-1",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "I-70"
+     ],
+     "direction": "eastbound",
+     "description": "Bridge Construction, Reduced To One Lane",
+     "update_date": "2026-09-01T20:03:14.853069Z"
+    },
+    "beginning_milepost": 163.7614491517063,
+    "ending_milepost": 163.3919682471112,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-08-14T17:00:00Z",
+    "end_date": "2026-10-01T04:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "some-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "below-road-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -99.247075,
+      38.878254
+     ],
+     [
+      -99.246578,
+      38.878243
+     ],
+     [
+      -99.243769,
+      38.878265
+     ],
+     [
+      -99.240898,
+      38.878287
+     ],
+     [
+      -99.240319,
+      38.878292
+     ]
+    ]
+   },
+   "bbox": [
+    38.87824289186971,
+    -99.24707486886881,
+    38.87829187549205,
+    -99.24031861145217
+   ]
+  },
+  {
+   "id": "CARS5-12545-2",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "I-70"
+     ],
+     "direction": "westbound",
+     "description": "Bridge Construction, Reduced To One Lane",
+     "update_date": "2026-09-01T20:03:14.853069Z"
+    },
+    "beginning_milepost": 163.3919682471112,
+    "ending_milepost": 163.7614491517063,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-08-14T17:00:00Z",
+    "end_date": "2026-10-01T04:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "some-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "below-road-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -99.240319,
+      38.878292
+     ],
+     [
+      -99.240898,
+      38.878287
+     ],
+     [
+      -99.243769,
+      38.878265
+     ],
+     [
+      -99.246578,
+      38.878243
+     ],
+     [
+      -99.247075,
+      38.878254
+     ]
+    ]
+   }
+  },
+  {
+   "id": "CARS5-12303-1",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "US 169"
+     ],
+     "direction": "northbound",
+     "description": "Shoulder Closed, Entrance Ramp Closed, Exit Ramp Closed, Bridge Construction",
+     "update_date": "2026-08-04T17:35:21.670928Z"
+    },
+    "beginning_milepost": 60.53988465767376,
+    "ending_milepost": 60.042526381418526,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-07-06T05:00:00Z",
+    "end_date": "2030-05-24T14:55:21.670928Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "some-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "below-road-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -95.411441,
+      37.787087
+     ],
+     [
+      -95.411437,
+      37.788715
+     ],
+     [
+      -95.411424,
+      37.789905
+     ],
+     [
+      -95.411428,
+      37.791026
+     ],
+     [
+      -95.411408,
+      37.793537
+     ],
+     [
+      -95.411398,
+      37.794751
+     ]
+    ]
+   },
+   "bbox": [
+    37.78708668331593,
+    -95.41144070428763,
+    37.79475114299574,
+    -95.4113977752901
+   ]
+  },
+  {
+   "id": "CARS5-12303-2",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "US 169"
+     ],
+     "direction": "southbound",
+     "description": "Shoulder Closed, Entrance Ramp Closed, Exit Ramp Closed, Bridge Construction",
+     "update_date": "2026-08-04T17:35:21.670928Z"
+    },
+    "beginning_milepost": 60.042526381418526,
+    "ending_milepost": 60.53988465767376,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2026-07-06T05:00:00Z",
+    "end_date": "2030-05-24T14:55:21.670928Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "some-lanes-closed",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "below-road-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -95.411398,
+      37.794751
+     ],
+     [
+      -95.411408,
+      37.793537
+     ],
+     [
+      -95.411428,
+      37.791026
+     ],
+     [
+      -95.411424,
+      37.789905
+     ],
+     [
+      -95.411437,
+      37.788715
+     ],
+     [
+      -95.411441,
+      37.787087
+     ]
+    ]
+   }
+  },
+  {
+   "id": "CARS5-8558-1",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "KS 156"
+     ],
+     "direction": "eastbound",
+     "description": "Bridge Construction",
+     "update_date": "2026-08-31T13:15:26.467768Z"
+    },
+    "beginning_milepost": 21.110300043585177,
+    "ending_milepost": 21.757720937417524,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2025-05-05T05:00:00Z",
+    "end_date": "2026-12-19T05:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "unknown",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "below-road-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.51844,
+      38.05942
+     ],
+     [
+      -100.518379,
+      38.05942
+     ],
+     [
+      -100.516989,
+      38.059413
+     ],
+     [
+      -100.506661,
+      38.059318
+     ]
+    ]
+   },
+   "bbox": [
+    38.05931780034737,
+    -100.5184395213718,
+    38.05942023153641,
+    -100.50666102716075
+   ]
+  },
+  {
+   "id": "CARS5-8558-2",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "data_source_id": "CARS",
+     "event_type": "work-zone",
+     "road_names": [
+      "KS 156"
+     ],
+     "direction": "westbound",
+     "description": "Bridge Construction",
+     "update_date": "2026-08-31T13:15:26.467768Z"
+    },
+    "beginning_milepost": 21.757720937417524,
+    "ending_milepost": 21.110300043585177,
+    "beginning_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "start_date": "2025-05-05T05:00:00Z",
+    "end_date": "2026-12-19T05:59:59.999Z",
+    "start_date_accuracy": "estimated",
+    "end_date_accuracy": "estimated",
+    "vehicle_impact": "unknown",
+    "location_method": "other",
+    "types_of_work": [
+     {
+      "type_name": "below-road-work"
+     }
+    ]
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.506661,
+      38.059318
+     ],
+     [
+      -100.516989,
+      38.059413
+     ],
+     [
+      -100.518379,
+      38.05942
+     ],
+     [
+      -100.51844,
+      38.05942
+     ]
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+  "osm_extract_date": "2026-09-11",
+  "hpms_vintage": null,
+  "dem_resolution_m": 7.953448955069979,
+  "canopy_version": null,
+  "gtfs_feed_versions": {},
+  "adapter_versions": {},
+  "layer_vintages": {
+    "ways": "2026-09-11",
+    "nodes": "2026-09-11",
+    "amenities": "2026-09-11",
+    "parks": "padus-4.1",
+    "railways": "2026-09-11",
+    "flowlines": "nhd-hu4",
+    "transit_stops": "gtfs-bart",
+    "boundaries": "tiger-2025"
+  },
+  "extra": {}
+}

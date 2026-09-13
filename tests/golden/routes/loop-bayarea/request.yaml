@@ -1,0 +1,23 @@
+# The scope 8.1 loop, end to end, with no model in it (ADR 0015).
+#
+# `from`/`to` rather than a route.gpx is what tells the harness to run `longrun plan` -
+# generate mode, through the loop - instead of the one-shot `repair` the other four use.
+# Every router answer this needs is recorded in `cache.sqlite`, and the harness points the
+# router at a closed port so an unrecorded one fails loudly rather than quietly reaching a
+# GraphHopper somebody happens to be running.
+#
+# The Ferry Building to the de Young, which is ADR 0001's own measured pair. Long enough to
+# leave the corridor `bay-urban` froze - and that is deliberate rather than sloppy. It is
+# the first route in this project not cut to fit the raster frozen for it, which is how the
+# M5.5 loop found that every point outside a DEM's coverage had been reported as an
+# elevation of -999999 since M1. The sheet says "elevation missing at N of M points", and
+# this golden is what keeps it saying so.
+#
+# 2026-09-15 for the same reason every other golden pins an absolute date: a forecast for a
+# past date cannot be re-fetched, so the cassette is permanent.
+from: "37.7955,-122.3937"
+to: "37.7715,-122.4686"
+date: 2026-09-15
+start: "08:00"
+utc_offset_hours: -7
+rounds: 5

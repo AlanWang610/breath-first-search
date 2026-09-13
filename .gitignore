@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Java (deploy/graphhopper/lts-wrapper)
+target/
+*.class
+
+# Node (ui/)
+node_modules/
+ui/dist/
+ui/.vite/
+
+# Secrets and local config
+.env
+.env.local
+*.local.yaml
+
+# Personal run history. Scope 3.7 is local-first: raw activity files are read where they
+# sit, never copied, and only derived curves are kept. `.gitattributes` has marked these
+# binary since M0, which is not the same as refusing to commit one.
+*.fit
+*.tcx
+
+# Local run artifacts
+*.log
+scratch/
+
+# UI build output and its lockfile-managed deps. `ui/dist` is what `longrun api --ui`
+# serves and is produced by `npm run build`; committing it would put a minified bundle in
+# every diff. `node_modules/` and `ui/dist/` were already listed above; this adds the
+# local vite cache directories npm 11 writes.
+ui/node_modules/
+ui/tsconfig.tsbuildinfo
+.vite/
+
+# Plans written by `longrun plan --out` and served by `longrun api --plans`. A stored
+# plan is a run of somebody's, not a fixture: the goldens are where a plan this project
+# tests against belongs, and one committed here would be a sixth golden nobody reviewed.
+plans/

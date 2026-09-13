@@ -1,0 +1,15 @@
+# The pinned request for this golden. Absolute, never relative: a golden run on a
+# moving date is a golden that cannot be reproduced, and a forecast for a past date can
+# never be re-fetched.
+#
+# Times are local wall-clock and naive. There is no timezone field because nothing reads
+# one yet - `FrozenClock` takes a naive datetime, and the scorers that will need a real
+# offset (heat, lighting, microclimate) land in M2. It gets added here when it is read,
+# not before.
+date: 2026-09-12
+# Pinned, not derived. Longitude alone gives -8; 12 September is Pacific Daylight
+# Time, so the true offset is -7, and an hour of error is fifteen degrees of solar
+# azimuth - enough to move a shadow across the street.
+utc_offset_hours: -7
+start: "07:00"
+target_km: 4.0

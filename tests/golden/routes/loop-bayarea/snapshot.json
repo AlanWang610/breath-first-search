@@ -1,0 +1,18 @@
+{
+  "osm_extract_date": "2026-09-04",
+  "hpms_vintage": null,
+  "dem_resolution_m": 10.0,
+  "canopy_version": null,
+  "gtfs_feed_versions": {},
+  "adapter_versions": {},
+  "layer_vintages": {
+    "ways": "2026-09-04",
+    "amenities": "2026-09-04",
+    "transit_stops": "gtfs-bart"
+  },
+  "extra": {
+    "dem": "USGS 3DEP 1/3 arc-second, tile n38w123, clipped to the corridor",
+    "fixtures": "ways, amenities, transit_stops and dem. The first three are what make `bailouts` and `services_along` *answer* rather than abstain, and a route with no flags gives the loop nothing to do - which would pin zero rounds and detect no regression in them.",
+    "graph": "the cache key for a recorded route is osm_extract_date; see ADR 0017"
+  }
+}

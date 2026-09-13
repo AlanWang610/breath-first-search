@@ -1,0 +1,54 @@
+{
+ "type": "FeatureCollection",
+ "name": "railways",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+  }
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "way_id": 301,
+    "railway": "rail",
+    "name": "Crossing Branch"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.393475,
+      37.7945
+     ],
+     [
+      -122.393475,
+      37.7965
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "way_id": 302,
+    "railway": "rail",
+    "name": "Parallel Branch"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -122.391,
+      37.7965
+     ],
+     [
+      -122.382,
+      37.7965
+     ]
+    ]
+   }
+  }
+ ]
+}
