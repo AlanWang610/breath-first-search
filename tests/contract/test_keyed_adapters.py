@@ -21,9 +21,9 @@ from typing import Any
 import pytest
 
 from longrun.adapters.base import AdapterContext
-from longrun.adapters.keys import ALL_KEYS, NPS, SF_BAY_511
+from longrun.adapters.keys import ALL_KEYS, MASSDOT, NPS, SF_BAY_511
 from longrun.adapters.portals import nps as nps_portal
-from longrun.adapters.wzdx import azdot, sfbay
+from longrun.adapters.wzdx import azdot, massdot, sfbay
 from longrun.core.data.cache import SqliteCache, args_hash
 from longrun.core.models.context import Budget
 
@@ -37,6 +37,7 @@ CASSETTES = Path(__file__).parent / "cassettes"
 #: did not.
 KEYED = [
     ("sfbay", sfbay.CLOSURES, SF_BAY_511),
+    ("massdot", massdot.CLOSURES, MASSDOT),
     ("nps", nps_portal.TRAIL_STATUS, NPS),
 ]
 
@@ -318,3 +319,27 @@ def test_the_live_endpoint_answers_when_a_key_is_present(
     with SqliteCache() as cache:
         result = adapter.fetch(None, DAY, AdapterContext(cache=cache, budget=Budget()))
     assert result.answered, result.reason
+
+
+def test_every_key_this_module_defines_is_in_all_keys() -> None:
+    """`ALL_KEYS` is a hand-maintained tuple, and every test in this file that keeps a key
+    honest iterates it. So a key added without being listed is a key with no contract test
+    - blank in `.env.example`, a followable registration URL, none of it checked.
+
+    That is exactly what happened to `MASSDOT`: written, wired, registered as an entry
+    point, and invisible to this file until the tuple was updated by hand. The same shape
+    as `FORBIDDEN_FROM_CORE` in the layering test, which M5.1 had to extend for `jobs/`
+    after the same omission.
+    """
+    from longrun.adapters import keys as keys_module
+
+    defined = {
+        value
+        for name, value in vars(keys_module).items()
+        if isinstance(value, keys_module.ApiKey) and not name.startswith("_")
+    }
+
+    assert defined == set(ALL_KEYS), (
+        "every ApiKey defined in adapters/keys.py must be in ALL_KEYS; missing: "
+        f"{sorted(key.env_var for key in defined - set(ALL_KEYS))}"
+    )

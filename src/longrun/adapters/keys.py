@@ -82,6 +82,6 @@ ANTHROPIC = ApiKey(
     register_at="https://console.anthropic.com/settings/keys",
 )
 
-ALL_KEYS = (SF_BAY_511, NPS, ANTHROPIC)
+ALL_KEYS = (SF_BAY_511, MASSDOT, NPS, ANTHROPIC)
 
-__all__ = ["ALL_KEYS", "NPS", "SF_BAY_511", "ApiKey"]
+__all__ = ["ALL_KEYS", "MASSDOT", "NPS", "SF_BAY_511", "ApiKey"]
