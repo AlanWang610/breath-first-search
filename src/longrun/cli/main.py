@@ -20,6 +20,7 @@ from longrun.cli import (
     region,
     repair,
     serve,
+    tune,
 )
 
 app = typer.Typer(
@@ -58,6 +59,7 @@ jobs.register(app)
 serve.register(app)
 history.register(app)
 metrics.register(app)
+tune.register(app)
 
 
 if __name__ == "__main__":  # pragma: no cover

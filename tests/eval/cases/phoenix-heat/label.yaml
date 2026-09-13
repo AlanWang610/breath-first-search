@@ -1,0 +1,26 @@
+# Whether a runner would run this route, and what in the numbers says so.
+#
+# `by` is required and is not decoration: a label this project wrote about its own
+# output is not the same claim as one a runner made (ADR 0022).
+#
+# `would_run` is quoted because YAML 1.1 reads a bare yes/no as a boolean, and an
+# unquoted `no` would arrive as False and match none of the three legal values.
+
+golden: phoenix-heat
+would_run: "no"
+by: claude
+reason: >-
+  Traffic is not the problem: 0% at LTS 3 or worse. Heat is. 97 of 97 segments are over
+  the 30 C WBGT hard floor at 0.000 shaded fraction, which is a safety-tier hard flag on
+  every segment of the route. Nobody should run this at this hour, and the plan says so -
+  which is the plan working, not failing.
+
+bounds:
+  fraction_lts3_plus_max: 0.05
+  lts4_count_max: 0
+  # The bound this route actually breaches, and the only one: a safety-tier hard flag on
+  # every segment. Traffic is fine here; heat is not.
+  hard_flags_max: 0
+
+note: >-
+  The label is `no` and the plan is correct. Eval measures the route, not the planner.

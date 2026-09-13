@@ -20,6 +20,8 @@ vector fitted to nothing is an assumption wearing a measurement's clothes.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from longrun.core.models.profile import PreferenceEntry
@@ -352,3 +354,64 @@ def test_a_pair_must_name_which_side_was_preferred() -> None:
 def test_the_summary_line_leads_with_how_many_real_pairs_there_were() -> None:
     """Because that is the number that decides whether the vector means anything."""
     assert "0 real pair(s)" in str(fit([], grid=GRID))
+
+
+# --- the command, and the round trip through YAML ----------------------------
+
+
+def test_a_stored_pair_survives_the_round_trip_through_yaml(tmp_path: Path) -> None:
+    """YAML has no tuple and a list is not hashable, so a way class is a `|`-joined string
+    on disk. The one that matters is `none`: an LTS nobody could determine must come back
+    as `None` and not as the four-character string, or every unmatched way silently becomes
+    a level the fitter charges a multiplier for."""
+    import yaml as yaml_module
+
+    from longrun.cli.tune import _class_key, _pairs_in
+
+    summary = RouteSummary.from_ways("r", [(WayClass(), 400.0), (WayClass(lts=3), 600.0)])
+    (tmp_path / "p.yaml").write_text(
+        yaml_module.safe_dump(
+            {
+                "pairs": [
+                    {
+                        "source": "edit",
+                        "preferred": "b",
+                        "a": {
+                            "name": "a",
+                            "length_m": summary.length_m,
+                            "metres_by_class": {
+                                _class_key(key): value
+                                for key, value in summary.metres_by_class.items()
+                            },
+                        },
+                        "b": {
+                            "name": "b",
+                            "length_m": 900.0,
+                            "metres_by_class": {"1|false|true|false": 900.0},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    restored = _pairs_in(tmp_path)
+
+    assert len(restored) == 1
+    assert restored[0].a.metres_by_class == summary.metres_by_class
+    assert None in {key[0] for key in restored[0].a.metres_by_class}
+
+
+def test_the_command_declines_to_fit_and_says_how_many_pairs_it_had(tmp_path: Path) -> None:
+    """What `longrun tune` prints on a fresh install, which is the honest answer and is
+    what `docs/tuning.md` publishes."""
+    from typer.testing import CliRunner
+
+    from longrun.cli.main import app
+
+    result = CliRunner().invoke(app, ["tune", "--pairs", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "unfitted" in result.output
+    assert "fewer than the 12 needed" in result.output
