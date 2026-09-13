@@ -42,15 +42,8 @@ from longrun.core.models.request import PlanRequest
 from longrun.core.preferences.store import load_profile
 from longrun.core.routing.base import NoRouteError, RouterUnavailable
 from longrun.core.routing.cached import CachedRouter
+from longrun.core.routing.custom_model import AVOID_HIGH_STRESS, NEUTRAL, to_custom_model
 from longrun.runtime import PLAN_LATENCY_BUDGET_S
-
-#: A custom model that keeps a runner off high-stress roads, in the terms ADR 0001's
-#: encoded value made available. Not applied unless asked: M0.5 measured `avoid` against
-#: `neutral` on four route pairs and found a detour of at most 0.8%, because stock
-#: `foot_priority` already keeps pedestrians off arterials. Risk R1's note stands — these
-#: parameters have to be **fitted against real preference pairs** (M6), not assumed to
-#: help, and shipping them on by default would bake in an unmeasured assumption.
-AVOID_HIGH_STRESS = {"priority": [{"if": "lts >= 3", "multiply_by": "0.2"}]}
 
 
 def _point(text: str, label: str) -> LatLon:
@@ -157,7 +150,13 @@ def plan(
             # that. Two graphs must not share a cache key.
             graph=snapshot.osm_extract_date,
         )
-        model = AVOID_HIGH_STRESS if avoid_high_stress else None
+        # M6.1: the six scope 7.1 parameters as a vector rather than one dict literal.
+        # Still opt-in, and still neutral by default - ADR 0021, and risk R1 is the
+        # measurement behind it. A neutral vector emits no model at all, so the request
+        # body, and therefore every cache key, is what it was before this existed.
+        params = AVOID_HIGH_STRESS if avoid_high_stress else NEUTRAL
+        profile = load_profile(profile_path)
+        model = to_custom_model(params, profile) or None
         typer.echo(f"routing {len(waypoints)} point(s) through {engine.url}")
 
         try:
@@ -195,7 +194,7 @@ def plan(
         )
         shared: dict[str, Any] = {
             "start_at": start_at,
-            "profile": load_profile(profile_path),
+            "profile": profile,
             "root": fixtures or Path("data"),
             "snapshot": snapshot,
             "offline": offline,
