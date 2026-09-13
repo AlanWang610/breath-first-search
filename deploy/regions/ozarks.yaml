@@ -1,0 +1,60 @@
+# The Ozarks - scope 11's test region 3, the thin-data one.
+#
+# Section 11 asks for "Rural, thin data (Appalachia or Ozarks): sparse OSM sidewalk/fountain
+# tags, PAD-US resolving to USFS/NPS, no GTFS, cell gaps, likely no WZDx or 511 API. Tests
+# whether the coverage manifest tells the truth."
+#
+# That last sentence is the whole point, and it is the hardest thing this project has to get
+# right. Every region built so far has had at least one rich data layer to hide behind: the
+# Bay Area has everything, Phoenix has Overture and 3DEP, Kansas City has two DOT feeds. A
+# plan where most sources honestly report absent is a different test, and until this region
+# existed nothing exercised it on real data.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   uv run longrun build-region deploy/regions/ozarks.yaml
+#
+# Mark Twain National Forest along the Current River, Shannon and Reynolds counties, southern
+# Missouri. Chosen over Appalachia for one practical reason: Missouri is inside
+# us-midwest-latest.osm.pbf, which is already on disk for Kansas City, so region 3 costs a
+# clip rather than a 1.5 GB download.
+#
+# What this region is expected to report absent, and why each is a real finding rather than
+# a gap in the build:
+#
+#   - GTFS: none. There is no transit agency here. `transit` and `bailouts` should say so.
+#   - Overture buildings: thin. A DSM over forest is terrain plus canopy, which is the
+#     case M2's height arithmetic was written for and has never met.
+#   - Sidewalks and fountains: largely untagged, so `surface_profile` and `services_along`
+#     lower confidence rather than reporting absence (scope 12).
+#   - PAD-US: **USFS**, which is the manager code section 11 names and no built region has
+#     yet resolved. `padus:USFS` is federal, so it needs no state suffix - the distinction
+#     M4.10 had to fix.
+#
+# One expectation section 11 sets that this region will probably *exceed*: it predicts "likely
+# no WZDx". MoDOT publishes a statewide CC0 feed and M4 proved a statewide fetch answers for
+# every place inside the state, so these counties should have tier-1 closure coverage. That
+# is a finding, not a failure, and the honest thing is to record it rather than to move the
+# region until the prediction holds.
+
+name: ozarks
+polygon: ozarks.geojson
+
+# Clipped from Geofabrik us-midwest-latest (2.3 GB), already on disk for kcmetro:
+#
+#   uv run python deploy/graphhopper/scripts/clip_pbf.py \
+#       data/osm/us-midwest-latest.osm.pbf data/osm/ozarks.osm.pbf \
+#       --bbox -91.55,37.05,-91.15,37.40
+osm_extract: ../../data/osm/ozarks.osm.pbf
+
+# 1101 Upper White and 0711 Meramec-Salt: the Current River is HUC8 11010008, in the Upper
+# White basin, and the region's northern edge reaches toward the Meramec headwaters. Step 5's
+# coverage report is where a wrong guess here shows up.
+huc4:
+  - "1101"
+  - "0711"
+
+# None, and that is the point rather than an omission. There is no transit agency in Shannon
+# County, so a plan here must report zero stops because there are none - not because nobody
+# loaded a feed. The two are the same output and different facts, which is what scope 3.6
+# exists to keep apart.
+gtfs: {}

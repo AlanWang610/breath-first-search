@@ -19,7 +19,7 @@ from datetime import date
 from enum import IntEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from longrun.core.pacing.curves import PacingCurves
 
@@ -52,8 +52,7 @@ class PreferenceEntry[T](BaseModel):
 
         Profiles are hand-edited YAML — the golden routes pin one, and scope 6.3 expects a
         user to keep their own. A file that has to say `provenance: 2` is a file whose
-        diffs cannot be reviewed, and the round trip through `save_profile` writes the
-        integer either way.
+        diffs cannot be reviewed.
         """
         if isinstance(value, str) and not value.isdigit():
             try:
@@ -62,6 +61,21 @@ class PreferenceEntry[T](BaseModel):
                 names = ", ".join(p.name.lower() for p in Provenance)
                 raise ValueError(f"unknown provenance {value!r}; expected one of {names}") from None
         return value
+
+    @field_serializer("provenance")
+    def _as_name(self, value: Provenance) -> str:
+        """Write the name, symmetrically with `_name_or_number` reading it.
+
+        The reader has accepted `stated` since M1 and the writer emitted `2` regardless, so
+        every `plan.json` this project has produced records provenance as an integer — and
+        `Plan.profile`, `Scratchpad.profile` and `GET /api/profile` all carry it. A UI
+        rendering "which of these did you say yourself" got a `0`, which is the shape scope
+        6.3's whole distinction collapses to when nobody can read it.
+
+        `Provenance` stays an `IntEnum` because `supersedes` compares it and the ordering
+        *is* the rule. Only the serialisation changes.
+        """
+        return value.name.lower()
 
     def supersedes(self, other: PreferenceEntry[T]) -> bool:
         """Whether this entry may overwrite `other` (scope 6.3)."""

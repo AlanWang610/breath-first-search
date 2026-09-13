@@ -11,6 +11,7 @@ import typer
 
 from longrun import __version__
 from longrun.cli import (
+    api,
     export,
     freeze,
     history,
@@ -60,6 +61,7 @@ serve.register(app)
 history.register(app)
 metrics.register(app)
 tune.register(app)
+api.register(app)
 
 
 if __name__ == "__main__":  # pragma: no cover
