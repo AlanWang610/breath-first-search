@@ -78,6 +78,9 @@ wzdx-maricopa = "longrun.adapters.wzdx.maricopa:CLOSURES"
 # needs no key; 511 SF Bay does, and says so by name until it has one.
 wzdx-azdot = "longrun.adapters.wzdx.azdot:CLOSURES"
 wzdx-sfbay = "longrun.adapters.wzdx.sfbay:CLOSURES"
+# Massachusetts. Active in the USDOT registry, 401 without a key, and the reason region 1
+# reported no closure adapter for any of 23 jurisdictions until M6.7.
+wzdx-massdot = "longrun.adapters.wzdx.massdot:CLOSURES"
 # Tier 3: agency portals. Keyed on a PAD-US agency rather than a census boundary.
 portal-nps = "longrun.adapters.portals.nps:TRAIL_STATUS"
 

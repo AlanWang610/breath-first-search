@@ -60,6 +60,7 @@ def fetch_feed(
     *,
     kind: FeatureKind = "closures",
     params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> AdapterResult:
     """One WZDx feed, cached, parsed, and never raised out of."""
     from longrun.core.data.cache import fetch
@@ -68,7 +69,17 @@ def fetch_feed(
         import httpx
 
         ctx.budget.spend_api_call()
-        response = httpx.get(url, params=params, timeout=HTTP_TIMEOUT_S, follow_redirects=True)
+        # `headers` carries a credential for the feeds that need one in a header rather
+        # than a query parameter. Deliberately kept out of `wzdx_args`, which is the cache
+        # key: a recorded cassette must not depend on whose key fetched it, and a key in a
+        # cache key would also put a secret in a committed fixture's filename.
+        response = httpx.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=HTTP_TIMEOUT_S,
+            follow_redirects=True,
+        )
         response.raise_for_status()
         payload = response.json()
         # `cache.fetch` raises on a producer returning None, deliberately: "no data here"

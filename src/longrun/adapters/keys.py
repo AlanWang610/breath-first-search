@@ -55,6 +55,15 @@ SF_BAY_511 = ApiKey(
 # (see `adapters/wzdx/azdot.py`), so asking anyone to register for it was asking them to do
 # work for nothing, in a file whose whole purpose is telling them what work to do.
 
+#: MassDOT's construction work-zone feed. The USDOT registry lists it active, and it
+#: answers HTTP 401 without a credential - which is why Boston reported no closure adapter
+#: for any of its 23 jurisdictions until one was written.
+MASSDOT = ApiKey(
+    env_var="LONGRUN_MASSDOT_API_KEY",
+    service="the MassDOT work-zone feed",
+    register_at="https://www.mass.gov/info-details/massdot-developer-resources",
+)
+
 #: The National Park Service alerts API - what `trail_status` reads for any route crossing
 #: `padus:NPS` land, which PAD-US resolves for every national park in the country.
 NPS = ApiKey(

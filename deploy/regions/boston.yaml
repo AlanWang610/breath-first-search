@@ -44,3 +44,28 @@ huc4:
 # answer from.
 gtfs:
   mbta: ../../data/gtfs/mbta.zip
+
+# What the build found, 2026-09-13:
+#
+#   uv run longrun build-region deploy/regions/boston.yaml                104s
+#   3 county, 10 park, 9 place, 1 state crossed; 23 of 23 have a closure adapter
+#
+#   - **71,864 ways** and 26,096 nodes over 0.13 by 0.09 degrees - 45x the Ozarks' 1,600
+#     over a polygon a tenth the size. Dense is what this region is for.
+#   - **1,716 MBTA stops**, against 103 for the Bay Area and 0 for Phoenix and the Ozarks.
+#     `stop_density` and `bailouts` have never had a feed like this to answer from.
+#   - **6,485 amenities**, so `services_along` and `resupply_schedule` answer here rather
+#     than lowering confidence.
+#   - buildings and cell_coverage ABSENT, each naming its reason, as everywhere.
+#
+# And the finding that was worth the region on its own. The first build reported **"no
+# closure adapter for any of 23"**, which reads as a fact about Massachusetts and was a
+# fact about this project: the USDOT registry carries an **active** MassDOT feed
+# (`massdot__cwz`), answering HTTP 401 without a key. So the dense, data-rich region had
+# *worse* closure coverage than the rural Ozarks - where MoDOT's statewide CC0 feed answers
+# for 9 of 9 - purely because nobody had written the adapter.
+#
+# Scope 11 predicts thin data in region 3 and rich data in region 1. For closures it came
+# out **backwards**, and the reason had nothing to do with either state. `adapters/wzdx/
+# massdot.py` closes it: 23 of 23 at tier 1, naming `LONGRUN_MASSDOT_API_KEY` until
+# somebody supplies one.
