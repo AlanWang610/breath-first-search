@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from longrun.core.data.cache import COORD_PRECISION, STATIC_DAY, fetch
 from longrun.core.models.geometry import LatLon, Route
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
-from longrun.core.routing.detour import detour_area, detour_waypoints
+from longrun.core.routing.detour import detour_area, detour_waypoints, round_coordinates
 from longrun.core.routing.graphhopper import FOOT_PROFILE, path_to_route, route_body
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -200,7 +200,14 @@ class CachedRouter:
             "graph": self.graph,
             "points": _rounded(waypoints),
             "profile": body.get("profile"),
-            "custom_model": body.get("custom_model"),
+            # Rounded for the same reason `points` is, and it had been missed: a custom
+            # model carries `areas`, and `areas` carries a buffered polygon at 17
+            # significant digits. Two platforms' GEOS and PROJ agree on where that polygon
+            # is and disagree in the last bit about how to say so, which was enough to give
+            # one detour request two cache keys - and to make the `loop-bayarea` golden
+            # replay on Windows and miss on Linux. `detour_area` now rounds at the source;
+            # this covers every other polygon, including ones a user drew.
+            "custom_model": round_coordinates(body.get("custom_model")),
             "algorithm": body.get("algorithm"),
             "max_paths": body.get("alternative_route.max_paths"),
         }

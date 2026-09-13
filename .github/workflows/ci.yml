@@ -19,7 +19,14 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Raised from 15 on 2026-09-13, after M5's push hit it: the Windows job was cancelled
+    # mid-`pytest` at 14m17s of testing, having grown from 11m5s before the fifth golden.
+    # M0 set 15 with the note that keeping CI short "is itself the enforcement mechanism
+    # for small fixtures", which was right and is now doing the wrong job - the fixtures
+    # are inside their 50 MB cap and it is the test count that grew, from 502 to 1,246.
+    # 30 restores headroom without removing the pressure; the day this is hit again the
+    # answer is to look at what got slow, not to raise it again.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v5

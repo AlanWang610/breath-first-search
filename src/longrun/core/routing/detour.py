@@ -34,6 +34,25 @@ DETOUR_PAD_M = 60.0
 #: itself, which makes the request unsatisfiable.
 DETOUR_MARGIN_M = 250.0
 
+#: Decimal places the avoid-polygon's coordinates are rounded to before anybody sees them.
+#:
+#: Six is ~0.11 m at this latitude - far finer than any routing consequence, and seven
+#: orders of magnitude coarser than the floating-point noise it exists to absorb.
+#:
+#: **This is a cache-key fix before it is a tidiness one, and it was found by CI rather
+#: than by a test.** GEOS builds this buffer from 87 trigonometric vertices and PROJ
+#: transforms every one of them back to WGS84, at 17 significant digits. The polygon goes
+#: into `route_body`'s `areas`, `areas` goes inside `custom_model`, and `CachedRouter`
+#: hashes `custom_model` into the cache key - so a last-bit difference between the Linux
+#: and Windows builds of either library gives the same detour request two different keys.
+#: The `loop-bayarea` golden replayed on Windows and missed its own cassette on Linux,
+#: which is the M0 lesson exactly: "gates green" had meant "green on my laptop".
+#:
+#: Rounded here rather than only in the args builder so that the *request* is stable and
+#: not merely its key - two platforms now send GraphHopper the same polygon, instead of
+#: agreeing about a question they asked differently.
+AREA_PRECISION = 6
+
 
 def index_at_distance(route: Route, distance_m: float) -> int:
     """The index of the last route point at or before `distance_m`.
@@ -123,12 +142,33 @@ def detour_area(
     # it, which is the street the detour was going to use.
     local = (LineString(coords) if len(coords) > 1 else Point(coords[0])).buffer(pad_m)
 
+    geometry = mapping(shapely_transform(lambda x, y: to_wgs.transform(x, y), local))
     return {
         "type": "Feature",
         "id": area_id,
         "properties": {},
-        "geometry": mapping(shapely_transform(lambda x, y: to_wgs.transform(x, y), local)),
+        "geometry": round_coordinates(geometry),
     }
+
+
+def round_coordinates(value: Any, precision: int = AREA_PRECISION) -> Any:
+    """Round every coordinate in a GeoJSON-shaped structure, in place of nothing.
+
+    Walks `coordinates` nests of any depth, so a Point, a Polygon and a MultiPolygon are
+    all handled by the same three lines. Tuples become lists on the way through, which is
+    what `json.dumps` would have produced anyway and what makes the result comparable.
+
+    Public because `CachedRouter` uses it on every custom model it keys, not only on the
+    ones this module built: an avoid-polygon supplied by a user or geocoded from
+    `PlanRequest.avoid_names` carries exactly the same risk and has no other owner.
+    """
+    if isinstance(value, dict):
+        return {key: round_coordinates(item, precision) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [round_coordinates(item, precision) for item in value]
+    if isinstance(value, float):
+        return round(value, precision)
+    return value
 
 
 __all__ = [

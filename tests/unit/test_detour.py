@@ -17,16 +17,21 @@ square kilometre of city, including the parallel street the detour was going to 
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import pytest
 from pydantic import ValidationError
 from shapely.geometry import Point, shape
 
+from longrun.core.data.cache import args_hash
 from longrun.core.models.geometry import Route, RoutePoint
 from longrun.core.routing.base import NullRouter
 from longrun.core.routing.detour import (
+    AREA_PRECISION,
     detour_area,
     detour_waypoints,
     index_at_distance,
+    round_coordinates,
 )
 
 
@@ -169,3 +174,59 @@ def test_a_router_that_is_not_there_still_answers_the_new_signature() -> None:
     route = _straight()
     assert NullRouter().alternatives(route, (100.0, 200.0), k=3) == []
     assert NullRouter().alternatives(route, None, k=3, custom_model={"priority": []}) == []
+
+
+# --- the cache key, which is where this bit ----------------------------------
+
+
+def test_the_avoid_area_is_rounded_so_two_platforms_key_it_the_same() -> None:
+    """That the contract holds at the configured precision.
+
+    A proxy, and a weak one on its own - at a large enough `AREA_PRECISION` every double
+    round-trips and this passes vacuously, which a sabotage run confirmed. The test below
+    is the one that actually holds the property; this one says where it comes from.
+
+    GEOS builds this buffer from trigonometry and PROJ transforms every vertex back, at 17
+    significant digits. The polygon ends up inside `custom_model`, and `CachedRouter`
+    hashes `custom_model` into the cache key - so a last-bit disagreement between the Linux
+    and Windows builds of either library gave one detour request two keys, and the
+    `loop-bayarea` golden replayed on Windows and missed its own cassette on Linux.
+    """
+    ring = detour_area(_straight(), 1000.0, 1100.0)["geometry"]["coordinates"][0]
+
+    for lon, lat in ring:
+        assert round(lon, AREA_PRECISION) == lon, f"{lon} carries more than {AREA_PRECISION} dp"
+        assert round(lat, AREA_PRECISION) == lat
+
+
+def test_noise_below_the_rounding_threshold_does_not_move_the_key() -> None:
+    """The real regression test: the property asserted directly against `args_hash`.
+
+    1e-12 degrees is ~0.1 micrometre on the ground - far below anything a router could act
+    on, and far above nothing, which is what the key used to require.
+    """
+    area = detour_area(_straight(), 1000.0, 1100.0)
+    nudged = deepcopy(area)
+    ring = [[lon + 1e-12, lat] for lon, lat in nudged["geometry"]["coordinates"][0]]
+    nudged["geometry"]["coordinates"] = [ring]
+
+    assert args_hash(round_coordinates(area)) == args_hash(round_coordinates(nudged))
+
+
+def test_rounding_a_polygon_keeps_its_shape() -> None:
+    """0.11 m of vertex movement on a 60 m buffer: the fix must not deform the area it is
+    protecting, or it trades a cache bug for a routing one."""
+    route = _straight()
+    area = shape(detour_area(route, 1000.0, 1100.0, pad_m=60.0)["geometry"])
+    on_the_line = route.points[10]
+
+    assert area.contains(Point(on_the_line.lon, on_the_line.lat + 0.00045))
+    assert not area.contains(Point(on_the_line.lon, on_the_line.lat + 0.00108))
+
+
+def test_it_rounds_a_polygon_it_did_not_build() -> None:
+    """`round_coordinates` is public because an avoid-polygon a user drew, or one geocoded
+    from `PlanRequest.avoid_names`, carries the same risk and has no other owner."""
+    drawn = {"type": "Polygon", "coordinates": [[(1.123456789, 2.987654321)]]}
+
+    assert round_coordinates(drawn)["coordinates"] == [[[1.123457, 2.987654]]]
