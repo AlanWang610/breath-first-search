@@ -7,7 +7,7 @@ Scope section 11. `core/` is where the tests live; the outer layers get thin wir
 | `unit/` | Per-module tests of `core/`, pure functions with fixture geometry |
 | `golden/` | Golden routes with expected measurements and flags, checked into the repo and run through the CLI with **no model in the loop**. A change in scorer output shows up here as a diff |
 | `contract/` | Adapter contract tests against recorded responses in `cassettes/`. Every tier-1/2/3 adapter has one; tier-4 extraction is tested for schema and confidence bounds, not content |
-| `eval/` | Small set of routes with human-judged "would you run this" labels, alongside the golden tests. Measures route quality, not correctness |
+| `eval/` | Routes with a "would you run this" label and the acceptance-metric bounds that justify it. Measures route quality, not correctness. Built in M6; **no label is human yet** and the suite prints the count on every run (ADR 0022) |
 
 Markers: `golden`, `contract`, `network` (skipped by default).
 
