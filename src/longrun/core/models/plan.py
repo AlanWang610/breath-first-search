@@ -9,7 +9,7 @@ plans cannot be attributed to a routing change rather than a new OSM extract.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -150,6 +150,14 @@ class Plan(BaseModel):
     #: recomputing this would mean re-reading a DEM the plan may no longer have.
     elevation: ElevationProfile | None = None
     profile: PreferenceProfile = PreferenceProfile()
+    #: Scope 7.1's acceptance metrics: the LTS fraction, the LTS 4 count and the detour
+    #: ratio. The first two are free - `segment_hostility` has written them into its route
+    #: summary since M1 and nothing ever read them. The third needs a second routing call
+    #: and so is measured only where scope 7.1 asks for it, "for a set of reference
+    #: routes": `longrun metrics --router` fills it, and an ordinary plan leaves it `None`
+    #: rather than spending an API call and 180 s of latency budget on a number nobody
+    #: asked this plan for.
+    metrics: dict[str, Any] = Field(default_factory=dict)
     status: PlanStatus = "complete"
 
     @property

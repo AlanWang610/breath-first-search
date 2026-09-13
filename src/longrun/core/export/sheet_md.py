@@ -80,6 +80,7 @@ def render_markdown(
         out.append("- Projected duration: not computed")
     out.append("")
 
+    out.extend(_metrics_section(plan))
     out.extend(_elevation_section(elevation))
     out.extend(_flags_section(plan))
     out.extend(_trade_offs_section(plan))
@@ -90,6 +91,41 @@ def render_markdown(
     out.extend(_attribution_section(plan))
 
     return "\n".join(out).rstrip() + "\n"
+
+
+def _metrics_section(plan: Plan) -> list[str]:
+    """Scope 7.1's acceptance metrics, when there are any.
+
+    Omitted entirely rather than printed as three "unknown"s on a plan nobody asked for
+    them on - `longrun metrics` is what fills this, and a sheet that always carried an
+    empty block would train a reader to skip it.
+
+    The detour ratio says "not measured" where it was not, never 1.0. That distinction is
+    the whole reason `AcceptanceMetrics` uses `None`: risk R1 turns on whether these
+    numbers move, and a fabricated 1.0 would read as "this route is already shortest".
+    """
+    if not plan.metrics:
+        return []
+    out = ["## Acceptance metrics", ""]
+    fraction = plan.metrics.get("fraction_lts3_plus")
+    count = plan.metrics.get("lts4_count")
+    ratio = plan.metrics.get("detour_ratio")
+    shortest = plan.metrics.get("shortest_legal_m")
+    out.append(
+        "- Length at LTS 3 or worse: " + ("not measured" if fraction is None else f"{fraction:.1%}")
+    )
+    out.append("- LTS 4 segments: " + ("not measured" if count is None else str(count)))
+    if ratio is None or shortest is None:
+        out.append("- Detour vs shortest legal route: not measured")
+    else:
+        out.append(
+            f"- Detour vs shortest legal route: {float(ratio):.3f}x "
+            f"({float(shortest) / 1000:.2f} km shortest legal)"
+        )
+    for reason in plan.metrics.get("reasons") or []:
+        out.append(f"- {reason}")
+    out.append("")
+    return out
 
 
 def _elevation_section(elevation: ElevationProfile | None) -> list[str]:

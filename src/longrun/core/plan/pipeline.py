@@ -34,6 +34,7 @@ from longrun.core.models.request import PlanRequest
 from longrun.core.models.verification import VerifyReport
 from longrun.core.pacing.model import pacing_model
 from longrun.core.plan.arbitrate import residual_flags
+from longrun.core.plan.metrics import acceptance_metrics
 from longrun.core.scorers.registry import run_scorers
 from longrun.core.verify.runner import gpx_verify
 
@@ -227,6 +228,17 @@ def build_plan(
         elevation=scored.elevation,
         manifest=manifest,
         pacing_caveats=scored.caveats,
+        # Scope 7.1's acceptance metrics, minus the detour ratio. The two LTS numbers are
+        # a read of `segment_hostility`'s own route summary and cost nothing; they have
+        # been computed on every plan since M1 and reached no sheet, no API and no test.
+        # The detour ratio needs a second routing call against a 200-call cap, and scope
+        # 7.1 asks for it "for a set of reference routes" rather than for every plan - so
+        # `longrun metrics --router` fills it and this leaves it honestly unmeasured.
+        metrics=acceptance_metrics(
+            scored.route,
+            scored.results,
+            reasons=["detour ratio needs a router; run `longrun metrics --router`"],
+        ).as_dict(),
     )
 
 
