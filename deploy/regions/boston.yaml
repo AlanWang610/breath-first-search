@@ -1,0 +1,46 @@
+# Boston - scope 11's test region 1, the dense, cold, transit-rich one.
+#
+# Section 11: "Dense, cold, transit-rich (Boston or NYC metro): darkness tolerance,
+# `sun.cool`, stop density, easy bailouts, strong 1 m LiDAR."
+#
+# Every axis there is the inverse of Phoenix, which is why the pair is worth having. Phoenix
+# is the region where shade is a benefit and the sun is a hazard; Boston in winter is the
+# region where sun is a *benefit* - `sun.cool` exists for exactly this - and where the
+# binding constraint is a 16:15 sunset rather than a 36 C WBGT. Every plan this project has
+# produced has been a daylight plan, and `lighting`'s darkness path has been exercised only
+# by unit tests.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   uv run longrun build-region deploy/regions/boston.yaml
+#
+# Chosen over NYC for one reason that is about the test and not about the city: an NYC metro
+# route that crossed into New Jersey would be asking region 4's question (two states, two
+# DOTs, two adapter sets) a second time, and `kc-stateline` already answers it. Boston keeps
+# region 1 about density.
+#
+# The polygon is the Charles basin: Cambridge and MIT on the north bank, Back Bay, the
+# Common and the Esplanade on the south, out to Southie. Dense street grid, heavy MBTA
+# coverage, and the river paths that make it a running city.
+
+name: boston
+polygon: boston.geojson
+
+# Clipped from Geofabrik us-northeast-latest (1.8 GB):
+#
+#   uv run python deploy/graphhopper/scripts/clip_pbf.py \
+#       data/osm/us-northeast-latest.osm.pbf data/osm/boston.osm.pbf \
+#       --bbox -71.15,42.31,-71.02,42.40
+osm_extract: ../../data/osm/boston.osm.pbf
+
+# 0109 Connecticut Coastal covers the Boston Harbor drainages, and 0107 Merrimack reaches
+# the region's northern edge. Step 5's coverage report is where a wrong guess shows up.
+huc4:
+  - "0109"
+  - "0107"
+
+# MBTA, which is the point of region 1. This is the first region with transit worth the
+# name - the Bay Area has BART and Caltrain, Phoenix honestly reports zero stops, and the
+# Ozarks has no agency at all. `stop_density` and `bailouts` have never had a dense feed to
+# answer from.
+gtfs:
+  mbta: ../../data/gtfs/mbta.zip

@@ -38,3 +38,10 @@ ui/.vite/
 # Local run artifacts
 *.log
 scratch/
+
+# UI build output and its lockfile-managed deps. `ui/dist` is what `longrun api --ui`
+# serves and is produced by `npm run build`; committing it would put a minified bundle in
+# every diff. `node_modules/` and `ui/dist/` were already listed above; this adds the
+# local vite cache directories npm 11 writes.
+ui/node_modules/
+.vite/

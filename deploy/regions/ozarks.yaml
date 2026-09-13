@@ -30,11 +30,23 @@
 #     yet resolved. `padus:USFS` is federal, so it needs no state suffix - the distinction
 #     M4.10 had to fix.
 #
-# One expectation section 11 sets that this region will probably *exceed*: it predicts "likely
-# no WZDx". MoDOT publishes a statewide CC0 feed and M4 proved a statewide fetch answers for
-# every place inside the state, so these counties should have tier-1 closure coverage. That
-# is a finding, not a failure, and the honest thing is to record it rather than to move the
-# region until the prediction holds.
+# What the build actually found, 2026-09-13:
+#
+#   - **1,600 ways** over 0.4 by 0.35 degrees, against 932,172 for the Bay Area. Thin is
+#     what this region is for, and it is thin.
+#   - **0 transit stops**, reported as "0 rows IN THIS REGION" rather than as an absent
+#     layer. The distinction is the whole exercise: there is no agency here, which is not
+#     the same fact as nobody having loaded a feed.
+#   - **buildings and cell_coverage ABSENT**, each naming its own reason.
+#   - **PAD-US: NPS 230, USFS 8**, plus OTHF, UNK and NGO. Both of the agencies section 11
+#     names, and NPS rather than USFS is the dominant one - Ozark National Scenic Riverways
+#     follows the Current River, which is the feature this polygon was drawn around.
+#
+# And the expectation section 11 sets that this region **exceeded**: it predicts "likely no
+# WZDx", and all **9 of 9 jurisdictions have a tier-1 closure adapter**. MoDOT publishes a
+# statewide CC0 feed and M4 proved one statewide fetch answers for every place inside the
+# state. That is a finding rather than a failure, and the honest thing is to record it
+# rather than to move the region until the prediction holds.
 
 name: ozarks
 polygon: ozarks.geojson

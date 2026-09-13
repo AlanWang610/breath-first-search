@@ -489,12 +489,33 @@ def _stored_plans(plans: Path) -> list[dict[str, Any]]:
                 "plan_id": path.parent.name if path.name == "plan.json" else path.stem,
                 "id": data.get("id"),
                 "date": (data.get("request") or {}).get("date"),
-                "length_m": (data.get("route") or {}).get("length_m"),
+                # Not `route.length_m`: that is a computed property on `Route` and so is
+                # absent from the JSON dump. The plan list showed every route as blank
+                # until this was run against a real stored plan, which is how it showed.
+                "length_m": _length_of(data),
                 "status": data.get("status"),
                 "trade_offs": len(data.get("trade_offs") or []),
             }
         )
     return out
+
+
+def _length_of(plan: dict[str, Any]) -> float | None:
+    """A stored plan's distance, from the metrics or from the route's last point.
+
+    `Route.length_m` is a property and never reaches the JSON, so both of these read
+    something that does. `None` when neither is there, because a plan list that invented a
+    zero would be a list of zero-kilometre runs.
+    """
+    metrics = plan.get("metrics") or {}
+    if isinstance(metrics.get("length_m"), (int, float)):
+        return float(metrics["length_m"])
+    points = (plan.get("route") or {}).get("points") or []
+    if points and isinstance(points[-1], dict):
+        last = points[-1].get("cum_dist_m")
+        if isinstance(last, (int, float)):
+            return float(last)
+    return None
 
 
 def _regions() -> list[dict[str, Any]]:
@@ -511,7 +532,11 @@ def _regions() -> list[dict[str, Any]]:
             except (OSError, ValueError):
                 data = {}
             entry["steps"] = {
-                name: bool(step.get("complete")) for name, step in (data.get("steps") or {}).items()
+                # `complete` is a property on `StepRecord` and the manifest stores
+                # `status`, so reading `complete` reported every step of every built
+                # region as not done. Found by looking at the panel after a real build.
+                name: bool(step.get("complete", step.get("status") == "done"))
+                for name, step in (data.get("steps") or {}).items()
             }
         out.append(entry)
     return out

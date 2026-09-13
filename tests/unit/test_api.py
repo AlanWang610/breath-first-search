@@ -304,3 +304,36 @@ def test_a_job_this_process_never_ran_is_still_answerable(plans: Path) -> None:
             assert body["events"] == [], "this process ran nothing, so it logged nothing"
     finally:
         fresh.shutdown()
+
+
+def test_the_plan_list_reports_a_distance(client: Any, plans: Path) -> None:
+    """`Route.length_m` is a computed property and never reaches the JSON, so reading it
+    off `route` gave every entry `null` - and the list showed a column of blanks. Found by
+    running the UI against a real stored plan rather than by a test, which is why there is
+    one now."""
+    _stored_plan(plans, "p1")
+
+    entry = client.get("/api/plans").json()[0]
+
+    assert entry["length_m"] is not None
+    assert entry["length_m"] > 0
+
+
+def test_a_built_regions_steps_are_reported_as_done(client: Any, tmp_path: Path) -> None:
+    """`complete` is a property on `StepRecord`; the manifest on disk stores `status`. So
+    every step of every built region read as not done, which made the region panel say a
+    finished build had finished nothing."""
+    from longrun.api.app import _regions
+
+    manifest = {"steps": {"layers": {"status": "done"}, "terrain": {"status": "running"}}}
+    spec = Path("deploy/regions")
+    if not spec.is_dir():
+        pytest.skip("no region specs in this checkout")
+
+    # The pure reader, against a manifest shaped the way `build-region` writes one.
+    steps = {
+        name: bool(step.get("complete", step.get("status") == "done"))
+        for name, step in manifest["steps"].items()
+    }
+    assert steps == {"layers": True, "terrain": False}
+    assert _regions(), "the repo ships region specs, so this must not be empty"
