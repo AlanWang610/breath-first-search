@@ -116,6 +116,23 @@ export interface JobView {
   plan_id: string | null;
 }
 
+/**
+ * The raster source drawn under the route (ADR 0023), or why there is none.
+ *
+ * `provider: null` is a normal answer — tiles switched off, or a misconfigured custom
+ * provider — and the map draws the route on a blank ground either way.
+ */
+export interface Basemap {
+  provider: string | null;
+  reason?: string;
+  kind?: "imagery" | "map";
+  tiles?: string[];
+  tile_size?: number;
+  maxzoom?: number;
+  attribution?: string;
+  licence?: string;
+}
+
 export interface Region {
   name: string;
   built: boolean;
@@ -149,6 +166,7 @@ export const api = {
   plans: () => call<PlanSummary[]>("/api/plans"),
   plan: (id: string) => call<Plan>(`/api/plans/${encodeURIComponent(id)}`),
   regions: () => call<Region[]>("/api/regions"),
+  basemap: () => call<Basemap>("/api/basemap"),
   jobs: () => call<{ job_id: string; status: string }[]>("/api/jobs"),
   job: (id: string) => call<JobView>(`/api/jobs/${encodeURIComponent(id)}`),
   submit: (body: unknown) =>

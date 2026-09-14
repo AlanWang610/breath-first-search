@@ -139,6 +139,28 @@ def create_app(
             "offline": settings.offline,
         }
 
+    @app.get("/api/basemap")
+    async def basemap() -> dict[str, Any]:
+        """The raster source the map draws under the route (ADR 0023).
+
+        Served from here rather than baked into the UI bundle, so there is one provider
+        setting and every consumer reads it - `imagery_tile` included - and changing it needs
+        a restart rather than a rebuild.
+
+        A misconfigured provider is a 200 with `provider: null` and the reason, not a 500.
+        The basemap is an enhancement: the route must still draw, and a typo in an
+        environment variable is no reason to show somebody an empty map.
+        """
+        from longrun.core.data.tiles import PROVIDER_ENV_VAR, TileConfigError, provider_from_env
+
+        try:
+            provider = provider_from_env()
+        except TileConfigError as exc:
+            return {"provider": None, "reason": str(exc)}
+        if provider is None:
+            return {"provider": None, "reason": f"{PROVIDER_ENV_VAR}=none"}
+        return provider.as_maplibre()
+
     @app.get("/api/profile")
     async def read_profile() -> dict[str, Any]:
         """The scope 6.3 table with its provenance, for the preference panel.

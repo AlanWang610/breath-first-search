@@ -54,22 +54,84 @@ def register(server: Any, settings: ToolSettings) -> None:
             ],
         }
 
-    @server.tool(name="imagery_tile", description="Scope 7.9: not available in this build.")
-    def imagery_tile(**kwargs: Any) -> dict[str, Any]:
-        return unavailable(
-            "imagery_tile",
-            "no imagery provider is configured: `Budget.spend_imagery_tile` meters a cost "
-            "nothing incurs, and a provider carries a scope 14 obligation",
-            blocked_on="decision",
-        )
+    @server.tool(
+        name="imagery_tile",
+        description=(
+            "Scope 7.9: the aerial tile containing a point, for a spot-check of a flagged "
+            "segment. US coverage, zoom 16 at most (about 1.9 m a pixel)."
+        ),
+    )
+    def imagery_tile(lat: float, lon: float, zoom: int = 16) -> dict[str, Any]:
+        """An aerial tile, base64-encoded, from the configured provider (ADR 0023).
+
+        Scope 7.9 caps this at "~10 calls per plan", which is `Budget.imagery_tiles_max`.
+        A tool call opens its own budget, like every tool here, so the cap binds inside a
+        plan - where scope 8.1 step 8 would spend it - rather than across separate calls.
+        """
+        import base64
+
+        from longrun.core.data.cache import SqliteCache
+        from longrun.core.data.tiles import TileConfigError, fetch_tile, provider_from_env
+        from longrun.core.models.context import Budget
+
+        try:
+            provider = provider_from_env()
+        except TileConfigError as exc:
+            return unavailable("imagery_tile", str(exc), blocked_on="decision")
+        if provider is None:
+            return unavailable(
+                "imagery_tile",
+                "tiles are switched off (LONGRUN_TILE_PROVIDER=none)",
+                blocked_on="decision",
+            )
+        if provider.kind != "imagery":
+            # Refused rather than served: a spot-check asks what is on the ground, and a
+            # topographic map answers a different question while looking like an answer.
+            return unavailable(
+                "imagery_tile",
+                f"the configured provider {provider.id!r} draws a map, not aerial imagery",
+                blocked_on="decision",
+            )
+
+        with SqliteCache(settings.cache_path or ":memory:", offline=settings.offline) as cache:
+            try:
+                tile = fetch_tile(provider, lat, lon, zoom, cache=cache, budget=Budget())
+            except Exception as exc:  # noqa: BLE001 - a tile that will not come is a reason
+                return unavailable("imagery_tile", f"{type(exc).__name__}: {exc}")
+
+        answer: dict[str, Any] = {
+            "name": "imagery_tile",
+            "provider": tile.provider,
+            "z": tile.z,
+            "x": tile.x,
+            "y": tile.y,
+            "requested_zoom": tile.requested_zoom,
+            "url": tile.url,
+            "attribution": tile.attribution,
+        }
+        if tile.requested_zoom != tile.z:
+            answer["note"] = (
+                f"zoom {tile.requested_zoom} clamped to {tile.z}, the most {tile.provider} serves"
+            )
+        if not tile.found:
+            # The tool exists and found nothing *here*, so no `blocked_on`: that is a fact
+            # about this point, not a gap in the build.
+            return {**answer, "checked": False, "reason": tile.reason}
+        return {
+            **answer,
+            "checked": True,
+            "media_type": tile.media_type,
+            "data_base64": base64.b64encode(tile.data or b"").decode("ascii"),
+        }
 
     @server.tool(name="render", description="Scope 7.9: not available in this build.")
     def render(**kwargs: Any) -> dict[str, Any]:
         return unavailable(
             "render",
-            "a static map needs a raster tile provider with a scope 14 obligation; the "
-            "HTML sheet draws route, flags and elevation on a blank ground instead",
-            blocked_on="decision",
+            "a tile provider is configured (ADR 0023); what is missing is compositing its "
+            "tiles and the route into one image, which needs an image library this build "
+            "does not depend on",
+            blocked_on="work",
         )
 
 

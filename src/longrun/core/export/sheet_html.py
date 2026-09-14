@@ -8,9 +8,11 @@ halves of that sentence are in tension and this module resolves it toward the se
 from a basemap provider requires a server — two of them — and it acquires a §14 obligation
 to whoever serves the tiles. Route geometry, flagged segments coloured by tier, and service
 markers are what the reader actually needs to locate a problem, and all of that draws
-without a network. MapLibre over a real basemap is the upgrade, and it belongs with the
-decision about which tile provider and under what licence. Until then a file that opens on
-a plane is worth more than one that opens in a browser with a connection.
+without a network. That decision was once parked "with the decision about which tile
+provider", and ADR 0023 has since made it - USGS The National Map, public domain. **The
+sheet stays SVG anyway**, because the licence was only half the objection: a tile fetched
+at view time is a server, and scope 9 says no server. The web UI draws the basemap; this
+file opens on a plane.
 
 **Everything is in the file.** No `<script src>`, no `<link href>`, no web fonts, no
 images. Open it from a USB stick at kilometre 40 with no signal and it renders.

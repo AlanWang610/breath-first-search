@@ -2,7 +2,7 @@
   "budget": {
     "api_calls_used": 0,
     "degradation": [
-      "step 8 skipped: no imagery provider is configured"
+      "step 8 skipped: no vision call site looks at imagery"
     ],
     "imagery_tiles_used": 0
   },

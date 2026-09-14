@@ -35,6 +35,11 @@ body {
 
 .map { position: relative; height: 55vh; min-height: 320px; }
 .map-canvas { position: absolute; inset: 0; }
+.map-note {
+  position: absolute; left: 0.5rem; bottom: 0.5rem; padding: 0.2rem 0.5rem;
+  border-radius: 4px; background: rgba(13, 17, 23, 0.8); color: var(--muted);
+  font-size: 0.78rem; pointer-events: none;
+}
 .map-empty {
   position: absolute; inset: 0; display: grid; place-items: center;
   color: var(--muted); pointer-events: none;
