@@ -28,8 +28,8 @@ def tools() -> dict[str, Any]:
     return {tool.name: tool for tool in server._tool_manager.list_tools()}
 
 
-#: Scope 7's own names, read off the tool tables. The five at the end are the ones this
-#: build cannot answer; they are registered anyway and say why.
+#: Scope 7's own names, read off the tool tables: the six this build cannot answer. They
+#: are registered anyway and say why.
 ABSENT = {"cue_sheet", "transit_at", "pin_waypoint", "place_notes", "imagery_tile", "render"}
 
 
@@ -48,14 +48,24 @@ def test_the_tools_that_cannot_answer_are_registered_and_say_why(tools: dict[str
 
     A caller cannot tell a tool that is absent from the list from one that found nothing,
     so a capability the scope names and this build lacks is registered and reports the
-    reason and the milestone.
+    reason and what blocks it.
     """
     for name in ABSENT:
         assert name in tools, f"{name} should be registered and honest, not omitted"
 
 
 @pytest.mark.parametrize("name", sorted(ABSENT))
-def test_an_absent_tool_reports_a_reason_and_a_milestone(name: str) -> None:
+def test_an_absent_tool_reports_a_reason_and_what_blocks_it(name: str) -> None:
+    """This test used to require a `milestone`, and so it enforced the defect.
+
+    It asserted every absent tool "says when it is expected" - and by the end of M7 four of
+    the six were naming a milestone that had already shipped without them, to every MCP
+    client that asked. A date in code is a claim with an expiry nobody tracks. What blocks
+    a tool does not expire, so that is what is required now, from a closed vocabulary.
+    """
+    from typing import get_args
+
+    from longrun.tools.base import Blocker
     from longrun.tools.server import build_server
 
     server = build_server()
@@ -64,7 +74,8 @@ def test_an_absent_tool_reports_a_reason_and_a_milestone(name: str) -> None:
 
     assert answer["checked"] is False
     assert answer["reason"], "an absent capability explains itself"
-    assert answer["milestone"], "and says when it is expected"
+    assert answer.get("blocked_on") in get_args(Blocker), "and says what stands in the way"
+    assert "milestone" not in answer, "a promise of when goes stale once its date passes"
 
 
 def test_the_routing_and_editing_tools_the_scope_names_are_present(tools: dict[str, Any]) -> None:

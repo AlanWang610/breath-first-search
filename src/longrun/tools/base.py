@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from datetime import time as time_type
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from longrun.core.models.plan import SnapshotPins
 
@@ -148,21 +148,43 @@ def _register_one(server: Any, settings: ToolSettings, tool_name: str, scorer: s
         return dict(score_with(settings, scorer, gpx_path, date, start))
 
 
-def unavailable(name: str, reason: str, *, milestone: str | None = None) -> dict[str, Any]:
+#: What stands between a tool this build lacks and one that works.
+#:
+#: This replaced a `milestone` field, and the replacement is the fix rather than a rename.
+#: Each absent tool used to name the milestone it would land in, and by the end of M7 four
+#: of the six named a milestone that had already shipped without them - `cue_sheet` and
+#: `place_notes` said "M6"; `pin_waypoint`, `imagery_tile` and `render` said "M7". Every MCP
+#: client was being told a promise about *when* that had quietly become false, and the
+#: roadmap had run out, so the next honest value would have been an "M8" that does not
+#: exist. A promise of when rots the moment its date passes; a statement of *what blocks
+#: it* does not, so that is what is recorded:
+#:
+#: * `decision` - needs a choice only a person can make (a tile provider, and the scope 14
+#:   obligation that comes with it). Writing code will not unblock it.
+#: * `work` - nothing stands in the way except building it.
+#: * `data` - needs a source this build does not load.
+Blocker = Literal["decision", "work", "data"]
+
+
+def unavailable(name: str, reason: str, *, blocked_on: Blocker | None = None) -> dict[str, Any]:
     """A tool that cannot answer says so in the shape a tool that can would have used.
 
     The `NOT_YET_IMPLEMENTED` treatment M4 proved: a capability the scope names and this
     build does not have is reported by name, with the reason, rather than omitted from the
     tool list - because a caller cannot tell an absent tool from a tool that found nothing.
+
+    `blocked_on` is left off for a tool that *does* exist and failed on this particular
+    input, like `gpx_read` on a file that will not parse. That is a reason, not a gap.
     """
     out: dict[str, Any] = {"name": name, "checked": False, "reason": reason}
-    if milestone:
-        out["milestone"] = milestone
+    if blocked_on:
+        out["blocked_on"] = blocked_on
     return out
 
 
 __all__ = [
     "FIXTURES_ENV_VAR",
+    "Blocker",
     "ToolSettings",
     "read_route",
     "register_scorers",

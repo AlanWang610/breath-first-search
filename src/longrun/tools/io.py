@@ -60,7 +60,7 @@ def register(server: Any, settings: ToolSettings) -> None:
             "imagery_tile",
             "no imagery provider is configured: `Budget.spend_imagery_tile` meters a cost "
             "nothing incurs, and a provider carries a scope 14 obligation",
-            milestone="M7",
+            blocked_on="decision",
         )
 
     @server.tool(name="render", description="Scope 7.9: not available in this build.")
@@ -69,7 +69,7 @@ def register(server: Any, settings: ToolSettings) -> None:
             "render",
             "a static map needs a raster tile provider with a scope 14 obligation; the "
             "HTML sheet draws route, flags and elevation on a blank ground instead",
-            milestone="M7",
+            blocked_on="decision",
         )
 
 

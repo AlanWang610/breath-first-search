@@ -62,8 +62,10 @@ MEASUREMENT_ONLY = frozenset(
 #: Listed rather than left to fall through, which is the whole point: an unlisted scorer is
 #: indistinguishable from one someone decided about, and `trail_status` sat in that state
 #: from M1 until M4 found it. Whether darkness at kilometre 80 should outweigh darkness at
-#: kilometre 2 is a real question and a `tuning.py` one (M6); until then the answer here is
-#: "no, and that was noticed rather than inherited".
+#: kilometre 2 is a real question for tuning - and not one `tuning.py` answers, because it
+#: fits the six router `priority` parameters and never position weights. This comment used
+#: to call it "a `tuning.py` one (M6)", which read as settled once M6 shipped and was not.
+#: So the answer here is still "no, and that was noticed rather than inherited".
 FLAT_BY_DEFAULT = frozenset(
     {
         "sun_exposure",

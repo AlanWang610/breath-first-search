@@ -35,7 +35,7 @@ def register(server: Any, settings: ToolSettings) -> None:
             "GTFS is loaded as a per-stop service summary, not as stop_times - which "
             "`core/data/gtfs.py` states and defends: a departure board needs GTFS-RT "
             "to be worth much",
-            milestone="unscheduled",
+            blocked_on="data",
         )
 
 

@@ -3,7 +3,10 @@
 Three things kept apart on purpose, because only the first is format-specific and only the
 last needs a router:
 
-* **reading** - FIT files, or a Strava bulk export's `activities.csv` plus its originals;
+* **reading** - FIT files, and only FIT files. This line used to promise "a Strava bulk
+  export's `activities.csv` plus its originals", and there has never been a CSV reader. A
+  Strava archive stores its originals mostly as `.fit.gz`, `.gpx` and `.tcx.gz`, and
+  `longrun ingest-history` globs `*.fit`, so pointed at one it reads almost nothing;
 * **deriving** - a grade-adjusted pace curve, fatigue drift, a surface factor;
 * **map matching** - the accepted-road set, which needs real `osm_way_id` values and
   therefore a router (ADR 0001 retired risk R4 on exactly this, and struck the
@@ -71,6 +74,10 @@ class Activity:
 
     activity_id: str
     points: list[TrackPoint] = field(default_factory=list)
+    #: Read from the file and **not yet used to exclude anything**, which matters more than
+    #: it sounds: `derive` drops races and nothing else, so a bike ride in the input would be
+    #: binned as running pace. Any bulk export - Strava or Garmin - mixes activity types,
+    #: and a cycling median near 8 m/s would silently become the runner's flat speed.
     sport: str | None = None
     #: Scope 6.2: "race efforts excluded or flagged". Whatever the source says - Strava's
     #: `activities.csv` has a workout type, FIT has a sub-sport - and never inferred from

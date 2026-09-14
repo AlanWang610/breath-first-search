@@ -29,11 +29,17 @@ def register(server: Any, settings: ToolSettings) -> None:
         description="Scope 7: cue_sheet - not available in this build.",
     )
     def _cue_sheet(**kwargs: Any) -> dict[str, Any]:
+        # `work`, and more of it than the reason makes it sound. Flipping `instructions` to
+        # True in `route_body` is the obvious first move and it would fail silently:
+        # `instructions` is not among the fields `CachedRouter._paths` keys a route on, so
+        # every cassette recorded without instructions would be served to a request that
+        # wants them, and the result would be a cue sheet with no turns in it - which is
+        # indistinguishable from a route that has none. The key has to learn the flag first.
         return unavailable(
             "cue_sheet",
             "GraphHopper turn instructions are not requested - `route_body` sets "
             "`instructions: False` - so there is nothing to build a cue sheet from",
-            milestone="M6",
+            blocked_on="work",
         )
 
 

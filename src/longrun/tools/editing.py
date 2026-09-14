@@ -110,7 +110,7 @@ def register(server: Any, settings: ToolSettings) -> None:
             "pin_waypoint",
             "a via point is a property of the request, and editing a stored request in "
             "place has no owner yet - the loop takes its waypoints from `PlanRequest`",
-            milestone="M7",
+            blocked_on="work",
         )
 
     @server.tool(name="place_notes", description="Scope 7.8: not available in this build.")
@@ -119,7 +119,7 @@ def register(server: Any, settings: ToolSettings) -> None:
             "place_notes",
             "there is no user-note store: scope 7.2 wants notes as a hostility prior and "
             "nothing models one",
-            milestone="M6",
+            blocked_on="work",
         )
 
 
