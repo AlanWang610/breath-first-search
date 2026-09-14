@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "parks",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "unit_id": 501, "name": "Synthetic Commons" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -122.3991, 37.7947 ], [ -122.3919, 37.7947 ], [ -122.3919, 37.7963 ], [ -122.3991, 37.7963 ], [ -122.3991, 37.7947 ] ] ] } }
+]
+}

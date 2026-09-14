@@ -1,0 +1,150 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "longrun"
+version = "0.0.0"
+description = "Long-run planner: verified routes and plan sheets for 20-100 km runs"
+readme = "README.md"
+# rasterio 1.5 declares >=3.12; the project targets 3.13 (see .python-version).
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Alan Wang" }]
+
+# What M0-M1 actually import. Dependencies from the scope whose consumers have not landed
+# yet live in the extras below, so a fresh `uv sync` stays fast and the lock stays small.
+dependencies = [
+  "pydantic>=2",
+  "typer>=0.12",
+  "httpx>=0.27",
+  "pyyaml>=6",
+  # geospatial core
+  "geopandas>=1.0",
+  "shapely>=2",
+  "pyproj>=3.6",
+  "rasterio>=1.5",
+  # track I/O
+  "gpxpy>=1.6",
+  # environment: solar geometry is needed by lighting/sun from M1
+  "pvlib>=0.11",
+  # stores
+  "psycopg[binary]>=3.2",
+  "tzfpy>=1.3",
+]
+
+[project.optional-dependencies]
+# Declared and locked, imported by nothing: ADR 0003 measured the DSM ray-cast at
+# 0.46 s for a 100 km route in plain numpy, so the JIT buys nothing spendable.
+raster = ["numba>=0.60"]
+# fitdecode lands with run-history ingest (scope 6.2, milestone M5).
+history = ["fitdecode>=0.10"]
+# Region-build ingest (scope 13): duckdb reads Overture GeoParquet, osmium clips the
+# state extract to a region polygon and writes the offline LTS tag back into the pbf.
+ingest = ["duckdb>=1.1", "osmium>=4.3"]
+# `mcp>=1.2` admitted a major version this code cannot use: in mcp 2.x `FastMCP` is
+# `MCPServer` and `mcp.server.fastmcp` raises a ModuleNotFoundError naming the migration
+# guide. The same class of error as M0's `requires-python = ">=3.11"` against rasterio.
+tools = ["mcp>=2,<3"]
+# Floors raised to what the lock actually holds, for the same reason. Note `pydantic-ai`
+# depends on `pydantic-ai-slim[...mcp...]`, so the agent extra installs the MCP stack
+# whatever the tools extra says - the two are not separable.
+agent = ["pydantic-ai>=2,<3", "anthropic>=1,<2"]
+api = ["fastapi>=0.115", "uvicorn[standard]>=0.32"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6",
+  "respx>=0.21",
+  "time-machine>=2.15",
+  "ruff>=0.7",
+  "mypy>=1.13",
+  "types-pyyaml",
+]
+
+[project.scripts]
+longrun = "longrun.cli.main:app"
+
+# Jurisdiction adapters register here (scope 7.10). Third-party packages can add entries
+# under the same group; discovery is by entry point, not by import path.
+[project.entry-points."longrun.adapters"]
+# Tier 1: WZDx work-zone feeds, all three keyless and confirmed live 2026-09-10. The value
+# is an object, not a class - one module may export several kinds, and there is nothing to
+# instantiate, which is the same convention `SCORERS` uses with `getattr(module, "score")`.
+wzdx-modot = "longrun.adapters.wzdx.modot:CLOSURES"
+wzdx-kdot = "longrun.adapters.wzdx.kdot:CLOSURES"
+wzdx-maricopa = "longrun.adapters.wzdx.maricopa:CLOSURES"
+# Also tier 1: scope 7.10 assigns the tier by source type, and these are WZDx too. Arizona
+# needs no key; 511 SF Bay does, and says so by name until it has one.
+wzdx-azdot = "longrun.adapters.wzdx.azdot:CLOSURES"
+wzdx-sfbay = "longrun.adapters.wzdx.sfbay:CLOSURES"
+# Massachusetts. Active in the USDOT registry, 401 without a key, and the reason region 1
+# reported no closure adapter for any of 23 jurisdictions until M6.7.
+wzdx-massdot = "longrun.adapters.wzdx.massdot:CLOSURES"
+# Tier 3: agency portals. Keyed on a PAD-US agency rather than a census boundary.
+portal-nps = "longrun.adapters.portals.nps:TRAIL_STATUS"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longrun"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The repo root on the path, so golden tests can import their harness as
+# `tests.golden.harness` rather than relying on pytest's per-directory sys.path
+# insertion, which depends on the import mode and silently changes with it.
+pythonpath = ["."]
+asyncio_mode = "auto"
+markers = [
+  "golden: end-to-end route regression, run through the CLI with no model in the loop",
+  "contract: adapter contract test against a recorded response",
+  "network: requires a live external service; skipped by default",
+  "slow: budget and performance assertions; skipped in CI",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer's whole API is call-valued defaults; B008 is a false positive against it.
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
+[tool.ruff.format]
+# Deliberately NOT docstring-code-format: the package docstrings document shell usage
+# (`longrun plan request.yaml`), which ruff would de-indent as if it were Python.
+
+[tool.mypy]
+python_version = "3.13"
+packages = ["longrun"]
+strict = false
+
+[[tool.mypy.overrides]]
+# Two different reasons, one setting.
+#
+# The geospatial stack publishes no type stubs, so mypy has nothing to check against.
+#
+# `duckdb` and `osmium` are the `ingest` extra, which CI does not install: the whole point
+# of the extra is that the test suite never touches S3 or a `.pbf`. Without this, `mypy`
+# passes on a developer machine with `--all-extras` and fails on CI, which is a gate that
+# is not a gate. `osmium` in particular *does* ship stubs, and they are worth having - they
+# are what forced the `isinstance(obj, osmium.osm.Way)` narrowing in `core/data/osm.py` -
+# so this suppresses only its absence, never its types when it is present.
+#
+# Anything else that lands in `ingest` belongs on this list for the same reason.
+module = [
+  "geopandas.*",
+  "rasterio.*",
+  "shapely.*",
+  "pvlib.*",
+  "gpxpy.*",
+  "pyproj.*",
+  "pandas.*",
+  "duckdb.*",
+  "osmium.*",
+  # `fitdecode` ships no stubs and no py.typed marker; the `history` extra, same rule.
+  "fitdecode.*",
+]
+ignore_missing_imports = true

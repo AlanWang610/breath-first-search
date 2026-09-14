@@ -1,0 +1,118 @@
+# FALLBACK config -- decision 0001's escape hatch, for the case where the import wrapper
+# cannot be built against a future GraphHopper.
+#
+# There is NO custom encoded value here. LTS is smuggled into the stock `track_type`
+# encoded value: `add_lts_tags.py --also-tracktype` writes tracktype=grade<lts> onto every
+# highway way, and a custom model reads `track_type == GRADE3` and so on. Nothing in
+# GraphHopper is modified -- the stock jar both imports and serves this.
+#
+# The cost is that `track_type` stops meaning track type. Scope 7.2's surface_profile
+# cannot use it, and any region built this way has to say so in its manifest.
+#
+# Build and serve, both with the stock jar:
+#   java -Xmx8g -jar data/graphhopper/graphhopper-web-11.0.jar import deploy/graphhopper/config-bayarea-fallback.yml
+#   ./deploy/graphhopper/run.ps1 -Config deploy/graphhopper/config-bayarea-fallback.yml
+
+graphhopper:
+  datareader.file: data/osm/bayarea-fallback.osm.pbf
+  graph.location: data/graphhopper/bayarea-fallback-gh
+
+  # Keep footways, paths, steps and cycleways: this graph is primarily pedestrian.
+  # (The shipped example excludes them, which is only right for motor-vehicle-only graphs.)
+  import.osm.ignored_highways: ""
+
+  graph.dataaccess.default_type: RAM_STORE
+
+  profiles:
+    # Pedestrian profile. The base model here is deliberately thin: everything that varies
+    # per user or per request (surface aversion, hill aversion, LTS multipliers) is sent at
+    # query time in `custom_model`, which is only possible because CH is off.
+    - name: foot
+      weighting: custom
+      custom_model:
+        distance_influence: 70
+        priority:
+          # scope 7.1 hard excludes: foot=no, access=private, motorway, and anything
+          # GraphHopper's foot access already rejects (motorway, railway ROW, ...).
+          - if: "!foot_access"
+            multiply_by: "0"
+          - if: "foot_road_access == PRIVATE || foot_road_access == NO"
+            multiply_by: "0"
+          - if: "road_access == PRIVATE"
+            multiply_by: "0"
+          - if: "road_class == MOTORWAY"
+            multiply_by: "0"
+          - if: "hike_rating >= 2"
+            multiply_by: "0"
+          - else: ""
+            multiply_by: "foot_priority"
+        speed:
+          - if: "true"
+            limit_to: "foot_average_speed"
+
+    # Car profile exists only for crew_points drive times (scope 7.7). Turn costs are off:
+    # drive-time estimates at this resolution do not need them and they cost import time.
+    - name: car
+      weighting: custom
+      custom_model:
+        distance_influence: 90
+        priority:
+          - if: "!car_access"
+            multiply_by: "0"
+        speed:
+          - if: "true"
+            limit_to: "car_average_speed"
+
+  # CH off: a contraction hierarchy would freeze the custom model into the preparation.
+  profiles_ch: []
+  # LM on: hybrid mode keeps the query-time custom model and still beats plain Dijkstra.
+  profiles_lm:
+    - profile: foot
+    - profile: car
+
+  # Everything a custom model or a path detail may reference must be listed here at import.
+  #
+  #  - foot_* / car_*      : the two profiles
+  #  - osm_way_id          : scope 6.2 accepted-road set == map-matched OSM ways (risk R4)
+  #  - surface, smoothness,
+  #    track_type          : scope 7.2 surface_profile
+  #  - max_speed, lanes,
+  #    road_class,
+  #    road_environment    : scope 7.2 segment_hostility inputs / LTS cross-checks
+  #  - crossing            : scope 7.2 crossings
+  #  - toll, road_access   : legality (scope 7.6)
+  graph.encoded_values: >
+    foot_access, foot_priority, foot_average_speed, foot_road_access,
+    car_access, car_average_speed,
+    road_access, road_class, road_class_link, road_environment,
+    surface, smoothness, track_type, max_speed, lanes, crossing, footway, toll,
+    hike_rating, mtb_rating, osm_way_id
+
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 4
+  routing.snap_preventions_default: tunnel, bridge, ferry
+  routing.non_ch.max_waypoint_distance: 1000000
+
+  # Elevation is off for the spike (scope 7.1 wants the region DEM here). Turning it on
+  # changes nothing about how `lts` behaves; it only adds import time.
+  # graph.elevation.provider: srtm
+  # graph.elevation.cache_dir: data/srtm/
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: localhost
+      max_request_header_size: 50k
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: localhost
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{HH:mm:ss.SSS} %-5level %logger{20} - %msg%n"

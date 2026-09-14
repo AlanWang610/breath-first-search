@@ -1,0 +1,25 @@
+# Kansas City, west to east along the 47th Street grid - Johnson County, Kansas into
+# Jackson County, Missouri. Scope 11's test region 4: "two DOTs, two 511 systems, two
+# adapter sets on one route; catches jurisdiction-discovery bugs".
+#
+# The route exists to be crossed by a state line, and everything else about it is ordinary.
+# What it demonstrates is that `closures` asks Missouri DOT and Kansas DOT separately, each
+# answers at tier 1 from its own keyless CC0 WZDx feed, and the coverage manifest names both
+# - while the *places* inside each state record `covered_by`, because one statewide fetch
+# answered for all of them.
+#
+# 2026-09-15, a Tuesday morning. An absolute date, pinned forever: a forecast for a past
+# date cannot be re-fetched and neither can a work-zone feed, so the cassette is permanent.
+#
+# Five days out rather than ten, and the reason is a real limit worth writing down.
+# Open-Meteo's **air quality** endpoint forecasts about seven days; its weather endpoint
+# reaches sixteen. A date inside the weather window but outside the air-quality one records
+# a cassette that half-scores, which the first attempt at this golden did.
+date: 2026-09-15
+start: "08:00"
+
+# Kansas City observes daylight saving, so late September is CDT, UTC-5. Pinned rather than
+# derived: ADR 0008 settled that the offset is looked up, and this route straddles no time
+# zone despite straddling a state line - which is exactly the sort of thing a reader would
+# otherwise wonder about.
+utc_offset_hours: -5

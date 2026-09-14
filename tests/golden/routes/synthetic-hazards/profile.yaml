@@ -1,0 +1,12 @@
+# The preference profile in force for this golden, pinned so a change to the shipped
+# defaults shows up as a deliberate diff here rather than silently re-scoring the route.
+#
+# `surface: paved` is the one non-default value, and it is load-bearing: the shipped
+# default is `mixed`, which objects to no surface at all, so the 800 m gravel track would
+# be measured and never flagged.
+version: 1
+surface:
+  value: paved
+  weight: 0.4
+  provenance: stated
+  updated: '2026-09-09'

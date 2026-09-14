@@ -1,0 +1,23 @@
+# Whether a runner would run this route, and what in the numbers says so.
+#
+# `by` is required and is not decoration: a label this project wrote about its own
+# output is not the same claim as one a runner made (ADR 0022).
+#
+# `would_run` is quoted because YAML 1.1 reads a bare yes/no as a boolean, and an
+# unquoted `no` would arrive as False and match none of the three legal values.
+
+golden: synthetic-hazards
+would_run: "no"
+by: synthetic
+reason: >-
+  Built to be bad and known to be bad by construction: 395 m of motorway, an unsignalized
+  60 kph primary crossing, 791 m of gravel. 20% of its length at LTS 3 or worse and four
+  LTS 4 segments. The one case in this directory whose answer needs no judgement at all,
+  which is what makes it the control.
+
+bounds:
+  # Bounds are always the *acceptable* envelope, never a description of what is
+  # wrong. A route labelled "no" is one that breaches them, and stating it the other
+  # way round made the breach test pass vacuously - which is how this was found.
+  fraction_lts3_plus_max: 0.15
+  lts4_count_max: 2

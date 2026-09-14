@@ -1,0 +1,225 @@
+{
+ "feed_info": {
+  "publisher": "MCDOT",
+  "version": "4.2",
+  "license": "https://creativecommons.org/publicdomain/zero/1.0",
+  "data_sources": [
+   {
+    "data_source_id": "ADOT",
+    "organization_name": "ADOT",
+    "update_date": "2026-09-10T17:22:03.0130800-07:00",
+    "update_frequency": 60,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Buckeye",
+    "organization_name": "Buckeye",
+    "update_date": "2026-09-10T17:00:18.4864399-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Chandler",
+    "organization_name": "Chandler",
+    "update_date": "2026-09-10T15:00:09.6710040-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Goodyear",
+    "organization_name": "Goodyear",
+    "update_date": "2026-09-10T17:31:00.0404372-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "MCDOT",
+    "organization_name": "MCDOT",
+    "update_date": "2026-09-09T12:41:00.0356604-07:00",
+    "update_frequency": 120,
+    "contact_name": "Alex Lemka",
+    "contact_email": "alemka@maricopa.gov"
+   },
+   {
+    "data_source_id": "Mesa",
+    "organization_name": "Mesa",
+    "update_date": "2026-09-10T17:00:19.6239253-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Peoria",
+    "organization_name": "Peoria",
+    "update_date": "2025-12-23T16:16:02.7623707-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Phoenix",
+    "organization_name": "Phoenix",
+    "update_date": "2026-09-10T17:00:26.2669223-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Scottsdale",
+    "organization_name": "Scottsdale",
+    "update_date": "2026-09-09T22:00:17.9327085-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   },
+   {
+    "data_source_id": "Tempe",
+    "organization_name": "Tempe",
+    "update_date": "2024-09-18T16:20:02.0000000-07:00",
+    "update_frequency": 3600,
+    "contact_name": "Unknown"
+   }
+  ],
+  "update_date": "2026-09-11T00:50:06.4916819+00:00",
+  "update_frequency": 60,
+  "contact_name": "Alex Lemka",
+  "contact_email": "alemka@maricopa.gov"
+ },
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "267686",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "event_type": "work-zone",
+     "data_source_id": "ADOT",
+     "road_names": [
+      "US-60"
+     ],
+     "direction": "eastbound",
+     "description": "Long term road construction on US-60 Eastbound from SR-177 (MP 227) to N Magma Mine Rd (MP 231) . Width Restriction: 12ft  Speed Restriction: 45mph 10/22/2024 6:59 AM to 6/16/2028 5:00 PM ",
+     "creation_date": "2024-10-22T06:59:00-07:00"
+    },
+    "start_date": "2024-10-22T06:59:00.0000000-07:00",
+    "end_date": "2028-06-16T17:00:00.0000000-07:00",
+    "is_start_date_verified": true,
+    "is_end_date_verified": true,
+    "is_start_position_verified": false,
+    "is_end_position_verified": false,
+    "work_zone_type": "static",
+    "location_method": "channel-device-method",
+    "vehicle_impact": "unknown",
+    "lanes": [],
+    "worker_presence": {
+     "are_workers_present": true,
+     "definition": [
+      "workers-in-work-zone-working"
+     ]
+    },
+    "restrictions": [
+     {
+      "type": "reduced-width",
+      "value": 366,
+      "unit": "centimeters"
+     }
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     [
+      -111.093206945882,
+      33.2925650208145
+     ]
+    ],
+    "type": "MultiPoint"
+   }
+  },
+  {
+   "id": "267688",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "event_type": "work-zone",
+     "data_source_id": "ADOT",
+     "road_names": [
+      "US-60"
+     ],
+     "direction": "westbound",
+     "description": "Long term road construction on US-60 Westbound from N Magma Mine Rd (MP 231) to SR-177 (MP 227) . Width Restriction: 12ft  Speed Restriction: 45mph 10/22/2024 7:03 AM to 6/16/2028 5:00 PM ",
+     "creation_date": "2024-10-22T07:03:00-07:00"
+    },
+    "start_date": "2024-10-22T07:03:00.0000000-07:00",
+    "end_date": "2028-06-16T17:00:00.0000000-07:00",
+    "is_start_date_verified": true,
+    "is_end_date_verified": true,
+    "is_start_position_verified": false,
+    "is_end_position_verified": false,
+    "work_zone_type": "static",
+    "location_method": "channel-device-method",
+    "vehicle_impact": "unknown",
+    "lanes": [],
+    "worker_presence": {
+     "are_workers_present": true,
+     "definition": [
+      "workers-in-work-zone-working"
+     ]
+    },
+    "restrictions": [
+     {
+      "type": "reduced-width",
+      "value": 366,
+      "unit": "centimeters"
+     }
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     [
+      -111.048994377136,
+      33.3130490617167
+     ]
+    ],
+    "type": "MultiPoint"
+   }
+  },
+  {
+   "id": "277750",
+   "type": "Feature",
+   "properties": {
+    "core_details": {
+     "event_type": "work-zone",
+     "data_source_id": "ADOT",
+     "road_names": [
+      "101-LOOP"
+     ],
+     "direction": "eastbound",
+     "description": "Narrow lanes on 101-LOOP Eastbound from 75th Ave (MP 17) to Arizona Veterans Memorial Hwy (MP 23) . 9/27/2024 5:00 AM to 12/18/2026 5:00 AM ",
+     "creation_date": "2024-09-27T05:00:00-07:00"
+    },
+    "start_date": "2024-09-27T05:00:00.0000000-07:00",
+    "end_date": "2026-12-18T05:00:00.0000000-07:00",
+    "is_start_date_verified": true,
+    "is_end_date_verified": true,
+    "is_start_position_verified": false,
+    "is_end_position_verified": false,
+    "work_zone_type": "static",
+    "location_method": "channel-device-method",
+    "vehicle_impact": "unknown",
+    "lanes": [],
+    "worker_presence": {
+     "are_workers_present": true,
+     "definition": [
+      "workers-in-work-zone-working"
+     ]
+    },
+    "restrictions": []
+   },
+   "geometry": {
+    "coordinates": [
+     [
+      -112.219921268966,
+      33.6677625870539
+     ]
+    ],
+    "type": "MultiPoint"
+   }
+  }
+ ]
+}

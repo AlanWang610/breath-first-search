@@ -1,0 +1,4 @@
+# Shipped defaults, unmodified. This route's subject is jurisdiction discovery, not
+# preference, and a non-default profile here would put a second variable into a golden
+# whose whole job is to pin which adapters answered for which state.
+version: 1

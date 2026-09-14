@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.longrun</groupId>
+  <artifactId>graphhopper-lts-wrapper</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>GraphHopper LTS import wrapper</name>
+  <description>
+    Adds an `lts` IntEncodedValue (1-4) to a GraphHopper import without forking GraphHopper.
+    Compiles against the published GraphHopper artifacts; runs against the shipped
+    graphhopper-web fat jar. See README.md.
+  </description>
+
+  <properties>
+    <!-- THE ONLY THING TO CHANGE ON A GRAPHHOPPER UPGRADE. Must match the version of
+         the graphhopper-web-<version>.jar this is run against. -->
+    <graphhopper.version>11.0</graphhopper.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- `provided`: everything below is already inside graphhopper-web-<version>.jar,
+         which is on the runtime classpath. The built artifact is therefore ~10 kB. -->
+    <dependency>
+      <groupId>com.graphhopper</groupId>
+      <artifactId>graphhopper-web</artifactId>
+      <version>${graphhopper.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.longrun.graphhopper.lts.LtsGraphHopperApplication</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

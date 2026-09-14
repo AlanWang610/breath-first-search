@@ -1,0 +1,13 @@
+{
+  "dem_resolution_m": 22.0,
+  "extra": {
+    "provenance": "hand-written; no OSM data, no real place"
+  },
+  "layer_vintages": {
+    "amenities": "2026-09-01",
+    "nodes": "2026-09-01",
+    "parks": "2026-09-01",
+    "ways": "2026-09-01"
+  },
+  "osm_extract_date": "2026-09-01"
+}

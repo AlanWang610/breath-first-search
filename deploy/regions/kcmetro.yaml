@@ -1,0 +1,38 @@
+# Kansas City MO/KS - scope 11's test region 4, the state-line one.
+#
+# Chosen over region 3 (rural Appalachia/Ozarks) because section 11 says this is the region
+# that "catches jurisdiction-discovery bugs", which is precisely what M4 builds - and
+# because both DOTs publish keyless CC0 WZDx feeds, so two adapter sets answer on one route
+# with no credential anybody has to obtain. Region 3 would mostly demonstrate that adapters
+# are *absent*, which the Bay Area already demonstrates.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   uv run longrun build-region deploy/regions/kcmetro.yaml
+#
+# The polygon straddles State Line Road (about -94.608), so the region crosses Missouri and
+# Kansas, Jackson and Wyandotte and Johnson counties, and both Kansas Citys. That there is
+# a Kansas City in each state, sharing a border, is why `JurisdictionAnswer.label()` renders
+# a name *and* an id - neither alone identifies one here.
+
+name: kcmetro
+polygon: kcmetro.geojson
+
+# Clipped from Geofabrik us-midwest-latest (2.3 GB), which covers both Kansas and Missouri -
+# so one existing `clip_pbf.py` run serves a two-state region and the script needed no
+# change. The per-state extracts would have needed merging first.
+#
+#   uv run python deploy/graphhopper/scripts/clip_pbf.py \
+#       data/osm/us-midwest-latest.osm.pbf data/osm/kcmetro.osm.pbf \
+#       --bbox -94.80,38.94,-94.40,39.22
+osm_extract: ../../data/osm/kcmetro.osm.pbf
+
+# 1030 Lower Missouri (the Blue River through Kansas City is HUC8 10300101), 1027 Kansas -
+# the Kansas River joins the Missouri at the state line, which is the confluence the region
+# is built around. Step 5's coverage report is where a wrong guess here shows up.
+huc4:
+  - "1030"
+  - "1027"
+
+# None loaded. KCATA publishes GTFS for the metro and it is not here, so `transit` and
+# `bailouts` report what the loaded feeds say - nothing - rather than what Kansas City has.
+gtfs: {}

@@ -1,0 +1,113 @@
+/* One dark surface, because the map is the page and a light chrome around a dark map
+   fights it. Colours are the three arbitration tiers plus neutrals derived from them. */
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --line: #232c36;
+  --text: #dfe6ec;
+  --muted: #8b98a5;
+  --safety: #d1495b;
+  --physio: #e8a33d;
+  --comfort: #4a8fc2;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+.top {
+  display: flex; align-items: baseline; gap: 1rem;
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--line);
+}
+.top h1 { font-size: 1.05rem; margin: 0; letter-spacing: 0.02em; }
+
+.layout { display: grid; grid-template-columns: 340px 1fr; flex: 1; min-height: 0; }
+.side { overflow-y: auto; border-right: 1px solid var(--line); padding: 0.75rem; }
+.main { display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }
+
+.map { position: relative; height: 55vh; min-height: 320px; }
+.map-canvas { position: absolute; inset: 0; }
+.map-empty {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--muted); pointer-events: none;
+}
+
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.75rem; margin-bottom: 0.75rem;
+}
+.panel h2 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em;
+  margin: 0 0 0.6rem; color: var(--muted); font-weight: 600; }
+
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem; padding: 0 0.75rem 0.75rem; }
+
+.timeline { padding: 0.75rem; }
+.timeline header { display: flex; justify-content: space-between; align-items: baseline; }
+.timeline h2 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em;
+  margin: 0 0 0.4rem; color: var(--muted); font-weight: 600; }
+.timeline svg { width: 100%; height: 120px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; }
+
+label { display: block; margin-bottom: 0.5rem; color: var(--muted); font-size: 0.85rem; }
+input {
+  width: 100%; margin-top: 0.2rem; padding: 0.4rem 0.5rem; background: var(--bg);
+  color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit;
+}
+button {
+  padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid var(--line);
+  background: #1f2731; color: var(--text); font: inherit; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--comfort); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.link { background: none; border: none; padding: 0; color: var(--comfort);
+  text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--comfort); outline-offset: 2px; }
+
+.row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.muted { color: var(--muted); }
+.small { font-size: 0.82rem; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
+.bad { color: var(--safety); }
+
+.error {
+  margin: 0.5rem 1rem; padding: 0.5rem 0.75rem; border-radius: 6px;
+  background: rgba(209, 73, 91, 0.14); border: 1px solid var(--safety);
+}
+
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 1rem; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+ul, ol { margin: 0; padding-left: 1.1rem; }
+.plans, .regions, .coverage, .events { list-style: none; padding: 0; }
+.plans li, .regions li, .coverage li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); }
+.coverage li:last-child, .plans li:last-child, .regions li:last-child { border-bottom: none; }
+.events li { color: var(--muted); font-size: 0.82rem; padding: 0.1rem 0; }
+
+.tradeoff { border-left: 3px solid var(--physio); padding-left: 0.6rem; margin-bottom: 0.6rem; }
+
+.profile { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.profile td { padding: 0.2rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.profile td:last-child { text-align: right; }
+.prov { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.prov-default { color: var(--muted); }
+.prov-inferred { color: var(--comfort); }
+.prov-stated { color: var(--physio); }
+
+/* The table and the coverage list can outgrow a 340px column; they scroll rather than
+   pushing the page sideways. */
+.panel { overflow-x: auto; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { border-right: none; border-bottom: 1px solid var(--line); }
+}

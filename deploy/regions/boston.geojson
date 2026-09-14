@@ -1,0 +1,45 @@
+{
+ "type": "FeatureCollection",
+ "name": "boston",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+  }
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "Boston core - Charles basin, Back Bay, Cambridge"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -71.15,
+       42.31
+      ],
+      [
+       -71.02,
+       42.31
+      ],
+      [
+       -71.02,
+       42.4
+      ],
+      [
+       -71.15,
+       42.4
+      ],
+      [
+       -71.15,
+       42.31
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

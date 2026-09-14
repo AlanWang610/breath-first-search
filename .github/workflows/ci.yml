@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # windows-latest is primary: development happens on Windows, and the geospatial
+    # stack's path, locale and CRLF failures are Windows-specific. Linux-only CI would
+    # let Windows-breaking code land daily.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    # Raised from 15 on 2026-09-13, after M5's push hit it: the Windows job was cancelled
+    # mid-`pytest` at 14m17s of testing, having grown from 11m5s before the fifth golden.
+    # M0 set 15 with the note that keeping CI short "is itself the enforcement mechanism
+    # for small fixtures", which was right and is now doing the wrong job - the fixtures
+    # are inside their 50 MB cap and it is the test count that grew, from 502 to 1,246.
+    # 30 restores headroom without removing the pressure; the day this is hit again the
+    # answer is to look at what got slow, not to raise it again.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        # Every extra whose package `mypy` type-checks. M5 added tools/agent/history and
+        # M7 adds api; `uv run mypy` checks the whole `longrun` package, and a gate that
+        # cannot see the code it guards is not a gate - M4.4a's lesson in a new costume.
+        run: uv sync --frozen --extra dev --extra tools --extra agent --extra history --extra api
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy
+
+      # `network` needs live services; `slow` holds budget assertions (scope 6.4).
+      - name: Test
+        run: uv run pytest -m "not network and not slow" --cov=longrun --cov-report=term-missing

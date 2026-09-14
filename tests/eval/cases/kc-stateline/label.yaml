@@ -1,0 +1,18 @@
+# Whether a runner would run this route, and what in the numbers says so.
+#
+# `by` is required and is not decoration: a label this project wrote about its own
+# output is not the same claim as one a runner made (ADR 0022).
+#
+# `would_run` is quoted because YAML 1.1 reads a bare yes/no as a boolean, and an
+# unquoted `no` would arrive as False and match none of the three legal values.
+
+golden: kc-stateline
+would_run: "yes"
+by: claude
+reason: >-
+  1.8% at LTS 3 or worse over 3.2 km, one LTS 4 segment. The route exists to cross a state
+  line, not to be pleasant, and it is still a route a runner would run.
+
+bounds:
+  fraction_lts3_plus_max: 0.1
+  lts4_count_max: 2
