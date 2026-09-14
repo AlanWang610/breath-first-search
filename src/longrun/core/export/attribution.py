@@ -105,6 +105,14 @@ LICENCES: dict[str, SourceLicence] = {
     "trail_status": SourceLicence(source="trail_status", licence="per jurisdiction adapter"),
     "access_hours": SourceLicence(source="access_hours", licence="per jurisdiction adapter"),
     "3dep": SourceLicence(source="3dep", licence="US public domain"),
+    #: The default tile provider (ADR 0023). Public domain, so nothing is owed - the
+    #: attribution is USGS's own credit line, shown as a courtesy and so a reader of a map
+    #: knows whose imagery they are looking at.
+    "usgs_national_map": SourceLicence(
+        source="usgs_national_map",
+        licence="US public domain",
+        attribution="USDA, USGS The National Map",
+    ),
     "nhd": SourceLicence(source="nhd", licence="US public domain"),
     "padus": SourceLicence(source="padus", licence="US public domain"),
     "tiger": SourceLicence(source="tiger", licence="US public domain"),

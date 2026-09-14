@@ -339,8 +339,9 @@ def test_the_model_writes_the_comparison_and_not_the_choice(tmp_path: Path, tied
 
 
 def test_the_imagery_step_is_reported_rather_than_skipped(tmp_path: Path, improving: None) -> None:
-    """Scope 8.1 step 8 has a budget meter, no implementation and no provider. A step that
-    is not run and not mentioned is indistinguishable from one that found nothing."""
+    """Scope 8.1 step 8 is a vision spot-check and there is no vision call site, whatever
+    tile provider is configured. A step that is not run and not mentioned is
+    indistinguishable from one that found nothing."""
     outcome = plan_route(_request(), _ctx(tmp_path), start_at=START, route=_route())
 
     assert any("step 8" in note for note in outcome.scratchpad.manifest.degradation)

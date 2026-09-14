@@ -337,3 +337,40 @@ def test_a_built_regions_steps_are_reported_as_done(client: Any, tmp_path: Path)
     }
     assert steps == {"layers": True, "terrain": False}
     assert _regions(), "the repo ships region specs, so this must not be empty"
+
+
+# --- the basemap (ADR 0023) ---------------------------------------------------------
+
+
+def test_the_basemap_defaults_to_usgs_imagery_in_the_shape_maplibre_wants(client: Any) -> None:
+    body = client.get("/api/basemap").json()
+
+    assert body["provider"] == "usgs-imagery"
+    assert body["tiles"][0].endswith("/tile/{z}/{y}/{x}")
+    assert body["maxzoom"] == 16
+    assert body["licence"] == "US public domain"
+
+
+def test_tiles_switched_off_are_a_normal_answer_with_a_reason(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LONGRUN_TILE_PROVIDER", "none")
+
+    body = client.get("/api/basemap").json()
+
+    assert body["provider"] is None
+    assert "none" in body["reason"]
+
+
+def test_a_misconfigured_provider_is_a_reason_and_not_a_500(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The basemap is an enhancement. A typo in an environment variable is no reason to
+    show somebody an empty map - the route still has to draw."""
+    monkeypatch.setenv("LONGRUN_TILE_PROVIDER", "custom")
+
+    response = client.get("/api/basemap")
+
+    assert response.status_code == 200
+    assert response.json()["provider"] is None
+    assert "LONGRUN_TILE_URL" in response.json()["reason"]

@@ -35,10 +35,23 @@ version, and it stays small: **every control calls a tool that already works fro
 
 ## Two decisions worth knowing
 
-**No basemap by default.** Raster tiles come from a server with a section 14 attribution
-obligation and usually a key. The map renders fully on a blank ground and treats a basemap
-as an enhancement — the same position M2 took for the HTML plan sheet. Set
-`VITE_BASEMAP_STYLE` to a style URL you are entitled to use.
+**The basemap is USGS The National Map, drawn as a layer under the route** (ADR 0023).
+Public domain and keyless, so there is no scope 14 obligation to manage and no key to leak
+into the bundle. The provider comes from the API (`GET /api/basemap`), so there is one
+setting for the map and for `imagery_tile`:
+
+```bash
+LONGRUN_TILE_PROVIDER=usgs-topo uv run longrun api --ui ui/dist   # or usgs-imagery (default), none
+```
+
+It is added as a raster *layer* on top of an inline blank style, never loaded as the style
+itself. A style that cannot be fetched leaves MapLibre with nothing, route included; a layer
+that cannot be fetched leaves the dark ground with the route still drawn on it. Coverage is
+the US, and tiles stop at zoom 16 — past that MapLibre scales the last real tile up.
+
+A keyed street-map provider works through `LONGRUN_TILE_PROVIDER=custom` with
+`LONGRUN_TILE_URL` and `LONGRUN_TILE_ATTRIBUTION`. Its key reaches the browser, so restrict
+it to your own domain.
 
 **Absence is rendered as absence.** `detour_ratio: null` reads "not measured", never `0`
 and never `1.0`. A coverage entry that was not checked is listed with its reason. The

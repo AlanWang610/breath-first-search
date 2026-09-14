@@ -1,18 +1,24 @@
 /**
  * The map (scope 10.3): route, flagged segments coloured by tier, markers.
  *
- * **No basemap by default, and that is a licensing decision rather than an omission.**
- * Raster tiles come from a server with a §14 attribution obligation and usually a key, and
- * M2 took the same position for the HTML plan sheet: render fully on a blank ground and
- * treat a basemap as an enhancement. Point `VITE_BASEMAP_STYLE` at a style URL you are
- * entitled to use and it appears; without one the geometry still draws, which is what the
- * reviewer actually needs to see.
+ * **The basemap is a layer, never the style** (ADR 0023). The map always starts from an
+ * inline blank style, and the provider `GET /api/basemap` names is added as a raster layer
+ * underneath the route. That ordering is the point. The first version took a style *URL*
+ * from `VITE_BASEMAP_STYLE`, and a style URL that cannot be fetched leaves MapLibre with no
+ * style at all — `load` never fires, so the route never draws either, and a reviewer with no
+ * connection gets an empty rectangle. As a layer, a tile that fails to load leaves the dark
+ * ground behind it and the route on top, which is the "render fully on a blank ground, treat
+ * a basemap as an enhancement" rule M2 wrote for the HTML sheet.
+ *
+ * The provider is read from the API rather than baked into the bundle, so there is one
+ * setting (`LONGRUN_TILE_PROVIDER`) for the map and for `imagery_tile`, and changing it needs
+ * a restart rather than a rebuild.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Plan } from "../api";
-import { flagsBySegment, tierColour } from "../api";
+import { api, flagsBySegment, tierColour } from "../api";
 
 const BLANK_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -51,18 +57,48 @@ function segmentFeatures(plan: Plan) {
 export function MapView({ plan }: { plan: Plan | null }) {
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
+  const [basemapNote, setBasemapNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!container.current || map.current) return;
-    const style = import.meta.env.VITE_BASEMAP_STYLE;
-    map.current = new maplibregl.Map({
+    const instance = new maplibregl.Map({
       container: container.current,
-      style: style ? style : BLANK_STYLE,
+      style: BLANK_STYLE,
       center: [-122.42, 37.78],
       zoom: 12,
       attributionControl: { compact: false },
     });
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.current = instance;
+    instance.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    instance.once("load", () => {
+      api
+        .basemap()
+        .then((basemap) => {
+          if (!basemap.provider || !basemap.tiles || map.current !== instance) {
+            // Said out loud rather than silently blank: a map with no ground under it
+            // should explain itself, and the API sends the reason.
+            if (basemap.reason) setBasemapNote(`No basemap: ${basemap.reason}`);
+            return;
+          }
+          instance.addSource("basemap", {
+            type: "raster",
+            tiles: basemap.tiles,
+            tileSize: basemap.tile_size ?? 256,
+            // MapLibre stops requesting past this and scales the last real tile up. USGS
+            // measured at 16: past it every request is a 404.
+            maxzoom: basemap.maxzoom ?? 16,
+            attribution: basemap.attribution,
+          });
+          // Underneath the route if the route is already drawn, at the bottom otherwise.
+          const beneath = instance.getLayer("segments") ? "segments" : undefined;
+          instance.addLayer({ id: "basemap", type: "raster", source: "basemap" }, beneath);
+        })
+        .catch(() => {
+          // An API that cannot say which provider is no reason to lose the route.
+          setBasemapNote("No basemap: the API did not answer");
+        });
+    });
     return () => {
       map.current?.remove();
       map.current = null;
@@ -121,6 +157,7 @@ export function MapView({ plan }: { plan: Plan | null }) {
     <div className="map">
       <div ref={container} className="map-canvas" />
       {!plan && <div className="map-empty">Plan a route, or pick one from the list.</div>}
+      {basemapNote && <div className="map-note">{basemapNote}</div>}
     </div>
   );
 }

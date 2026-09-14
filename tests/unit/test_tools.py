@@ -28,9 +28,9 @@ def tools() -> dict[str, Any]:
     return {tool.name: tool for tool in server._tool_manager.list_tools()}
 
 
-#: Scope 7's own names, read off the tool tables: the six this build cannot answer. They
-#: are registered anyway and say why.
-ABSENT = {"cue_sheet", "transit_at", "pin_waypoint", "place_notes", "imagery_tile", "render"}
+#: Scope 7's own names, read off the tool tables: the five this build cannot answer. They
+#: are registered anyway and say why. `imagery_tile` left this set with ADR 0023.
+ABSENT = {"cue_sheet", "transit_at", "pin_waypoint", "place_notes", "render"}
 
 
 def test_every_scorer_is_reachable_as_a_tool(tools: dict[str, Any]) -> None:
@@ -144,3 +144,78 @@ def test_the_server_says_what_it_is_for() -> None:
 
     server = build_server()
     assert "do not decide" in (server.instructions or "")
+
+
+# --- imagery_tile, which left ABSENT with ADR 0023 ---------------------------------
+
+
+def _imagery_tool(settings: Any = None) -> Any:
+    from longrun.tools.server import build_server
+
+    server = build_server(settings)
+    return next(t for t in server._tool_manager.list_tools() if t.name == "imagery_tile")
+
+
+def test_imagery_tile_returns_a_tile_and_says_when_it_clamped(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End to end through the tool, with the server faked. Asked for zoom 18, which USGS
+    does not serve, it returns the zoom-16 tile and says so rather than a 404 dressed up as
+    "no imagery here"."""
+    import base64
+
+    import httpx
+
+    from longrun.tools.base import ToolSettings
+
+    class _Ok:
+        status_code = 200
+        content = b"\xff\xd8 imagery"
+        headers = {"content-type": "image/jpeg"}
+
+        def raise_for_status(self) -> None:
+            return None
+
+    monkeypatch.setattr(httpx, "get", lambda url, **kwargs: _Ok())
+    tool = _imagery_tool(ToolSettings(cache_path=tmp_path / "c.sqlite"))
+
+    answer = tool.fn(lat=37.7715, lon=-122.4686, zoom=18)
+
+    assert answer["checked"] is True
+    assert (answer["z"], answer["requested_zoom"]) == (16, 18)
+    assert "clamped" in answer["note"]
+    assert base64.b64decode(answer["data_base64"]) == b"\xff\xd8 imagery"
+    assert "The National Map" in answer["attribution"]
+
+
+def test_imagery_tile_switched_off_says_it_is_a_decision(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LONGRUN_TILE_PROVIDER", "none")
+
+    answer = _imagery_tool().fn(lat=37.77, lon=-122.47)
+
+    assert answer["checked"] is False
+    assert answer["blocked_on"] == "decision"
+
+
+def test_imagery_tile_refuses_a_map_provider_rather_than_serving_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A spot-check asks what is on the ground. A topographic map answers a different
+    question while looking like an answer, so it is refused, not returned."""
+    monkeypatch.setenv("LONGRUN_TILE_PROVIDER", "usgs-topo")
+
+    answer = _imagery_tool().fn(lat=37.77, lon=-122.47)
+
+    assert answer["checked"] is False
+    assert "not aerial imagery" in answer["reason"]
+
+
+def test_the_render_tool_is_now_blocked_on_work_not_on_a_decision() -> None:
+    """The decision `render` waited on was made in ADR 0023. Leaving it labelled `decision`
+    would be the stale-label defect M7.4 fixed, recreated one commit later."""
+    from longrun.tools.server import build_server
+
+    server = build_server()
+    render = next(t for t in server._tool_manager.list_tools() if t.name == "render")
+
+    assert render.fn()["blocked_on"] == "work"

@@ -275,11 +275,17 @@ def _route(request: PlanRequest, router: Router | None, pad: Scratchpad) -> Rout
 def _note_imagery(manifest: Manifest) -> None:
     """Scope 8.1 step 8, reported rather than silently skipped.
 
-    `imagery_tile` has a budget meter and no implementation and no provider. A step that
-    is not run and not mentioned is indistinguishable from a step that found nothing,
-    which is scope 3.6's whole subject.
+    A step that is not run and not mentioned is indistinguishable from a step that found
+    nothing, which is scope 3.6's whole subject.
+
+    The note names the blocker that is actually binding. It used to say "no imagery provider
+    is configured", which stopped being true when ADR 0023 configured one - and `imagery_tile`
+    now fetches a tile. What step 8 still lacks is something to *look* at the tile: scope
+    8.1 calls it a vision spot-check, and none of the five model call sites is a vision one.
+    That blocker holds whichever provider is set, including none, so the note cannot go
+    stale the next time the provider changes.
     """
-    note = "step 8 skipped: no imagery provider is configured"
+    note = "step 8 skipped: no vision call site looks at imagery"
     if note not in manifest.degradation:
         manifest.degradation.append(note)
 
