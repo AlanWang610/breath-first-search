@@ -34,6 +34,12 @@ ui/.vite/
 # binary since M0, which is not the same as refusing to commit one.
 *.fit
 *.tcx
+# A Strava bulk export gzips its originals and names its archive `export_<id>.zip`. Plain
+# `.gpx` cannot be ignored - every golden route is one - so only the compressed forms are.
+*.fit.gz
+*.tcx.gz
+*.gpx.gz
+export_*.zip
 
 # Local run artifacts
 *.log

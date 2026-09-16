@@ -3,10 +3,9 @@
 Three things kept apart on purpose, because only the first is format-specific and only the
 last needs a router:
 
-* **reading** - FIT files, and only FIT files. This line used to promise "a Strava bulk
-  export's `activities.csv` plus its originals", and there has never been a CSV reader. A
-  Strava archive stores its originals mostly as `.fit.gz`, `.gpx` and `.tcx.gz`, and
-  `longrun ingest-history` globs `*.fit`, so pointed at one it reads almost nothing;
+* **reading** - FIT and GPX, either of them gzipped, from a path or straight from bytes.
+  A Strava bulk export is a reader of its own (`strava.py`), because what decides which of
+  its files are runs is `activities.csv` rather than anything in the files;
 * **deriving** - a grade-adjusted pace curve, fatigue drift, a surface factor;
 * **map matching** - the accepted-road set, which needs real `osm_way_id` values and
   therefore a router (ADR 0001 retired risk R4 on exactly this, and struck the
@@ -23,18 +22,27 @@ activities start at homes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import functools
+import gzip
+import io
+from collections import Counter
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from statistics import median
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any, Literal
 
+from longrun.core.geo.dem import DEFAULT_SMOOTH_M
+from longrun.core.geo.gpx import haversine_m
 from longrun.core.pacing.curves import PacingCurves
 
 if TYPE_CHECKING:  # pragma: no cover
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
+    from longrun.core.models.geometry import Route
     from longrun.core.routing.base import Router
+
+ElevationSource = Literal["terrain", "device"]
 
 #: Scope 6.2: "first/last 500 m of each activity stripped before map-matching". A privacy
 #: measure before it is a data-quality one - a run starts where somebody lives.
@@ -56,6 +64,18 @@ MIN_RUNS_FOR_ACCEPTED = 2
 #: stopped time from the pace curve.
 MOVING_SPEED_MS = 0.5
 
+#: Shortest stretch of moving a speed and a gradient are measured over: the window a plan
+#: grades its own route over, so a bin means the same grade in both places. Point to point,
+#: which is what this measured before, a watch recording every 1-7 s gives strides of a few
+#: metres, and a real archive put 8% of them in bins steeper than 20% - elevation noise
+#: divided by a short run, not hills.
+STRIDE_M = DEFAULT_SMOOTH_M
+
+#: Sports whose speed is a runner's pace, as FIT's enum and a GPX `<type>` spell them.
+#: Everything else - a ride, a walk, a swim, a treadmill's `virtual_run` - is excluded
+#: before a single stride is binned.
+RUNNING_SPORTS = frozenset({"running", "trail_running"})
+
 
 @dataclass(frozen=True)
 class TrackPoint:
@@ -74,14 +94,15 @@ class Activity:
 
     activity_id: str
     points: list[TrackPoint] = field(default_factory=list)
-    #: Read from the file and **not yet used to exclude anything**, which matters more than
-    #: it sounds: `derive` drops races and nothing else, so a bike ride in the input would be
-    #: binned as running pace. Any bulk export - Strava or Garmin - mixes activity types,
-    #: and a cycling median near 8 m/s would silently become the runner's flat speed.
+    #: Lower-case, as FIT's enum and a GPX `<type>` both spell it (`running`, `cycling`).
+    #: `derive` excludes anything that names a sport outside `RUNNING_SPORTS`, because any
+    #: bulk export mixes activity types and a cycling median near 8 m/s would otherwise
+    #: become the runner's flat speed. `None` - a file that does not say - is read as a run
+    #: and counted in the reasons, since a hand-picked file is usually one.
     sport: str | None = None
-    #: Scope 6.2: "race efforts excluded or flagged". Whatever the source says - Strava's
-    #: `activities.csv` has a workout type, FIT has a sub-sport - and never inferred from
-    #: the pace, which would exclude somebody's good day.
+    #: Scope 6.2: "race efforts excluded or flagged". Whatever the source says - FIT has a
+    #: sub-sport; a real Strava export turned out to carry no marker at all - and never
+    #: inferred from the pace, which would exclude somebody's good day.
     is_race: bool = False
     name: str | None = None
 
@@ -114,11 +135,38 @@ def grade_bin(gradient: float) -> str:
     return f"{int(gradient * 100 // GRADE_BIN_PCT) * GRADE_BIN_PCT:+d}"
 
 
-def derive(activities: Sequence[Activity], *, min_samples: int = MIN_SAMPLES_PER_BIN) -> History:
-    """Turn activities into curves. No files, no network, no router."""
-    usable = [a for a in activities if not a.is_race and len(a.points) > 1]
-    races = sum(1 for a in activities if a.is_race)
+def is_running(activity: Activity) -> bool:
+    """Whether an activity's speed may be binned as pace: it says running, or says nothing."""
+    return activity.sport is None or activity.sport in RUNNING_SPORTS
+
+
+def derive(
+    activities: Sequence[Activity],
+    *,
+    min_samples: int = MIN_SAMPLES_PER_BIN,
+    stride_m: float = STRIDE_M,
+    elevation: ElevationSource = "device",
+) -> History:
+    """Turn activities into curves. No files, no network, no router.
+
+    `elevation` says where the points' `ele_m` came from - the device, or `with_terrain` -
+    and is recorded on the curve, because it decides whether the grade bins can be trusted.
+    """
+    runs = [a for a in activities if is_running(a)]
+    usable = [a for a in runs if not a.is_race and len(a.points) > 1]
+    races = sum(1 for a in runs if a.is_race)
     reasons: list[str] = []
+
+    not_running = Counter(a.sport for a in activities if not is_running(a))
+    if not_running:
+        listed = ", ".join(f"{sport} {count}" for sport, count in not_running.most_common())
+        reasons.append(
+            f"{sum(not_running.values())} activity(ies) excluded as not running ({listed}): "
+            "a ride's speed is not a runner's pace"
+        )
+    unlabelled = sum(1 for a in runs if a.sport is None)
+    if unlabelled and unlabelled < len(activities):
+        reasons.append(f"{unlabelled} activity(ies) name no sport and were binned as running")
 
     if races:
         # Flagged, not silently dropped: scope 6.2 allows either and the caveat is what
@@ -131,7 +179,10 @@ def derive(activities: Sequence[Activity], *, min_samples: int = MIN_SAMPLES_PER
     samples: dict[str, list[float]] = {}
     flat: list[float] = []
     for activity in usable:
-        for gradient, speed in _strides(activity):
+        for gradient, speed in _strides(activity, stride_m=stride_m):
+            if gradient is None:
+                # No elevation at one end: a speed with no grade to file it under.
+                continue
             samples.setdefault(grade_bin(gradient), []).append(speed)
             if abs(gradient) < 0.01:
                 flat.append(speed)
@@ -162,7 +213,8 @@ def derive(activities: Sequence[Activity], *, min_samples: int = MIN_SAMPLES_PER
             provenance="history",
             longest_effort_m=longest,
             speed_by_grade_bin=measured,
-            fatigue_drift_pct_per_10km=_drift(usable),
+            grade_elevation=elevation if measured else None,
+            fatigue_drift_pct_per_10km=_drift(usable, stride_m=stride_m),
         ),
         activities_read=len(activities),
         races_excluded=races,
@@ -170,24 +222,46 @@ def derive(activities: Sequence[Activity], *, min_samples: int = MIN_SAMPLES_PER
     )
 
 
-def _strides(activity: Activity) -> Iterable[tuple[float, float]]:
-    """Gradient and speed for each moving step, with the ends trimmed."""
+def _strides(
+    activity: Activity, *, stride_m: float = STRIDE_M
+) -> Iterable[tuple[float | None, float]]:
+    """Gradient and speed over each stretch of at least `stride_m` of moving, ends trimmed.
+
+    A stop ends a stretch and the next begins where the runner set off again, so stopped
+    time never reaches a speed. The gradient is `None` when either end has no elevation.
+    """
     points = _trimmed(activity.points)
+    if not points:
+        return
+    start = points[0]
     for before, after in zip(points, points[1:], strict=False):
-        run = after.cum_dist_m - before.cum_dist_m
         seconds = (after.at - before.at).total_seconds()
-        if run <= 0 or seconds <= 0:
+        if seconds <= 0:
             continue
-        speed = run / seconds
-        if speed < MOVING_SPEED_MS:
+        if (after.cum_dist_m - before.cum_dist_m) / seconds < MOVING_SPEED_MS:
             # Stopped time, which scope 6.2 excludes: a traffic light is not a pace.
+            start = after
             continue
-        rise = (after.ele_m or 0.0) - (before.ele_m or 0.0) if before.ele_m is not None else 0.0
-        yield rise / run, speed
+        span = after.cum_dist_m - start.cum_dist_m
+        if span <= 0 or span < stride_m:
+            continue
+        elapsed = (after.at - start.at).total_seconds()
+        gradient = (
+            (after.ele_m - start.ele_m) / span
+            if after.ele_m is not None and start.ele_m is not None
+            else None
+        )
+        yield gradient, span / elapsed
+        start = after
 
 
 def _trimmed(points: list[TrackPoint]) -> list[TrackPoint]:
     """Scope 6.2's 500 m off each end, before anything looks at where it was."""
+    return [points[i] for i in _kept(points)]
+
+
+def _kept(points: list[TrackPoint]) -> list[int]:
+    """Indices of the points that survive the trim."""
     if not points:
         return []
     total = points[-1].cum_dist_m
@@ -195,10 +269,60 @@ def _trimmed(points: list[TrackPoint]) -> list[TrackPoint]:
         # A run shorter than the trim is all doorstep. Dropping it entirely is the honest
         # answer: there is nothing left that is not somebody's address.
         return []
-    return [p for p in points if PRIVACY_TRIM_M <= p.cum_dist_m <= total - PRIVACY_TRIM_M]
+    return [
+        i for i, p in enumerate(points) if PRIVACY_TRIM_M <= p.cum_dist_m <= total - PRIVACY_TRIM_M
+    ]
 
 
-def _drift(activities: Sequence[Activity]) -> float:
+def with_terrain(
+    activities: Sequence[Activity], sample: Callable[[Route], list[float | None]]
+) -> tuple[list[Activity], int]:
+    """Each activity's elevation replaced by terrain elevation, over the trimmed range only.
+
+    Scope 7.1 grades a plan on the terrain model and never on a GPX, and a pace curve is
+    looked up by that grade - so bins measured on a watch's altimeter are applied to a
+    different quantity than they measured. `sample` is `dem.sample_elevation` over whatever
+    store covers the route, injected so this module never picks a raster source.
+
+    Only the trimmed points are asked about. The ends get `None`: nothing reads them, and a
+    terrain lookup is a question about where somebody was. Returns the activities and how
+    many had no terrain coverage at all.
+    """
+    from longrun.core.models.geometry import Route, RoutePoint
+
+    out: list[Activity] = []
+    uncovered = 0
+    for activity in activities:
+        kept = _kept(activity.points)
+        values: list[float | None] = []
+        if len(kept) >= 2:
+            origin = activity.points[kept[0]].cum_dist_m
+            try:
+                route = Route(
+                    id=activity.activity_id,
+                    points=[
+                        RoutePoint(
+                            lat=activity.points[i].lat,
+                            lon=activity.points[i].lon,
+                            cum_dist_m=activity.points[i].cum_dist_m - origin,
+                        )
+                        for i in kept
+                    ],
+                )
+                values = sample(route)
+            except ValueError:
+                # A track whose distance runs backwards is not a route. Its grades are
+                # unknown, which is what an empty sample says.
+                values = []
+        if not any(v is not None for v in values):
+            uncovered += 1
+        terrain = dict(zip(kept, values, strict=False))
+        points = [replace(p, ele_m=terrain.get(i)) for i, p in enumerate(activity.points)]
+        out.append(replace(activity, points=points))
+    return out, uncovered
+
+
+def _drift(activities: Sequence[Activity], *, stride_m: float = STRIDE_M) -> float:
     """Percent slower per 10 km, from the longest efforts.
 
     Measured as first-quarter against last-quarter speed on the longest runs, because that
@@ -207,7 +331,7 @@ def _drift(activities: Sequence[Activity]) -> float:
     longest = sorted(activities, key=lambda a: a.distance_m, reverse=True)[:5]
     drifts: list[float] = []
     for activity in longest:
-        speeds = [speed for _, speed in _strides(activity)]
+        speeds = [speed for _, speed in _strides(activity, stride_m=stride_m)]
         if len(speeds) < 8 or activity.distance_m < 1000:
             continue
         quarter = max(1, len(speeds) // 4)
@@ -260,24 +384,58 @@ def accepted_ways(
 # --- reading ---------------------------------------------------------------------
 
 
-def read_fit(path: Path) -> Activity | None:
-    """One FIT file, or `None` when it holds no track.
+#: The formats a real Strava archive holds its runs in: `.fit.gz` for nearly everything a
+#: device recorded, `.gpx` for app recordings, and a few plain `.fit` and `.gpx.gz`. The
+#: archive's one `.tcx.gz` was a swim, so TCX has no reader - a TCX run is reported as a
+#: format this does not decode, never guessed at.
+READABLE_SUFFIXES = (".fit", ".fit.gz", ".gpx", ".gpx.gz")
 
-    `fitdecode` is the `history` extra, so it is imported here rather than at module scope.
+
+class UnsupportedActivityFile(ValueError):
+    """A file in a format this module does not decode."""
+
+
+def read_activity(name: str, data: bytes) -> Activity | None:
+    """One activity file, by its name and its bytes. `None` when it holds no track.
+
+    Bytes rather than a path, so an export is read straight out of its zip: scope 3.7's
+    "read where they sit, nothing copied" stays true of an archive that also holds
+    somebody's messages, contacts and login history.
     """
+    base = name.replace("\\", "/").rsplit("/", 1)[-1]
+    if base.lower().endswith(".gz"):
+        data = gzip.decompress(data)
+        base = base[:-3]
+    activity_id = base.split(".", 1)[0]
+    if base.lower().endswith(".fit"):
+        return _read_fit(io.BytesIO(data), activity_id)
+    if base.lower().endswith(".gpx"):
+        return _read_gpx(data, activity_id)
+    raise UnsupportedActivityFile(f"{base}: not a FIT or GPX file")
+
+
+def read_fit(path: Path) -> Activity | None:
+    """One FIT file (or `.fit.gz`) from disk, or `None` when it holds no track."""
+    return read_activity(path.name, path.read_bytes())
+
+
+def _read_fit(stream: IO[bytes], activity_id: str) -> Activity | None:
+    """`fitdecode` is the `history` extra, so it is imported here rather than at module scope."""
     import fitdecode
 
     points: list[TrackPoint] = []
-    sport: str | None = None
-    sub_sport: str | None = None
+    sport: Any = None
+    sub_sport: Any = None
 
-    with fitdecode.FitReader(str(path)) as reader:
+    with _fit_reader()(stream, error_handling=fitdecode.ErrorHandling.IGNORE) as reader:
         for frame in reader:
             if getattr(frame, "frame_type", None) != fitdecode.FIT_FRAME_DATA:
                 continue
-            if frame.name == "sport":
-                sport = _field(frame, "sport")
-                sub_sport = _field(frame, "sub_sport")
+            if frame.name in ("sport", "session"):
+                # Devices write both; `sport` comes first, `session` is the fallback.
+                if sport is None:
+                    sport = _field(frame, "sport")
+                    sub_sport = _field(frame, "sub_sport")
             elif frame.name == "record":
                 point = _record(frame)
                 if point is not None:
@@ -286,11 +444,78 @@ def read_fit(path: Path) -> Activity | None:
     if not points:
         return None
     return Activity(
-        activity_id=path.stem,
+        activity_id=activity_id,
         points=points,
-        sport=str(sport) if sport else None,
+        sport=_sport(sport),
         is_race=str(sub_sport or "").lower() == "race",
     )
+
+
+@functools.cache
+def _fit_reader() -> Any:
+    """`fitdecode.FitReader`, less one crash that a real device file found.
+
+    fitdecode 0.11.0 raises `developer_data_index N not defined` when a `field_description`
+    names a developer data index no `developer_data_id` message declared - and raises it
+    unconditionally, even under `ErrorHandling.IGNORE`. Its own lookup path (`_get_dev_type`)
+    meets the same absence under IGNORE by registering a placeholder; this does that one
+    step earlier. The fields in question belong to a third-party watch app and carry nothing
+    this module reads, so without the override a whole run is lost to a field it ignores.
+    """
+    import fitdecode
+
+    class _Reader(fitdecode.FitReader):  # type: ignore[misc]
+        def _add_dev_field_description(self, message: Any) -> Any:
+            try:
+                index = message.get_raw_value("developer_data_index")
+            except KeyError:
+                index = None
+            if index is not None and int(index) not in self._local_dev_types:
+                self._add_dev_data_id_impl(int(index))
+            return super()._add_dev_field_description(message)
+
+    return _Reader
+
+
+def _read_gpx(data: bytes, activity_id: str) -> Activity | None:
+    """Track points with a time. A point without one is shape, and shape is not pace."""
+    import gpxpy
+
+    parsed = gpxpy.parse(data.decode("utf-8-sig"))
+    points: list[TrackPoint] = []
+    for track in parsed.tracks:
+        for segment in track.segments:
+            for p in segment.points:
+                if p.time is None:
+                    continue
+                total = (
+                    points[-1].cum_dist_m
+                    + haversine_m(points[-1].lat, points[-1].lon, p.latitude, p.longitude)
+                    if points
+                    else 0.0
+                )
+                points.append(
+                    TrackPoint(
+                        lat=p.latitude,
+                        lon=p.longitude,
+                        cum_dist_m=total,
+                        at=p.time,
+                        ele_m=p.elevation,
+                    )
+                )
+    if not points:
+        return None
+    return Activity(
+        activity_id=activity_id,
+        points=points,
+        sport=_sport(next((t.type for t in parsed.tracks if t.type), None)),
+    )
+
+
+def _sport(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value).strip().lower() or None
 
 
 def _record(frame: Any) -> TrackPoint | None:
@@ -300,12 +525,15 @@ def _record(frame: Any) -> TrackPoint | None:
         # A record with no position is a heart-rate sample, not a place. Dropped rather
         # than interpolated: an invented position becomes an accepted road.
         return None
+    # `enhanced_altitude` first: current devices write it on every record, and 16-bit
+    # `altitude` is the older field some omit.
+    altitude = _field(frame, "enhanced_altitude")
     return TrackPoint(
         lat=_semicircles(lat),
         lon=_semicircles(lon),
         cum_dist_m=float(distance),
         at=at,
-        ele_m=_optional_float(_field(frame, "altitude")),
+        ele_m=_optional_float(altitude if altitude is not None else _field(frame, "altitude")),
     )
 
 
@@ -335,9 +563,14 @@ def _optional_float(value: Any) -> float | None:
         return None
 
 
-def ingest(activities: Sequence[Activity], *, router: Router | None = None) -> History:
+def ingest(
+    activities: Sequence[Activity],
+    *,
+    router: Router | None = None,
+    elevation: ElevationSource = "device",
+) -> History:
     """Derive everything derivable, and the accepted-road set when there is a router."""
-    history = derive(activities)
+    history = derive(activities, elevation=elevation)
     if router is None:
         return History(
             curves=history.curves,
@@ -349,7 +582,9 @@ def ingest(activities: Sequence[Activity], *, router: Router | None = None) -> H
                 "(ADR 0001), so it is empty rather than guessed",
             ],
         )
-    ways, problems = accepted_ways([a for a in activities if not a.is_race], router)
+    ways, problems = accepted_ways(
+        [a for a in activities if is_running(a) and not a.is_race], router
+    )
     return History(
         curves=history.curves,
         accepted_ways=ways,
@@ -365,12 +600,20 @@ __all__ = [
     "MIN_SAMPLES_PER_BIN",
     "MOVING_SPEED_MS",
     "PRIVACY_TRIM_M",
+    "READABLE_SUFFIXES",
+    "RUNNING_SPORTS",
+    "STRIDE_M",
     "Activity",
+    "ElevationSource",
     "History",
     "TrackPoint",
+    "UnsupportedActivityFile",
     "accepted_ways",
     "derive",
     "grade_bin",
     "ingest",
+    "is_running",
+    "read_activity",
     "read_fit",
+    "with_terrain",
 ]

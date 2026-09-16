@@ -49,6 +49,13 @@ class PacingCurves(BaseModel):
     #: population one.
     speed_by_grade_bin: dict[str, float] = Field(default_factory=dict)
 
+    #: The elevation those bins were measured against. A plan grades its route on 3DEP
+    #: terrain (scope 7.1), so `terrain` bins mean what they are applied to. `device` is
+    #: what a watch recorded, and altimeter noise smears climbs into gentler bins: on a
+    #: real archive a +12% climb read as 0.92 of flat speed on device elevation and 0.65
+    #: on terrain, at the same stride (ADR 0024). `None` when nothing was binned.
+    grade_elevation: Literal["terrain", "device"] | None = None
+
     def speed_ms(self, gradient: float, distance_m: float, unpaved: bool = False) -> float:
         """Sustainable speed at a gradient, this far into the run."""
         speed = self._grade_speed(gradient)
