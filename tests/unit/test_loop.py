@@ -207,6 +207,43 @@ def test_an_avoid_polygon_reaches_every_call_the_loop_makes(
     assert all(area in (call.get("avoid_polygons") or []) for call in router.detoured)
 
 
+def test_an_avoided_name_reaches_the_router_as_an_area(
+    tmp_path: Path, improving: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scope 6.4 admits a must-avoid by *name*, and `avoid_names` was written by
+    `agent/intent.py` and read by nothing - so "avoid El Camino" was stored and ignored."""
+    from longrun.core.data.cache import STATIC_DAY, SqliteCache, args_hash
+    from longrun.core.data.geocode import USER_AGENT_ENV_VAR, geocode_args
+
+    monkeypatch.setenv(USER_AGENT_ENV_VAR, "longrun test (nobody@example.invalid)")
+    request = _request().model_copy(update={"avoid_names": ["El Camino Real"]})
+    router = RecordingRouter()
+
+    with SqliteCache() as cache:
+        cache.put(
+            "nominatim.search",
+            args_hash(geocode_args("El Camino Real")),
+            # A place name is not date-dependent (M5.8), so the day column is static.
+            STATIC_DAY,
+            [
+                {
+                    "display_name": "El Camino Real",
+                    "lat": "37.4200",
+                    "lon": "-122.1400",
+                    "type": "primary",
+                    "boundingbox": ["37.4190", "37.4260", "-122.1450", "-122.1380"],
+                }
+            ],
+        )
+        ctx = _ctx(tmp_path)
+        ctx.cache = cache
+        plan_route(request, ctx, start_at=START, route=_route(), router=router)
+
+    assert router.detoured, "the loop asked for no detour at all"
+    ids = {area.get("id") for call in router.detoured for area in call.get("avoid_polygons") or []}
+    assert any(str(i).startswith("avoid-") for i in ids)
+
+
 def test_a_per_run_override_reaches_the_plan_and_not_the_disk(
     tmp_path: Path, improving: None
 ) -> None:

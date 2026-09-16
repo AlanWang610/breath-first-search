@@ -171,7 +171,9 @@ def plan_route(
     history ingest lands in M5.10 - until then the pacing model reports the population
     curve and says so, which is the honest degradation and already implemented.
     """
-    pad = resume if resume is not None else _fresh(request, profile, snapshot, custom_model)
+    pad = (
+        resume if resume is not None else _fresh(request, profile, snapshot, custom_model, ctx=ctx)
+    )
     if resume is not None:
         _apply_answer(pad)
 
@@ -248,6 +250,7 @@ def _fresh(
     profile: PreferenceProfile | None,
     snapshot: SnapshotPins | None,
     custom_model: CostingModel | None = None,
+    ctx: ScorerContext | None = None,
 ) -> Scratchpad:
     from longrun.core.models.plan import Manifest
     from longrun.core.models.profile import PreferenceProfile as Profile
@@ -259,7 +262,7 @@ def _fresh(
         job_id=uuid.uuid4().hex[:12],
         request=request,
         profile=_overridden(profile if profile is not None else Profile(), request, manifest),
-        policy=_policy(request, custom_model),
+        policy=_policy(request, custom_model, ctx, manifest),
         locked=list(request.locked),
         manifest=manifest,
     )
@@ -296,16 +299,32 @@ def _overridden(
     return applied
 
 
-def _policy(request: PlanRequest, custom_model: CostingModel | None) -> RoutingPolicy:
+def _policy(
+    request: PlanRequest,
+    custom_model: CostingModel | None,
+    ctx: ScorerContext | None,
+    manifest: Manifest,
+) -> RoutingPolicy:
     """Resolve once what every routing call in this plan must carry (scope 6.4, 7.1).
 
     The model comes from the caller because it is built from the profile and the run's own
     flags, which are a `cli/` and `api/` concern; the areas come from the request, which has
-    carried them since M1 with nothing reading them.
+    carried them since M1 with nothing reading them; and a name becomes an area here,
+    because that needs a geocoder and therefore a context.
     """
+    areas = list(request.avoid_polygons)
+    notes: list[str] = []
+    if request.avoid_names and ctx is not None:
+        from longrun.core.routing.avoid import polygons_for_names
+
+        geocoded, notes = polygons_for_names(request.avoid_names, ctx)
+        areas.extend(geocoded)
+    for note in notes:
+        manifest.degradation.append(note)
     return RoutingPolicy(
         custom_model=dict(custom_model) if custom_model else None,
-        avoid_polygons=list(request.avoid_polygons),
+        avoid_polygons=areas,
+        notes=notes,
     )
 
 

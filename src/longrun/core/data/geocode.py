@@ -52,6 +52,12 @@ class Place:
     lat: float
     lon: float
     kind: str | None = None
+    #: Nominatim's `boundingbox`, as `(min_lat, max_lat, min_lon, max_lon)`. Kept because a
+    #: named *road* is a line and its point is one arbitrary spot on it - scope 6.4's
+    #: "must-avoid ways/areas by name" needs the extent, and a disc around the point would
+    #: avoid a couple of hundred metres of a road somebody asked to stay off entirely.
+    #: `None` when the endpoint did not give one, which is the point-buffer case.
+    bbox: tuple[float, float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +116,19 @@ def geocode_args(query: str, *, limit: int = 5, viewbox: tuple[float, ...] | Non
     return args
 
 
+def _bbox(value: Any) -> tuple[float, float, float, float] | None:
+    """Nominatim's `boundingbox`: four strings, south, north, west, east.
+
+    Dropped rather than guessed when it is any other shape - an avoid-area built from a
+    misread box is a closed piece of city nobody asked to close.
+    """
+    try:
+        south, north, west, east = (float(v) for v in value)
+    except (TypeError, ValueError):
+        return None
+    return (south, north, west, east)
+
+
 def parse_places(payload: Any) -> list[Place]:
     """Nominatim's `jsonv2` array, with anything unreadable dropped rather than guessed."""
     out: list[Place] = []
@@ -126,6 +145,7 @@ def parse_places(payload: Any) -> list[Place]:
                     lat=float(row["lat"]),
                     lon=float(row["lon"]),
                     kind=row.get("type"),
+                    bbox=_bbox(row.get("boundingbox")),
                 )
             )
         except (KeyError, TypeError, ValueError):
