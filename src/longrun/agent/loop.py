@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from longrun.core.geo.segments import locked_segment_ids
 from longrun.core.models.plan import PendingQuestion, Plan, TradeOff
+from longrun.core.models.routing import RoutingPolicy
 from longrun.core.plan.arbitrate import arbitrate, rank_flags, score_candidate
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.plan.scratchpad import Scratchpad
@@ -50,7 +51,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.request import PlanRequest
     from longrun.core.plan.arbitrate import Candidate
     from longrun.core.plan.pipeline import ScoredRoute
-    from longrun.core.routing.base import Router
+    from longrun.core.routing.base import CostingModel, Router
 
 #: Scope 8.1 step 6: "iterate up to 5 rounds or until no scorer flags above threshold".
 MAX_ROUNDS = 5
@@ -162,6 +163,7 @@ def plan_route(
     snapshot: SnapshotPins | None = None,
     resume: Scratchpad | None = None,
     max_rounds: int = MAX_ROUNDS,
+    custom_model: CostingModel | None = None,
 ) -> LoopOutcome:
     """Run scope 8.1 from a structured request to a plan, or to a question.
 
@@ -169,7 +171,7 @@ def plan_route(
     history ingest lands in M5.10 - until then the pacing model reports the population
     curve and says so, which is the honest degradation and already implemented.
     """
-    pad = resume if resume is not None else _fresh(request, profile, snapshot)
+    pad = resume if resume is not None else _fresh(request, profile, snapshot, custom_model)
     if resume is not None:
         _apply_answer(pad)
 
@@ -242,7 +244,10 @@ def answer(pad: Scratchpad, choice: str) -> Scratchpad:
 
 
 def _fresh(
-    request: PlanRequest, profile: PreferenceProfile | None, snapshot: SnapshotPins | None
+    request: PlanRequest,
+    profile: PreferenceProfile | None,
+    snapshot: SnapshotPins | None,
+    custom_model: CostingModel | None = None,
 ) -> Scratchpad:
     from longrun.core.models.plan import Manifest
     from longrun.core.models.profile import PreferenceProfile as Profile
@@ -253,8 +258,22 @@ def _fresh(
         job_id=uuid.uuid4().hex[:12],
         request=request,
         profile=profile if profile is not None else Profile(),
+        policy=_policy(request, custom_model),
         locked=list(request.locked),
         manifest=Manifest(snapshot=snapshot) if snapshot is not None else Manifest(),
+    )
+
+
+def _policy(request: PlanRequest, custom_model: CostingModel | None) -> RoutingPolicy:
+    """Resolve once what every routing call in this plan must carry (scope 6.4, 7.1).
+
+    The model comes from the caller because it is built from the profile and the run's own
+    flags, which are a `cli/` and `api/` concern; the areas come from the request, which has
+    carried them since M1 with nothing reading them.
+    """
+    return RoutingPolicy(
+        custom_model=dict(custom_model) if custom_model else None,
+        avoid_polygons=list(request.avoid_polygons),
     )
 
 
@@ -266,7 +285,11 @@ def _route(request: PlanRequest, router: Router | None, pad: Scratchpad) -> Rout
 
     waypoints = [request.start, *request.via, request.end]
     try:
-        return router.route(waypoints)
+        return router.route(
+            waypoints,
+            avoid_polygons=pad.policy.areas,
+            custom_model=pad.policy.costing(),
+        )
     except (RouterUnavailable, NoRouteError) as exc:
         pad.manifest.degradation.append(f"no route: {exc}")
         return None
@@ -335,9 +358,20 @@ def _worst_segment(pad: Scratchpad) -> Segment | None:
 
 
 def _propose(pad: Scratchpad, router: Router | None, span: tuple[float, float]) -> list[Route]:
+    """Candidates for one span, costed exactly as the route they will be compared against.
+
+    `CachedRouter.alternatives` unions these areas with the detour area it builds, so an
+    avoid the user asked for still holds inside a detour.
+    """
     if router is None or pad.route is None:
         return []
-    return router.alternatives(pad.route, span, k=CANDIDATES_PER_ROUND)
+    return router.alternatives(
+        pad.route,
+        span,
+        k=CANDIDATES_PER_ROUND,
+        avoid_polygons=pad.policy.areas,
+        custom_model=pad.policy.costing(),
+    )
 
 
 def _arbitrate(

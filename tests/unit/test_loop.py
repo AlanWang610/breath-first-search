@@ -137,6 +137,76 @@ def improving(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(loop, "score_once", fake)
 
 
+class RecordingRouter(StubRouter):
+    """A stub that keeps the keyword arguments every call was made with."""
+
+    def __init__(self, *, offers: int = 1) -> None:
+        super().__init__(offers=offers)
+        self.routed: list[dict[str, Any]] = []
+        self.detoured: list[dict[str, Any]] = []
+
+    def route(self, waypoints: Any, *a: Any, **k: Any) -> Route:
+        self.routed.append(dict(k))
+        return _route()
+
+    def alternatives(self, gpx: Route, around: Any = None, k: int = 3, **kw: Any) -> list[Route]:
+        self.detoured.append(dict(kw))
+        return super().alternatives(gpx, around, k, **kw)
+
+
+# --- the request reaches the router --------------------------------------------
+
+
+def test_a_reroute_carries_the_model_the_route_was_drawn_with(
+    tmp_path: Path, improving: None
+) -> None:
+    """The costing model reached the first route and no reroute after it.
+
+    `cli/plan.py` built the model and passed it to its own `router.route` call, and the
+    loop then called `alternatives` bare - so `--avoid-high-stress` shaped the opening line
+    and every detour the loop drew afterwards ignored it. A plan that arbitrates between a
+    costed route and uncosted candidates is comparing two different questions, which is
+    scope 7.1's whole subject.
+    """
+    from longrun.core.routing.custom_model import AVOID_HIGH_STRESS, to_custom_model
+
+    model = to_custom_model(AVOID_HIGH_STRESS)
+    router = RecordingRouter()
+
+    plan_route(
+        _request(),
+        _ctx(tmp_path),
+        start_at=START,
+        route=_route(),
+        router=router,
+        custom_model=model,
+    )
+
+    assert router.detoured, "the loop asked for no detour at all"
+    assert all(call.get("custom_model") == model for call in router.detoured)
+
+
+def test_an_avoid_polygon_reaches_every_call_the_loop_makes(
+    tmp_path: Path, improving: None
+) -> None:
+    """Scope 6.4 files must-avoid areas as a *constraint*, so a detour may not re-enter one.
+
+    `PlanRequest.avoid_polygons` has been declared since M1 and read by nothing on the plan
+    path: the router layer carries it end to end and the loop never passed it.
+    """
+    area = {
+        "type": "Polygon",
+        "coordinates": [[[-122.42, 37.77], [-122.41, 37.77], [-122.41, 37.78], [-122.42, 37.77]]],
+    }
+    request = _request().model_copy(update={"avoid_polygons": [area]})
+    router = RecordingRouter()
+
+    plan_route(request, _ctx(tmp_path), start_at=START, route=_route(), router=router)
+
+    assert router.detoured, "the loop asked for no detour at all"
+    assert all(area in (call.get("avoid_polygons") or []) for call in router.detoured)
+
+
 # --- the cap ------------------------------------------------------------------
 
 
