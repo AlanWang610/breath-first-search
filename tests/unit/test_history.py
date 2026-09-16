@@ -4,11 +4,10 @@ Hand-built activities whose answer is arithmetic: a runner holding exactly 3 m/s
 flat for an hour produces a flat speed of 3 m/s, and anything else is a bug in the
 derivation rather than a judgement call about somebody's training.
 
-No FIT files here. The reader is a thin loop over `fitdecode` frames and a test of it
-against a file this suite also *wrote* would mostly be testing the encoder; what can
-actually be wrong is the mapping - semicircles, missing positions, the race flag - and that
-is tested against hand-built frames. The reader meets a real device file when one is
-dropped in `data/`, which is where it belongs and where this suite will never look.
+No FIT files here. What can be wrong in the reader is the mapping - semicircles, missing
+positions, which altitude field - and that is tested against hand-built frames in
+`test_history_readers.py`. This docstring promised those tests for two milestones before
+they existed; they were written when a real Strava archive was first read.
 """
 
 from __future__ import annotations

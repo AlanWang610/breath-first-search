@@ -154,6 +154,11 @@ def _caveats(
                 f"Longest recorded effort is {longest / 1000:.0f} km against a "
                 f"{total_m / 1000:.0f} km plan; projected times are unreliable."
             )
+    if curves.speed_by_grade_bin and curves.grade_elevation == "device":
+        out.append(
+            "Pace by grade was measured on the recording device's own elevation, which "
+            "understates hills; climbs may be paced faster than they will be run."
+        )
     if elevations is None:
         out.append("No elevation supplied; ETAs assume flat terrain throughout.")
     elif any(e is None for e in elevations):
