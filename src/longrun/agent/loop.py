@@ -253,15 +253,47 @@ def _fresh(
     from longrun.core.models.profile import PreferenceProfile as Profile
 
     plan_id = uuid.uuid4().hex[:12]
+    manifest = Manifest(snapshot=snapshot) if snapshot is not None else Manifest()
     return Scratchpad(
         plan_id=plan_id,
         job_id=uuid.uuid4().hex[:12],
         request=request,
-        profile=profile if profile is not None else Profile(),
+        profile=_overridden(profile if profile is not None else Profile(), request, manifest),
         policy=_policy(request, custom_model),
         locked=list(request.locked),
-        manifest=Manifest(snapshot=snapshot) if snapshot is not None else Manifest(),
+        manifest=manifest,
     )
+
+
+def _overridden(
+    profile: PreferenceProfile, request: PlanRequest, manifest: Manifest
+) -> PreferenceProfile:
+    """Scope 6.1's per-run overrides, applied to this plan and never to the disk.
+
+    `apply_overrides` has existed since M1 with its "never writes to disk" promise and no
+    caller outside its own tests, so `PlanRequest.overrides` was a field a request could
+    carry and a plan would ignore. It is applied here rather than at the CLI so every
+    entry point gets it, and recorded on the manifest so a sheet cannot report a threshold
+    the profile does not hold.
+
+    A floor violation degrades rather than raises: scope 6.3 lets a runner *raise* a floor
+    and not lower one, and a refused override is a thing to tell them, not a reason to
+    refuse the plan.
+    """
+    if not request.overrides:
+        return profile
+    from longrun.core.preferences.floors import FloorViolation
+    from longrun.core.preferences.store import ProfileError, apply_overrides
+
+    try:
+        applied = apply_overrides(profile, request.overrides)
+    except (ProfileError, FloorViolation) as exc:
+        manifest.degradation.append(f"per-run override refused: {exc}")
+        return profile
+    manifest.degradation.append(
+        "per-run overrides applied to this plan only: " + ", ".join(sorted(request.overrides))
+    )
+    return applied
 
 
 def _policy(request: PlanRequest, custom_model: CostingModel | None) -> RoutingPolicy:
@@ -325,7 +357,12 @@ def _score(
     """Steps 4, 5 and 9, which `score_once` already runs as one pass."""
     assert pad.route is not None
     scored = score_once(
-        pad.route, request, ctx, start_at=start_at, router=router, manifest=manifest
+        pad.route,
+        _with_locks(request, pad),
+        ctx,
+        start_at=start_at,
+        router=router,
+        manifest=manifest,
     )
     pad.route = scored.route
     pad.segments = scored.segments
@@ -355,6 +392,19 @@ def _worst_segment(pad: Scratchpad) -> Segment | None:
         if segment is not None:
             return segment
     return None
+
+
+def _with_locks(request: PlanRequest, pad: Scratchpad) -> PlanRequest:
+    """The request as the *plan* now stands, not as it arrived.
+
+    A lock set during the loop - which is what resolving a trade-off does, automatically
+    (scope 8.4) - lives on the scratchpad, and `check_10_locks_intact` reads
+    `request.locked`. So verification checked the locks the runner started with and never
+    the ones their own choices added, which is the half of the locks that matter most.
+    """
+    if list(pad.locked) == list(request.locked):
+        return request
+    return request.model_copy(update={"locked": list(pad.locked)})
 
 
 def _propose(pad: Scratchpad, router: Router | None, span: tuple[float, float]) -> list[Route]:
@@ -399,8 +449,16 @@ def _arbitrate(
     scoredby: dict[str, ScoredRoute] = {}
     for index, candidate in enumerate(candidates):
         label = f"alternative {index + 1}"
+        # `original=pad.route` is what lets check 10 mean anything: a candidate is a
+        # proposal to move the line, and a lock says which parts of it may not move.
         pass_result = score_once(
-            candidate, request, ctx, start_at=start_at, router=router, manifest=manifest
+            candidate,
+            _with_locks(request, pad),
+            ctx,
+            start_at=start_at,
+            router=router,
+            manifest=manifest,
+            original=pad.route,
         )
         scoredby[label] = pass_result
         field.append(

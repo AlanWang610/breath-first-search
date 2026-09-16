@@ -207,6 +207,43 @@ def test_an_avoid_polygon_reaches_every_call_the_loop_makes(
     assert all(area in (call.get("avoid_polygons") or []) for call in router.detoured)
 
 
+def test_a_per_run_override_reaches_the_plan_and_not_the_disk(
+    tmp_path: Path, improving: None
+) -> None:
+    """Scope 6.1: overrides apply to this run and do not persist unless confirmed.
+
+    `apply_overrides` has carried that promise since M1 and had no caller outside its own
+    tests, so `PlanRequest.overrides` was a field a request could set and a plan ignored.
+    """
+    request = _request().model_copy(update={"overrides": {"traffic_tolerance": 1}})
+
+    outcome = plan_route(
+        request, _ctx(tmp_path), start_at=START, route=_route(), router=StubRouter()
+    )
+
+    pad = outcome.scratchpad
+    assert pad.profile.traffic_tolerance.value == 1
+    assert load_defaults().traffic_tolerance.value == 2, "the stored default was mutated"
+    assert any("override" in note for note in pad.manifest.degradation)
+
+
+def test_an_override_that_lowers_a_safety_floor_is_refused_and_said_to_be(
+    tmp_path: Path, improving: None
+) -> None:
+    """Scope 6.3: a floor may be raised, never lowered - and a refusal is reported, not
+    raised, because it is something to tell the runner rather than a reason to refuse them
+    a plan."""
+    request = _request().model_copy(update={"overrides": {"traffic_tolerance": 4}})
+
+    outcome = plan_route(
+        request, _ctx(tmp_path), start_at=START, route=_route(), router=StubRouter()
+    )
+
+    pad = outcome.scratchpad
+    assert pad.profile.traffic_tolerance.value == 2, "the floor was lowered"
+    assert any("refused" in note for note in pad.manifest.degradation)
+
+
 # --- the cap ------------------------------------------------------------------
 
 

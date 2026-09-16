@@ -96,6 +96,6 @@ def gpx_verify(
                 _offenders_from(scorer_results, "crossings", requires="traffic_signals")
             ),
             checks.check_9_time_constraints(request.time_constraints, etas),
-            checks.check_10_locks_intact(segments or [], request.locked, original),
+            checks.check_10_locks_intact(route, request.locked, original),
         ]
     )

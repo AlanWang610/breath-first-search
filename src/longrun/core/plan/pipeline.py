@@ -73,8 +73,13 @@ def score_once(
     start_at: datetime,
     router: Any = None,
     manifest: Manifest | None = None,
+    original: Route | None = None,
 ) -> ScoredRoute:
     """Score a route once against an open context.
+
+    `original` is the line this one is being proposed *instead of*, and it is what makes
+    scope 7.9's check 10 possible: a lock is intact when the new line has not moved inside
+    it. `None` on a first pass, where there is nothing yet to have moved away from.
 
     `router` changes exactly one thing: where way ids come from. Repair mode has none and
     snaps geometrically (`core.geo.matching`); generate mode has the router that drew the
@@ -92,7 +97,13 @@ def score_once(
     external_before = len(getattr(ctx.cache, "calls", ()))
     try:
         scored = _score_pass(
-            route, request, ctx, start_at=start_at, router=router, manifest=manifest
+            route,
+            request,
+            ctx,
+            start_at=start_at,
+            router=router,
+            manifest=manifest,
+            original=original,
         )
         if manifest is not None:
             # The cache logs every external call; the manifest wants the ones this pass
@@ -113,6 +124,7 @@ def _score_pass(
     start_at: datetime,
     router: Any,
     manifest: Manifest | None,
+    original: Route | None = None,
 ) -> ScoredRoute:
     """The pass itself, with `ctx.coverage` already scoped to it by `score_once`."""
     # Repair mode has no router by design (scope 6.1), so it snaps geometrically instead;
@@ -185,6 +197,7 @@ def _score_pass(
         etas=eta_vector.etas,
         elevations=elevations,
         snapped_distances_m=snapped,
+        original=original,
     )
     if manifest is not None:
         # Scope 6.4: "budgets are recorded in the manifest". These two fields have existed

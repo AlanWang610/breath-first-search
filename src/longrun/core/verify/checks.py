@@ -16,7 +16,7 @@ from datetime import datetime
 
 from longrun.core.geo.dem import SPIKE_THRESHOLD_M
 from longrun.core.geo.gpx import haversine_m
-from longrun.core.models.geometry import Route, Segment
+from longrun.core.models.geometry import Route
 from longrun.core.models.request import LockedRange, TimeConstraints
 from longrun.core.models.verification import CheckResult
 
@@ -186,21 +186,39 @@ def check_9_time_constraints(
 
 
 def check_10_locks_intact(
-    segments: list[Segment], locked: list[LockedRange], original: Route | None
+    route: Route, locked: list[LockedRange], original: Route | None
 ) -> CheckResult:
-    """Locked segments unchanged from the locked geometry."""
+    """Locked segments unchanged from the locked geometry (scope 7.9 check 10).
+
+    Two things were wrong here until M8, and the check passed nothing either way because
+    nothing ever passed `original` - every plan in this project's history reported check 10
+    as skipped, which is why neither showed up.
+
+    The first: it took the *new* route's segments and then searched the *original* route's
+    points, so it asked whether the lock existed on the line it was set against. That is
+    true by construction. What scope 7.9 asks is whether the line inside the lock **moved**,
+    which needs both routes.
+
+    The second: a lock is a range in metres, and a reroute renumbers distances after the
+    span it changed - so comparing point to point by index would report every lock after a
+    detour as broken. `route_diff` already finds where two lines diverge in the original's
+    own distance frame, within a tolerance that exists for exactly this, so a lock is
+    intact when no divergence overlaps it.
+    """
     if original is None:
         return _skip(10, "locks_intact", "no pre-edit route to compare against")
     if not locked:
         return _result(10, "locks_intact", [])
 
+    from longrun.core.plan.diff import route_diff
+
+    spans = route_diff(original, route).spans
     offenders = []
     for lock in locked:
-        for point in original.points:
-            if lock.start_m <= point.cum_dist_m <= lock.end_m:
-                break
-        else:
+        moved = [s for s in spans if s.start_m < lock.end_m and s.end_m > lock.start_m]
+        if moved:
+            worst = max(s.max_offset_m for s in moved)
             offenders.append(
-                f"locked range {lock.start_m:.0f}-{lock.end_m:.0f} m is no longer on the route"
+                f"locked range {lock.start_m:.0f}-{lock.end_m:.0f} m moved by up to {worst:.0f} m"
             )
     return _result(10, "locks_intact", offenders)
