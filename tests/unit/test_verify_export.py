@@ -50,6 +50,10 @@ def _flag(scorer: str, segment_id: str = "s00000", kind: FlagKind = FlagKind.HAR
     )
 
 
+def _check(report: object, number: int) -> object:
+    return next(c for c in report.results if c.number == number)  # type: ignore[attr-defined]
+
+
 # --- verify: skips are not passes -------------------------------------------
 
 
@@ -58,6 +62,57 @@ def test_a_bare_route_skips_rather_than_passes_what_it_cannot_check() -> None:
     skipped = {c.number for c in report.skipped}
     assert {2, 4, 5, 6, 8, 10} <= skipped
     assert not any(c.status == "passed" for c in report.results if c.number in skipped)
+
+
+def test_a_lock_the_reroute_respected_passes_check_ten() -> None:
+    """Check 10 had never run: `gpx_verify` takes `original` and the pipeline never passed
+    one, so every plan in this project's history reported it skipped."""
+    original = _route()
+    kept = original.model_copy(update={"id": "same"})
+    request = _request(locked=[LockedRange(start_m=200.0, end_m=600.0, reason="chose B")])
+
+    check = _check(gpx_verify(kept, request, original=original), 10)
+
+    assert check.status == "passed"
+
+
+def test_a_lock_the_reroute_drove_through_fails_check_ten_and_says_how_far() -> None:
+    """The check used to search the *original* route for the lock, which is true by
+    construction. What scope 7.9 asks is whether the line inside the lock moved."""
+    original = _route()
+    moved = original.model_copy(
+        update={
+            "points": [
+                point.model_copy(
+                    update={"lon": point.lon + (0.004 if 200 <= i * 55.6 <= 600 else 0)}
+                )
+                for i, point in enumerate(original.points)
+            ]
+        }
+    )
+    request = _request(locked=[LockedRange(start_m=200.0, end_m=600.0)])
+
+    check = _check(gpx_verify(moved, request, original=original), 10)
+
+    assert check.status == "failed"
+    assert "moved by up to" in check.offenders[0]
+
+
+def test_a_lock_elsewhere_is_not_disturbed_by_a_reroute() -> None:
+    """A reroute renumbers every distance after the span it changed, so a check comparing
+    point to point by index would report every later lock as broken."""
+    original = _route()
+    moved = original.model_copy(
+        update={
+            "points": [
+                point.model_copy(update={"lon": point.lon + (0.004 if i * 55.6 > 800 else 0)})
+                for i, point in enumerate(original.points)
+            ]
+        }
+    )
+    request = _request(locked=[LockedRange(start_m=100.0, end_m=400.0)])
+
+    assert _check(gpx_verify(moved, request, original=original), 10).status == "passed"
 
 
 def test_summary_counts_all_three_states() -> None:

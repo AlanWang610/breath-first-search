@@ -937,7 +937,7 @@
       "name": "locks_intact",
       "number": 10,
       "offenders": 0,
-      "status": "skipped"
+      "status": "passed"
     }
   ]
 }

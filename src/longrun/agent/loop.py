@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from longrun.core.geo.segments import locked_segment_ids
 from longrun.core.models.plan import PendingQuestion, Plan, TradeOff
+from longrun.core.models.routing import RoutingPolicy
 from longrun.core.plan.arbitrate import arbitrate, rank_flags, score_candidate
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.plan.scratchpad import Scratchpad
@@ -50,7 +51,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.request import PlanRequest
     from longrun.core.plan.arbitrate import Candidate
     from longrun.core.plan.pipeline import ScoredRoute
-    from longrun.core.routing.base import Router
+    from longrun.core.routing.base import CostingModel, Router
 
 #: Scope 8.1 step 6: "iterate up to 5 rounds or until no scorer flags above threshold".
 MAX_ROUNDS = 5
@@ -162,6 +163,7 @@ def plan_route(
     snapshot: SnapshotPins | None = None,
     resume: Scratchpad | None = None,
     max_rounds: int = MAX_ROUNDS,
+    custom_model: CostingModel | None = None,
 ) -> LoopOutcome:
     """Run scope 8.1 from a structured request to a plan, or to a question.
 
@@ -169,7 +171,9 @@ def plan_route(
     history ingest lands in M5.10 - until then the pacing model reports the population
     curve and says so, which is the honest degradation and already implemented.
     """
-    pad = resume if resume is not None else _fresh(request, profile, snapshot)
+    pad = (
+        resume if resume is not None else _fresh(request, profile, snapshot, custom_model, ctx=ctx)
+    )
     if resume is not None:
         _apply_answer(pad)
 
@@ -242,19 +246,85 @@ def answer(pad: Scratchpad, choice: str) -> Scratchpad:
 
 
 def _fresh(
-    request: PlanRequest, profile: PreferenceProfile | None, snapshot: SnapshotPins | None
+    request: PlanRequest,
+    profile: PreferenceProfile | None,
+    snapshot: SnapshotPins | None,
+    custom_model: CostingModel | None = None,
+    ctx: ScorerContext | None = None,
 ) -> Scratchpad:
     from longrun.core.models.plan import Manifest
     from longrun.core.models.profile import PreferenceProfile as Profile
 
     plan_id = uuid.uuid4().hex[:12]
+    manifest = Manifest(snapshot=snapshot) if snapshot is not None else Manifest()
     return Scratchpad(
         plan_id=plan_id,
         job_id=uuid.uuid4().hex[:12],
         request=request,
-        profile=profile if profile is not None else Profile(),
+        profile=_overridden(profile if profile is not None else Profile(), request, manifest),
+        policy=_policy(request, custom_model, ctx, manifest),
         locked=list(request.locked),
-        manifest=Manifest(snapshot=snapshot) if snapshot is not None else Manifest(),
+        manifest=manifest,
+    )
+
+
+def _overridden(
+    profile: PreferenceProfile, request: PlanRequest, manifest: Manifest
+) -> PreferenceProfile:
+    """Scope 6.1's per-run overrides, applied to this plan and never to the disk.
+
+    `apply_overrides` has existed since M1 with its "never writes to disk" promise and no
+    caller outside its own tests, so `PlanRequest.overrides` was a field a request could
+    carry and a plan would ignore. It is applied here rather than at the CLI so every
+    entry point gets it, and recorded on the manifest so a sheet cannot report a threshold
+    the profile does not hold.
+
+    A floor violation degrades rather than raises: scope 6.3 lets a runner *raise* a floor
+    and not lower one, and a refused override is a thing to tell them, not a reason to
+    refuse the plan.
+    """
+    if not request.overrides:
+        return profile
+    from longrun.core.preferences.floors import FloorViolation
+    from longrun.core.preferences.store import ProfileError, apply_overrides
+
+    try:
+        applied = apply_overrides(profile, request.overrides)
+    except (ProfileError, FloorViolation) as exc:
+        manifest.degradation.append(f"per-run override refused: {exc}")
+        return profile
+    manifest.degradation.append(
+        "per-run overrides applied to this plan only: " + ", ".join(sorted(request.overrides))
+    )
+    return applied
+
+
+def _policy(
+    request: PlanRequest,
+    custom_model: CostingModel | None,
+    ctx: ScorerContext | None,
+    manifest: Manifest,
+) -> RoutingPolicy:
+    """Resolve once what every routing call in this plan must carry (scope 6.4, 7.1).
+
+    The model comes from the caller because it is built from the profile and the run's own
+    flags, which are a `cli/` and `api/` concern; the areas come from the request, which has
+    carried them since M1 with nothing reading them; and a name becomes an area here,
+    because that needs a geocoder and therefore a context.
+    """
+    areas = list(request.avoid_polygons)
+    notes: list[str] = []
+    if request.avoid_names and ctx is not None:
+        from longrun.core.routing.avoid import polygons_for_names
+
+        geocoded, notes = polygons_for_names(request.avoid_names, ctx)
+        areas.extend(geocoded)
+    for note in notes:
+        manifest.degradation.append(note)
+    return RoutingPolicy(
+        custom_model=dict(custom_model) if custom_model else None,
+        avoid_polygons=areas,
+        notes=notes,
     )
 
 
@@ -266,7 +336,11 @@ def _route(request: PlanRequest, router: Router | None, pad: Scratchpad) -> Rout
 
     waypoints = [request.start, *request.via, request.end]
     try:
-        return router.route(waypoints)
+        return router.route(
+            waypoints,
+            avoid_polygons=pad.policy.areas,
+            custom_model=pad.policy.costing(),
+        )
     except (RouterUnavailable, NoRouteError) as exc:
         pad.manifest.degradation.append(f"no route: {exc}")
         return None
@@ -302,7 +376,12 @@ def _score(
     """Steps 4, 5 and 9, which `score_once` already runs as one pass."""
     assert pad.route is not None
     scored = score_once(
-        pad.route, request, ctx, start_at=start_at, router=router, manifest=manifest
+        pad.route,
+        _with_locks(request, pad),
+        ctx,
+        start_at=start_at,
+        router=router,
+        manifest=manifest,
     )
     pad.route = scored.route
     pad.segments = scored.segments
@@ -334,10 +413,34 @@ def _worst_segment(pad: Scratchpad) -> Segment | None:
     return None
 
 
+def _with_locks(request: PlanRequest, pad: Scratchpad) -> PlanRequest:
+    """The request as the *plan* now stands, not as it arrived.
+
+    A lock set during the loop - which is what resolving a trade-off does, automatically
+    (scope 8.4) - lives on the scratchpad, and `check_10_locks_intact` reads
+    `request.locked`. So verification checked the locks the runner started with and never
+    the ones their own choices added, which is the half of the locks that matter most.
+    """
+    if list(pad.locked) == list(request.locked):
+        return request
+    return request.model_copy(update={"locked": list(pad.locked)})
+
+
 def _propose(pad: Scratchpad, router: Router | None, span: tuple[float, float]) -> list[Route]:
+    """Candidates for one span, costed exactly as the route they will be compared against.
+
+    `CachedRouter.alternatives` unions these areas with the detour area it builds, so an
+    avoid the user asked for still holds inside a detour.
+    """
     if router is None or pad.route is None:
         return []
-    return router.alternatives(pad.route, span, k=CANDIDATES_PER_ROUND)
+    return router.alternatives(
+        pad.route,
+        span,
+        k=CANDIDATES_PER_ROUND,
+        avoid_polygons=pad.policy.areas,
+        custom_model=pad.policy.costing(),
+    )
 
 
 def _arbitrate(
@@ -365,8 +468,16 @@ def _arbitrate(
     scoredby: dict[str, ScoredRoute] = {}
     for index, candidate in enumerate(candidates):
         label = f"alternative {index + 1}"
+        # `original=pad.route` is what lets check 10 mean anything: a candidate is a
+        # proposal to move the line, and a lock says which parts of it may not move.
         pass_result = score_once(
-            candidate, request, ctx, start_at=start_at, router=router, manifest=manifest
+            candidate,
+            _with_locks(request, pad),
+            ctx,
+            start_at=start_at,
+            router=router,
+            manifest=manifest,
+            original=pad.route,
         )
         scoredby[label] = pass_result
         field.append(

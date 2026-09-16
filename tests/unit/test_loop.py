@@ -137,6 +137,150 @@ def improving(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(loop, "score_once", fake)
 
 
+class RecordingRouter(StubRouter):
+    """A stub that keeps the keyword arguments every call was made with."""
+
+    def __init__(self, *, offers: int = 1) -> None:
+        super().__init__(offers=offers)
+        self.routed: list[dict[str, Any]] = []
+        self.detoured: list[dict[str, Any]] = []
+
+    def route(self, waypoints: Any, *a: Any, **k: Any) -> Route:
+        self.routed.append(dict(k))
+        return _route()
+
+    def alternatives(self, gpx: Route, around: Any = None, k: int = 3, **kw: Any) -> list[Route]:
+        self.detoured.append(dict(kw))
+        return super().alternatives(gpx, around, k, **kw)
+
+
+# --- the request reaches the router --------------------------------------------
+
+
+def test_a_reroute_carries_the_model_the_route_was_drawn_with(
+    tmp_path: Path, improving: None
+) -> None:
+    """The costing model reached the first route and no reroute after it.
+
+    `cli/plan.py` built the model and passed it to its own `router.route` call, and the
+    loop then called `alternatives` bare - so `--avoid-high-stress` shaped the opening line
+    and every detour the loop drew afterwards ignored it. A plan that arbitrates between a
+    costed route and uncosted candidates is comparing two different questions, which is
+    scope 7.1's whole subject.
+    """
+    from longrun.core.routing.custom_model import AVOID_HIGH_STRESS, to_custom_model
+
+    model = to_custom_model(AVOID_HIGH_STRESS)
+    router = RecordingRouter()
+
+    plan_route(
+        _request(),
+        _ctx(tmp_path),
+        start_at=START,
+        route=_route(),
+        router=router,
+        custom_model=model,
+    )
+
+    assert router.detoured, "the loop asked for no detour at all"
+    assert all(call.get("custom_model") == model for call in router.detoured)
+
+
+def test_an_avoid_polygon_reaches_every_call_the_loop_makes(
+    tmp_path: Path, improving: None
+) -> None:
+    """Scope 6.4 files must-avoid areas as a *constraint*, so a detour may not re-enter one.
+
+    `PlanRequest.avoid_polygons` has been declared since M1 and read by nothing on the plan
+    path: the router layer carries it end to end and the loop never passed it.
+    """
+    area = {
+        "type": "Polygon",
+        "coordinates": [[[-122.42, 37.77], [-122.41, 37.77], [-122.41, 37.78], [-122.42, 37.77]]],
+    }
+    request = _request().model_copy(update={"avoid_polygons": [area]})
+    router = RecordingRouter()
+
+    plan_route(request, _ctx(tmp_path), start_at=START, route=_route(), router=router)
+
+    assert router.detoured, "the loop asked for no detour at all"
+    assert all(area in (call.get("avoid_polygons") or []) for call in router.detoured)
+
+
+def test_an_avoided_name_reaches_the_router_as_an_area(
+    tmp_path: Path, improving: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scope 6.4 admits a must-avoid by *name*, and `avoid_names` was written by
+    `agent/intent.py` and read by nothing - so "avoid El Camino" was stored and ignored."""
+    from longrun.core.data.cache import STATIC_DAY, SqliteCache, args_hash
+    from longrun.core.data.geocode import USER_AGENT_ENV_VAR, geocode_args
+
+    monkeypatch.setenv(USER_AGENT_ENV_VAR, "longrun test (nobody@example.invalid)")
+    request = _request().model_copy(update={"avoid_names": ["El Camino Real"]})
+    router = RecordingRouter()
+
+    with SqliteCache() as cache:
+        cache.put(
+            "nominatim.search",
+            args_hash(geocode_args("El Camino Real")),
+            # A place name is not date-dependent (M5.8), so the day column is static.
+            STATIC_DAY,
+            [
+                {
+                    "display_name": "El Camino Real",
+                    "lat": "37.4200",
+                    "lon": "-122.1400",
+                    "type": "primary",
+                    "boundingbox": ["37.4190", "37.4260", "-122.1450", "-122.1380"],
+                }
+            ],
+        )
+        ctx = _ctx(tmp_path)
+        ctx.cache = cache
+        plan_route(request, ctx, start_at=START, route=_route(), router=router)
+
+    assert router.detoured, "the loop asked for no detour at all"
+    ids = {area.get("id") for call in router.detoured for area in call.get("avoid_polygons") or []}
+    assert any(str(i).startswith("avoid-") for i in ids)
+
+
+def test_a_per_run_override_reaches_the_plan_and_not_the_disk(
+    tmp_path: Path, improving: None
+) -> None:
+    """Scope 6.1: overrides apply to this run and do not persist unless confirmed.
+
+    `apply_overrides` has carried that promise since M1 and had no caller outside its own
+    tests, so `PlanRequest.overrides` was a field a request could set and a plan ignored.
+    """
+    request = _request().model_copy(update={"overrides": {"traffic_tolerance": 1}})
+
+    outcome = plan_route(
+        request, _ctx(tmp_path), start_at=START, route=_route(), router=StubRouter()
+    )
+
+    pad = outcome.scratchpad
+    assert pad.profile.traffic_tolerance.value == 1
+    assert load_defaults().traffic_tolerance.value == 2, "the stored default was mutated"
+    assert any("override" in note for note in pad.manifest.degradation)
+
+
+def test_an_override_that_lowers_a_safety_floor_is_refused_and_said_to_be(
+    tmp_path: Path, improving: None
+) -> None:
+    """Scope 6.3: a floor may be raised, never lowered - and a refusal is reported, not
+    raised, because it is something to tell the runner rather than a reason to refuse them
+    a plan."""
+    request = _request().model_copy(update={"overrides": {"traffic_tolerance": 4}})
+
+    outcome = plan_route(
+        request, _ctx(tmp_path), start_at=START, route=_route(), router=StubRouter()
+    )
+
+    pad = outcome.scratchpad
+    assert pad.profile.traffic_tolerance.value == 2, "the floor was lowered"
+    assert any("refused" in note for note in pad.manifest.degradation)
+
+
 # --- the cap ------------------------------------------------------------------
 
 

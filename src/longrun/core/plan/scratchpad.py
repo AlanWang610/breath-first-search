@@ -24,6 +24,7 @@ from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Manifest, PendingQuestion, TradeOff
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import LockedRange, PlanRequest
+from longrun.core.models.routing import RoutingPolicy
 
 JobStatus = Literal["running", "needs_input", "complete", "failed"]
 
@@ -42,6 +43,11 @@ class Scratchpad(BaseModel):
     #: abandoned while the plan it is building keeps its identity.
     job_id: str | None = None
     profile: PreferenceProfile = PreferenceProfile()
+    #: The costing model and avoid-areas every routing call in this plan carries, resolved
+    #: once when the plan began. Persisted rather than recomputed, because a resume rebuilds
+    #: the router in a different process and a policy recomputed there could silently differ
+    #: from the one the first half of the route was drawn with.
+    policy: RoutingPolicy = RoutingPolicy()
     segments: list[Segment] = Field(default_factory=list)
     results: list[ScorerResult] = Field(default_factory=list)
     etas: list[datetime] = Field(default_factory=list)

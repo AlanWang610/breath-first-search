@@ -206,7 +206,11 @@ def plan(
         }
 
         if rounds > 0:
-            _iterate(request, route, shared, rounds=rounds, out=out)
+            # The model goes with the loop, not into `shared`: `score_route` scores one pass
+            # and never re-routes, so it has no use for it. Passing it to the opening
+            # `router.route` and to nothing else is how `--avoid-high-stress` shaped the
+            # first line and no reroute after it, for every plan between M5 and M8.
+            _iterate(request, route, shared, rounds=rounds, out=out, custom_model=model)
         else:
             score_route(route, request, out=out, **shared)
 
@@ -272,6 +276,7 @@ def _iterate(
     *,
     rounds: int,
     out: Path | None,
+    custom_model: dict[str, Any] | None = None,
 ) -> None:
     """Scope 8.1's loop, through the same pieces `repair` scores one pass with.
 
@@ -304,6 +309,7 @@ def _iterate(
             profile=shared["profile"],
             snapshot=shared["snapshot"],
             max_rounds=rounds,
+            custom_model=custom_model,
             # Whatever the environment supports. With no key this is `NO_MODEL` and the
             # plan is identical apart from a terser trade-off line (ADR 0015).
             sites=call_sites_from_env(shared["budget"]),

@@ -295,7 +295,7 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
     """
     from datetime import datetime
 
-    from longrun.agent.loop import plan_route
+    from longrun.agent.loop import call_sites_from_env, plan_route
     from longrun.core.data.cache import SqliteCache, cache_path_from_env
     from longrun.core.models.context import Budget
     from longrun.core.models.plan import SnapshotPins
@@ -335,8 +335,9 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
             graph=snapshot.osm_extract_date,
         )
         params = AVOID_HIGH_STRESS if submission.avoid_high_stress else NEUTRAL
+        model = to_custom_model(params, profile) or None
         report("routing")
-        route = router.route(waypoints, custom_model=to_custom_model(params, profile) or None)
+        route = router.route(waypoints, custom_model=model)
         report(f"routed {route.length_m / 1000:.2f} km")
         with open_context(
             route=route,
@@ -356,6 +357,11 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
                 route=route,
                 router=router,
                 max_rounds=submission.rounds,
+                custom_model=model,
+                # The CLI has passed this since M5 and this path passed nothing, so the
+                # HTTP surface was model-free even with a key set - which made "the UI adds
+                # no capability" true in one direction and false in the other (scope 3.9).
+                sites=call_sites_from_env(budget),
             )
     return _finish(outcome, plans, report)
 
@@ -367,7 +373,7 @@ def _continue_plan(pad: Any, plans: Path, report: Any) -> Any:
     here is the record rather than anything held in memory. That is the boundary scope 4.2
     exists for and the one a reopened browser crosses.
     """
-    from longrun.agent.loop import plan_route
+    from longrun.agent.loop import call_sites_from_env, plan_route
     from longrun.core.data.cache import SqliteCache, cache_path_from_env
     from longrun.core.models.context import Budget
     from longrun.core.models.plan import SnapshotPins
@@ -404,8 +410,17 @@ def _continue_plan(pad: Any, plans: Path, report: Any) -> Any:
             cache=cache,
             budget=budget,
         ) as ctx:
+            # No `custom_model` here on purpose: the policy was resolved when the plan began
+            # and rides on the scratchpad, so a resume in a different process costs the
+            # route the same way the first half of it was costed.
             outcome = plan_route(
-                pad.request, ctx, start_at=start_at, route=pad.route, router=router, resume=pad
+                pad.request,
+                ctx,
+                start_at=start_at,
+                route=pad.route,
+                router=router,
+                resume=pad,
+                sites=call_sites_from_env(budget),
             )
     return _finish(outcome, plans, report)
 
