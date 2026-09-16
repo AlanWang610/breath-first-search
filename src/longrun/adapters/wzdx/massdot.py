@@ -24,6 +24,12 @@ through Boston to two HTTP requests rather than twenty-three.
 Confirmed 2026-09-13: the endpoint is live and answers **HTTP 401** without a key, so it
 lands beside 511 SF Bay as a feed that names the key it needs rather than one that quietly
 does not exist.
+
+**Not yet known to parse.** The registry lists the feed's version as **CWZ 1.0** -
+Connected Work Zones, developed from WZDx - not one of the WZDx 4.x versions the shared
+reader was written against. It may well read; nobody with a key has yet seen whether it
+does, and a feed that answers and parses to nothing would look exactly like a state with
+no work zones.
 """
 
 from __future__ import annotations

@@ -58,10 +58,14 @@ SF_BAY_511 = ApiKey(
 #: MassDOT's construction work-zone feed. The USDOT registry lists it active, and it
 #: answers HTTP 401 without a credential - which is why Boston reported no closure adapter
 #: for any of its 23 jurisdictions until one was written.
+#:
+#: `register_at` is the registry's own `apikeyurl` for `massdot__cwz`, the "Work Zones API"
+#: portal. It used to be a mass.gov developer page that nobody had confirmed offers this
+#: key, and which refuses automated requests, so it could not be checked either.
 MASSDOT = ApiKey(
     env_var="LONGRUN_MASSDOT_API_KEY",
     service="the MassDOT work-zone feed",
-    register_at="https://www.mass.gov/info-details/massdot-developer-resources",
+    register_at="https://api-app.massdot-swzm.com/",
 )
 
 #: The National Park Service alerts API - what `trail_status` reads for any route crossing
