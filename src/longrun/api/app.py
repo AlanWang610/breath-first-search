@@ -332,7 +332,7 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
             GraphHopperRouter(settings.router_url or ""),
             cache,
             budget,
-            graph=snapshot.osm_extract_date,
+            graph=snapshot.graph_identity,
         )
         params = AVOID_HIGH_STRESS if submission.avoid_high_stress else NEUTRAL
         model = to_custom_model(params, profile) or None
@@ -398,7 +398,7 @@ def _continue_plan(pad: Any, plans: Path, report: Any) -> Any:
             GraphHopperRouter(settings.router_url or ""),
             cache,
             budget,
-            graph=snapshot.osm_extract_date,
+            graph=snapshot.graph_identity,
         )
         with open_context(
             route=pad.route,

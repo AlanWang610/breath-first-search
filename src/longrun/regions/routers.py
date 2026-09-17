@@ -187,6 +187,72 @@ def region_for(points: list[LatLon], specs: dict[str, Any]) -> RegionMatch:
     )
 
 
+@dataclass(frozen=True)
+class Resolved:
+    """Which router a route should go to, and what the caller should be told about it."""
+
+    url: str
+    region: str | None
+    #: Always worth printing. When a region was found this says which; when one was not, it
+    #: says why the fallback is being used, because "the default router answered" and "the
+    #: right router answered" are different facts about the same route.
+    note: str
+
+
+def resolve(
+    points: list[LatLon],
+    *,
+    region: str | None = None,
+    explicit: str | None = None,
+    specs_dir: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> Resolved:
+    """Pick a router for a route, and say why.
+
+    Never raises and never guesses. An ambiguous or unplaceable route falls back to the
+    single-region default with a note saying so — refusing outright would break every
+    one-region setup, and silently picking a region would produce the plausible-but-wrong
+    route this module exists to prevent.
+    """
+    registry = load_registry()
+    if explicit:
+        return Resolved(explicit.rstrip("/"), region, f"router given explicitly: {explicit}")
+
+    if region:
+        return Resolved(
+            router_url(region, env=env, registry=registry), region, f"region given: {region}"
+        )
+
+    specs = _load_specs(specs_dir, registry)
+    if not specs:
+        url = router_url(None, env=env, registry=registry)
+        return Resolved(url, None, f"no region specs available; using {url}")
+
+    match = region_for(points, specs)
+    if match.region is not None:
+        url = router_url(match.region, env=env, registry=registry)
+        return Resolved(url, match.region, f"region {match.region} ({url})")
+    url = router_url(None, env=env, registry=registry)
+    return Resolved(url, None, f"{match.reason}; falling back to {url}")
+
+
+def _load_specs(specs_dir: Path | None, registry: dict[str, RouterEntry]) -> dict[str, Any]:
+    """Region specs for every registry entry whose spec and graph config both exist."""
+    from longrun.regions.build import RegionSpec
+
+    root = specs_dir or Path("deploy/regions")
+    specs: dict[str, Any] = {}
+    for name in registry:
+        path = root / f"{name}.yaml"
+        if not path.exists():
+            continue
+        try:
+            specs[name] = RegionSpec.load(path)
+        except (ValueError, OSError):  # a spec that will not parse is not a region to route in
+            continue
+    return specs
+
+
 # --- config generation ------------------------------------------------------
 
 #: The body every region's config shares, verbatim.
@@ -343,9 +409,11 @@ __all__ = [
     "ENV_PREFIX",
     "REGISTRY_PATH",
     "RegionMatch",
+    "Resolved",
     "RouterEntry",
     "load_registry",
     "region_for",
     "render_config",
+    "resolve",
     "router_url",
 ]

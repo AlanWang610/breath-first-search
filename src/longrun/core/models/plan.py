@@ -42,7 +42,28 @@ class SnapshotPins(BaseModel):
     #: `set_vintage` puts it into the store, the scorers read it back out through
     #: `vintage()`, and every coverage entry then carries the vintage of what it checked.
     layer_vintages: dict[str, str] = Field(default_factory=dict)
+    #: Which region's graph drew this route, when one was resolved (M9). Recorded because five
+    #: graphs now exist and a plan that cannot say which one answered cannot be compared with
+    #: another - and because a route drawn on the wrong region's graph is plausible.
+    region: str | None = None
+    #: The routing graph's identity, as `<extract>+lts<version>` (`regions.lts.composite_
+    #: vintage`). Separate from `osm_extract_date` because that pins the *input* and says
+    #: nothing about the LTS rules applied to it, and the graph is a function of both: 13
+    #: rebuilds weekly, and a graph built from the same extract under changed scoring is a
+    #: different graph that nothing else could distinguish.
+    graph: str | None = None
     extra: dict[str, str] = Field(default_factory=dict)
+
+    @property
+    def graph_identity(self) -> str | None:
+        """What the route cache keys on — the composite graph pin, or the extract date.
+
+        The fallback is what keeps every cassette recorded before M9 replaying unchanged: a
+        golden's `snapshot.json` carries no `graph`, so it still keys on `osm_extract_date`
+        exactly as it did. A snapshot frozen *after* M9 carries the composite, and re-keys
+        deliberately — which is the point, because that is when a stale graph becomes visible.
+        """
+        return self.graph or self.osm_extract_date
 
 
 class ToolCall(BaseModel):

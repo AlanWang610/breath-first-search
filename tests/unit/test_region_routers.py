@@ -20,6 +20,7 @@ from longrun.regions.routers import (
     load_registry,
     region_for,
     render_config,
+    resolve,
     router_url,
 )
 
@@ -198,3 +199,67 @@ class TestRegionResolution:
 
     def test_no_waypoints_is_answered_rather_than_crashing(self) -> None:
         assert region_for([], self.SPECS).region is None
+
+
+class TestResolve:
+    """What `longrun plan` calls. Never raises, never guesses, always says which it used."""
+
+    BAY = [LatLon(lat=37.7955, lon=-122.3937), LatLon(lat=37.7715, lon=-122.4686)]
+
+    def test_the_waypoints_pick_the_region(self) -> None:
+        chosen = resolve(self.BAY, env={})
+        assert chosen.region == "bayarea"
+        assert chosen.url.endswith(":8989")
+
+    def test_an_explicit_router_skips_resolution_entirely(self) -> None:
+        chosen = resolve(self.BAY, explicit="http://box:1/", env={})
+        assert chosen.url == "http://box:1"
+
+    def test_a_named_region_is_not_second_guessed(self) -> None:
+        """`--region` is the answer to an ambiguous route, so it must not be re-derived."""
+        chosen = resolve(self.BAY, region="ozarks", env={})
+        assert chosen.region == "ozarks"
+        assert chosen.url.endswith(":8997")
+
+    def test_a_straddling_route_falls_back_and_says_why(self) -> None:
+        """Refusing outright would break every one-region setup; guessing is worse."""
+        chosen = resolve(
+            [LatLon(lat=37.7955, lon=-122.3937), LatLon(lat=42.3550, lon=-71.0656)], env={}
+        )
+        assert chosen.region is None
+        assert "straddle" in chosen.note
+        assert "bayarea" in chosen.note and "boston" in chosen.note
+
+    def test_a_route_nowhere_near_a_built_region_still_gets_a_router(self) -> None:
+        chosen = resolve([LatLon(lat=51.5, lon=-0.12)], env={})
+        assert chosen.region is None
+        assert chosen.url == DEFAULT_URL
+
+
+class TestGraphIdentity:
+    """What the route cache keys on, and why every pre-M9 cassette still replays."""
+
+    def test_a_snapshot_with_no_graph_pin_keys_on_the_extract_date(self) -> None:
+        """Every golden's `snapshot.json` is in this state, so all five must be unaffected."""
+        from longrun.core.models.plan import SnapshotPins
+
+        assert SnapshotPins(osm_extract_date="2026-09-04").graph_identity == "2026-09-04"
+
+    def test_the_composite_pin_wins_when_present(self) -> None:
+        from longrun.core.models.plan import SnapshotPins
+
+        pins = SnapshotPins(osm_extract_date="2026-09-04", graph="2026-09-04+lts1")
+        assert pins.graph_identity == "2026-09-04+lts1"
+
+    def test_a_rules_change_re_keys_without_the_extract_moving(self) -> None:
+        """The staleness the extract date alone cannot express: same input, different rules."""
+        from longrun.core.models.plan import SnapshotPins
+
+        one = SnapshotPins(osm_extract_date="2026-09-04", graph="2026-09-04+lts1")
+        two = SnapshotPins(osm_extract_date="2026-09-04", graph="2026-09-04+lts2")
+        assert one.graph_identity != two.graph_identity
+
+    def test_an_empty_snapshot_pins_nothing_rather_than_inventing_a_value(self) -> None:
+        from longrun.core.models.plan import SnapshotPins
+
+        assert SnapshotPins().graph_identity is None

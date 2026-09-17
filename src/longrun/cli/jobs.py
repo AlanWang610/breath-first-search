@@ -92,7 +92,7 @@ def resume(
     with SqliteCache(cache_path or cache_path_from_env(), offline=offline) as cache:
         budget = Budget(latency_budget_s=PLAN_LATENCY_BUDGET_S)
         router = CachedRouter(
-            GraphHopperRouter(router_url), cache, budget, graph=snapshot.osm_extract_date
+            GraphHopperRouter(router_url), cache, budget, graph=snapshot.graph_identity
         )
         with open_context(
             route=pad.route,
