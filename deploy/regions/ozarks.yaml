@@ -70,3 +70,23 @@ huc4:
 # loaded a feed. The two are the same output and different facts, which is what scope 3.6
 # exists to keep apart.
 gtfs: {}
+
+# Endpoint pairs for `verify_lts_routing.py --region ozarks`, chosen off the region's own
+# high-stress corridor rather than transplanted from the Bay Area: the four pairs that script
+# hard-coded are San Francisco streets, and asking them here would route through nothing.
+#
+# Highway 19 runs north through Eminence and Round Spring and is the only LTS 4 in the region
+# - `primary`, no sidewalk, 55 mph. The first two pairs run along it; the third crosses on a
+# `secondary`. If `avoid` cannot find a lower-stress line between these points that is a fact
+# about Shannon County, which has one road, and it is the answer this region was chosen to
+# give (scope 11 region 3, risk R22).
+verify_pairs:
+  - name: "Hwy 19 south: Eminence -> Round Spring"
+    from: [37.0046, -91.3235]
+    to: [37.1402, -91.3595]
+  - name: "Hwy 19 north: Round Spring -> Salem approach"
+    from: [37.1911, -91.3618]
+    to: [37.2811, -91.4106]
+  - name: "Hwy 106 east across the Current River"
+    from: [37.1513, -91.2899]
+    to: [37.1616, -91.2007]

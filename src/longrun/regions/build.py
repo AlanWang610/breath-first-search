@@ -82,6 +82,13 @@ class RegionSpec(BaseModel):
     huc4: list[str] = Field(default_factory=list)
     #: Feed id -> local GTFS zip. Same reasoning: discovery needs a registry with a key.
     gtfs: dict[str, Path] = Field(default_factory=dict)
+    #: Endpoint pairs `verify_lts_routing.py` routes between, as `{name, from: [lat, lon],
+    #: to: [lat, lon]}`. Committed with the region because the question "does the LTS term
+    #: move a route *here*" is about the city, not about the script: the four pairs that script
+    #: hard-coded are Bay Area streets, and asking them of the Ozarks would answer nothing.
+    #: Empty is legitimate — a region nobody has chosen pairs for reports that rather than
+    #: being verified against somewhere else.
+    verify_pairs: list[dict[str, Any]] = Field(default_factory=list)
     #: Where national downloads are cached.
     downloads: Path = Path("data/national")
 
