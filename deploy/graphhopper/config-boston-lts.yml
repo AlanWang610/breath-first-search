@@ -1,16 +1,16 @@
-# GENERATED from deploy/regions/phoenix.yaml -- do not edit by hand.
+# GENERATED from deploy/regions/boston.yaml -- do not edit by hand.
 #
-#   uv run longrun region-config deploy/regions/phoenix.yaml
+#   uv run longrun region-config deploy/regions/boston.yaml
 #
 # `tests/unit/test_region_routers.py` regenerates every committed config and fails on a diff,
 # so an edit here is reverted by CI rather than silently kept. Change the region spec or
 # `regions/routers.py`.
 #
-# GraphHopper config for 'phoenix', WITH the custom `lts` encoded value. The graph MUST
+# GraphHopper config for 'boston', WITH the custom `lts` encoded value. The graph MUST
 # be built with the wrapper, which is the only thing that knows what `lts` is:
-#   ./deploy/graphhopper/import-lts.ps1 -Region phoenix
+#   ./deploy/graphhopper/import-lts.ps1 -Region boston
 # Once built, the stock graphhopper-web jar serves it:
-#   ./deploy/graphhopper/run.ps1 -Region phoenix
+#   ./deploy/graphhopper/run.ps1 -Region boston
 #
 # The `lts` tag on the input pbf comes from `osm_lts.way_lts` via
 # deploy/graphhopper/scripts/add_lts_tags.py, which reads the same `lts_from_tags` every
@@ -23,8 +23,8 @@
 # deploy/graphhopper/run.ps1 which does the cd for you.
 
 graphhopper:
-  datareader.file: data/osm/phoenix-lts.osm.pbf
-  graph.location: data/graphhopper/phoenix-lts-gh
+  datareader.file: data/osm/boston-lts.osm.pbf
+  graph.location: data/graphhopper/boston-lts-gh
 
   # Keep footways, paths, steps and cycleways: this graph is primarily pedestrian.
   # (The shipped example excludes them, which is only right for motor-vehicle-only graphs.)
@@ -111,14 +111,14 @@ graphhopper:
 server:
   application_connectors:
     - type: http
-      port: 8991
+      port: 8995
       bind_host: localhost
       max_request_header_size: 50k
   request_log:
     appenders: []
   admin_connectors:
     - type: http
-      port: 8992
+      port: 8996
       bind_host: localhost
 
 logging:

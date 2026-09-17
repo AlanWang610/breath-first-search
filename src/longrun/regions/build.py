@@ -17,6 +17,12 @@ to a build instead of a plan.
 build prepares the `.pbf` and reports the exact command rather than shelling out to Java:
 a region build that fails because someone has no JDK should say so in one line, not in a
 stack trace from a subprocess.
+
+**But the score the graph is built from is computed here** (M9, ADR 0025). `way_lts` writes
+`osm_lts.way_lts` with the same `lts_from_tags` the scorers call, so the level a plan reports
+and the level the router steered on are the same number by construction rather than by review.
+Until M9 they were not: the importer carried its own tag-only approximation, and on the Ozarks
+the two disagreed about **469 of 1,600 ways**.
 """
 
 from __future__ import annotations
@@ -37,10 +43,16 @@ if TYPE_CHECKING:  # pragma: no cover
 
 WGS84 = 4326
 
-#: Step names, in the order scope 13 lists them.
+#: Step names, in the order scope 13 lists them — with one inversion, recorded in ADR 0025.
+#:
+#: §13 step 1 reads "fetch the extract; **compute the offline LTS score per way**; build the
+#: graph", and step 2 is what loads OSM into PostGIS. Scoring per way in PostGIS therefore
+#: depends on a step that comes after it, which the scope cannot have meant. `way_lts` runs
+#: after `layers` because that is the only order in which it can run at all.
 STEPS: tuple[str, ...] = (
     "osm_graph",
     "layers",
+    "way_lts",
     "terrain",
     "jurisdictions",
     "coverage_report",
@@ -70,6 +82,13 @@ class RegionSpec(BaseModel):
     huc4: list[str] = Field(default_factory=list)
     #: Feed id -> local GTFS zip. Same reasoning: discovery needs a registry with a key.
     gtfs: dict[str, Path] = Field(default_factory=dict)
+    #: Endpoint pairs `verify_lts_routing.py` routes between, as `{name, from: [lat, lon],
+    #: to: [lat, lon]}`. Committed with the region because the question "does the LTS term
+    #: move a route *here*" is about the city, not about the script: the four pairs that script
+    #: hard-coded are Bay Area streets, and asking them of the Ozarks would answer nothing.
+    #: Empty is legitimate — a region nobody has chosen pairs for reports that rather than
+    #: being verified against somewhere else.
+    verify_pairs: list[dict[str, Any]] = Field(default_factory=list)
     #: Where national downloads are cached.
     downloads: Path = Path("data/national")
 
@@ -199,8 +218,8 @@ def step_osm_graph(ctx: BuildContext) -> StepRecord:
         status="done",
         detail=(
             f"{extract.name}, {size_mb:.0f} MB. The routing graph is a JVM step and is not "
-            f"run here: deploy/graphhopper/scripts/add_lts_tags.py then "
-            f"deploy/graphhopper/import-lts.ps1 (ADR 0001)"
+            f"run here: deploy/graphhopper/scripts/add_lts_tags.py (after the way_lts step "
+            f"below, which is what it reads) then deploy/graphhopper/import-lts.ps1 (ADR 0001)"
         ),
     )
 
@@ -295,6 +314,45 @@ def step_layers(ctx: BuildContext) -> StepRecord:
         status="done" if counts else "blocked",
         detail="not loaded: " + "; ".join(blocked) if blocked else "all sources loaded",
         counts=counts,
+    )
+
+
+def step_way_lts(ctx: BuildContext) -> StepRecord:
+    """§13 step 1's middle clause: the offline LTS score per way, into `osm_lts.way_lts`.
+
+    Split out as its own step rather than folded into `osm_graph` because the two have
+    different inputs and different failure modes: `osm_graph` needs a `.pbf` on disk and
+    `way_lts` needs `osm.ways` loaded, which is step 2. A build with no extract should report
+    one blocked step, not two.
+    """
+    from longrun.core.data.osm import extract_vintage
+    from longrun.regions import lts as lts_table
+
+    extract = ctx.spec.osm_extract
+    if extract is None or not extract.exists():
+        return StepRecord(
+            status="blocked",
+            detail=f"no OSM extract at {extract or '(unset)'}; nothing to pin a vintage to",
+        )
+
+    report = lts_table.compute(
+        ctx.connection,
+        region=ctx.spec.name,
+        extract_vintage=extract_vintage(extract),
+        region_wkt=ctx.spec.shape().wkt,
+        force=ctx.force,
+        log=ctx.log,
+    )
+    return StepRecord(
+        status="done",
+        detail=report.summary(),
+        counts={
+            "covered": report.covered,
+            "scored": report.scored,
+            "not_highway": report.not_highway,
+            "with_aadt": report.with_aadt,
+            **{f"lts{level}": report.levels[level] for level in (1, 2, 3, 4)},
+        },
     )
 
 
@@ -412,6 +470,7 @@ def step_coverage_report(ctx: BuildContext) -> StepRecord:
 STEP_FUNCTIONS: dict[str, Callable[[BuildContext], StepRecord]] = {
     "osm_graph": step_osm_graph,
     "layers": step_layers,
+    "way_lts": step_way_lts,
     "terrain": step_terrain,
     "jurisdictions": step_jurisdictions,
     "coverage_report": step_coverage_report,

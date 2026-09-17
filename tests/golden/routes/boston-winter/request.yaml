@@ -1,0 +1,28 @@
+# The first golden route in this project's history that is run in the dark.
+#
+# Every one of the five routes before it reports `dark_m: 0.0`, `unlit_dark_m: 0.0` and
+# `mean_confidence: 1.0` from `lighting` - so the `unlit_in_darkness` flag, the
+# `darkness_tolerance` branch, `UNKNOWN_LIT_CONFIDENCE` and the "run in darkness on ways with
+# no lit tag" coverage entry have all been pinned by unit tests and by nothing end to end.
+#
+# **2026-01-15, and the date is the point.** Scope 11's region 1 is "dense, cold, transit-rich
+# ... darkness tolerance, `sun.cool`". Every plan this project has produced has been a daylight
+# plan. Boston civil twilight on this date ends between 17:00 and 17:15 EST, so a 17:00 start
+# begins in the last of the light and finishes after dark - which exercises the daylight path,
+# the darkness path and the transition between them in one route.
+#
+# A *past* date, deliberately. The M8-M14 plan assumed a winter golden could not be recorded
+# because "a forecast for a past date can never be re-fetched"; that stopped being true in M3.
+# `forecast.open_meteo_root` picks `archive-api.open-meteo.com` for anything older than
+# `ARCHIVE_AFTER_DAYS`, which is how `phoenix-heat` pins a July date recorded 57 days later. A
+# *future* winter date would have been the unrecordable one: the forecast endpoint reaches
+# about a fortnight, and December 2026 is four months out.
+#
+# `rounds: 0` because this route's subject is what the scorers say after dark, not the loop.
+# `loop-bayarea` is the loop golden and there is no reason for two.
+from: "42.3732,-71.1304"
+to: "42.3590,-71.1156"
+date: 2026-01-15
+start: "17:00"
+utc_offset_hours: -5
+rounds: 0

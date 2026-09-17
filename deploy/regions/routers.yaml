@@ -1,0 +1,47 @@
+# Where each region's GraphHopper listens (M9, ADR 0026).
+#
+# A port is deployment topology, not part of what a region *is*, so it lives here rather than
+# in the region spec: two plans of the same region must be comparable whichever machine drew
+# them, and a spec that carried a port would make the port part of the comparison.
+#
+# One graph per process is GraphHopper's constraint, not a choice. `datareader.file` and
+# `graph.location` are single-valued, and `load()` refuses a graph whose stored `profiles`
+# string differs from the configured one - so five regions is five JVMs, started on demand.
+#
+# **Ports are two apart** because the admin connector is always `port + 1`. Leaving one gap
+# would collide the next region's HTTP port with the previous region's admin port, which fails
+# at bind time with a message about the wrong region.
+#
+# **Heap is per region** because the default was `-Xmx6g` and five of those would reserve
+# 30 GB. The Bay Area is the large graph (361 MB on disk, 2.17 M edges); the Ozarks is 1,600
+# ways and needs a fraction of it.
+#
+# Bay Area keeps 8989 deliberately: it is `DEFAULT_URL` in `core/routing/graphhopper.py` and
+# the value in `.env.example`, so every setup that predates this file keeps working untouched.
+#
+# Resolution order, most specific first (`regions/routers.py::router_url`):
+#   1. --router / an explicit URL
+#   2. LONGRUN_GRAPHHOPPER_URL_<REGION>
+#   3. this file
+#   4. LONGRUN_GRAPHHOPPER_URL
+#   5. http://localhost:8989
+
+bayarea:
+  port: 8989
+  xmx: 6g
+
+phoenix:
+  port: 8991
+  xmx: 4g
+
+kcmetro:
+  port: 8993
+  xmx: 2g
+
+boston:
+  port: 8995
+  xmx: 2g
+
+ozarks:
+  port: 8997
+  xmx: 1g

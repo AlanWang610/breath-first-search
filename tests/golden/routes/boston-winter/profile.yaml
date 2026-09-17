@@ -1,0 +1,6 @@
+# Shipped defaults, unmodified - and for this route that is load-bearing rather than lazy.
+# `darkness_tolerance` defaults to `false` at weight 0.0, which is the condition
+# `lighting` requires before it will flag an unlit stretch at all. A profile that tolerated
+# darkness would produce the same measurements and no flags, and the difference between those
+# two outcomes is exactly what this route exists to pin.
+version: 1

@@ -69,3 +69,18 @@ gtfs:
 # out **backwards**, and the reason had nothing to do with either state. `adapters/wzdx/
 # massdot.py` closes it: 23 of 23 at tier 1, naming `LONGRUN_MASSDOT_API_KEY` until
 # somebody supplies one.
+
+# Endpoint pairs for `verify_lts_routing.py --region boston`. Region 1 is the dense grid, so
+# this is the case where scope 7.1's LTS term is expected to be nearly inert - stock
+# `foot_priority` already keeps pedestrians off Mass Ave - and the interesting number is how
+# small the detour is, not how large.
+verify_pairs:
+  - name: "MIT -> Boston Common, across the Harvard Bridge"
+    from: [42.3601, -71.0942]
+    to: [42.3550, -71.0656]
+  - name: "Back Bay -> Kendall, across the Longfellow"
+    from: [42.3489, -71.0784]
+    to: [42.3626, -71.0862]
+  - name: "Esplanade -> Fenway"
+    from: [42.3540, -71.0870]
+    to: [42.3467, -71.0972]

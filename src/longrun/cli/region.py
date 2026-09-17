@@ -241,6 +241,73 @@ def build_region(
         typer.echo("incomplete: some steps have not run")
 
 
+def region_config(
+    spec_path: Path | None = typer.Argument(
+        None, help="Region spec YAML. Omitted, every region in the registry is written."
+    ),
+    check: bool = typer.Option(
+        False, "--check", help="Report what would change and write nothing. Exits 1 on a diff."
+    ),
+) -> None:
+    """Write `deploy/graphhopper/config-<region>-lts.yml` from the region spec (ADR 0026).
+
+    Generated rather than copied. `config-phoenix-lts.yml` was a copy of the Bay Area's with
+    two lines changed, and it still carried the Bay Area's extract command and bbox in its
+    header — wrong from the moment it was written, and invisible because nobody re-reads a
+    config they did not change.
+
+    The output is committed, not written at run time: `GraphHopper.load()` compares the
+    `profiles` string stored in a built graph against the configured one and refuses a
+    mismatch, so a config that regenerated differently would take every built graph offline.
+    `--check` is what CI runs.
+    """
+    from longrun.regions.build import RegionSpec
+    from longrun.regions.routers import load_registry, render_config
+
+    registry = load_registry()
+    if not registry:
+        typer.echo("error: no router registry at deploy/regions/routers.yaml", err=True)
+        raise typer.Exit(code=2)
+
+    if spec_path is not None:
+        if not spec_path.exists():
+            typer.echo(f"error: no such region spec: {spec_path}", err=True)
+            raise typer.Exit(code=2)
+        wanted = [(RegionSpec.load(spec_path).name, spec_path)]
+    else:
+        wanted = [(name, Path(f"deploy/regions/{name}.yaml")) for name in sorted(registry)]
+
+    stale: list[str] = []
+    for name, path in wanted:
+        entry = registry.get(name)
+        if entry is None:
+            typer.echo(f"error: {name!r} is not in the router registry", err=True)
+            raise typer.Exit(code=2)
+        rendered = render_config(entry, path)
+        target = entry.config_path
+        current = target.read_text(encoding="utf-8") if target.exists() else None
+        if current == rendered:
+            typer.echo(f"{name}: {target} up to date (port {entry.port}, heap {entry.xmx})")
+            continue
+        stale.append(name)
+        if check:
+            typer.echo(f"{name}: {target} DIFFERS from the spec", err=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # newline="" so the f-string's \n survive as LF on Windows too: .gitattributes
+        # normalises the repo to LF, and a CRLF config would show as a diff on every checkout.
+        with target.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(rendered)
+        typer.echo(f"{name}: wrote {target} (port {entry.port}, admin {entry.admin_port})")
+
+    if check and stale:
+        typer.echo(
+            f"error: {', '.join(stale)} differ from their specs; run `longrun region-config`",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+
 def promote_adapter(
     jurisdiction_id: str = typer.Argument(..., help="tiger:county:29095 or padus:NPS."),
     name: str = typer.Option(..., "--name", help="What to call it in the draft."),
@@ -302,4 +369,5 @@ def register(app: typer.Typer) -> None:
     app.command("load-nhd")(load_nhd)
     app.command("load-gtfs")(load_gtfs)
     app.command("build-region")(build_region)
+    app.command("region-config")(region_config)
     app.command("promote-adapter")(promote_adapter)

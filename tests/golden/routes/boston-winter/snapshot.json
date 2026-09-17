@@ -1,0 +1,16 @@
+{
+  "osm_extract_date": "2026-09-13",
+  "hpms_vintage": null,
+  "dem_resolution_m": 7.599417890961887,
+  "canopy_version": null,
+  "gtfs_feed_versions": {},
+  "adapter_versions": {},
+  "layer_vintages": {
+    "ways": "2026-09-13"
+  },
+  "region": "boston",
+  "graph": "2026-09-13+lts1",
+  "extra": {
+    "note": "The first snapshot to carry a `graph` pin (M9). Routes recorded against this cassette key on `<extract>+lts<version>` rather than the extract date alone, so a graph rebuilt under changed LTS rules re-keys and the cassette misses loudly."
+  }
+}

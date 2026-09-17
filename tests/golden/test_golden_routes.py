@@ -42,6 +42,44 @@ def test_the_golden_suite_is_not_empty() -> None:
     )
 
 
+#: Total bytes the committed golden fixtures may occupy.
+#:
+#: The number has been in the build plan since M0 and was enforced by **nothing** — not a test,
+#: not a CI step. What stood in for it was M0's 15-minute CI timeout, on the reasoning that
+#: "keeping CI short is itself the enforcement mechanism for small fixtures"; M6 raised that to
+#: 30 when the fifth golden pushed the Windows job over, and said so in a comment sitting a
+#: file away from anything about fixtures. So the only mechanism was relaxed by the milestone
+#: that discovered it, and the cap has been a number in prose since.
+#:
+#: 50 MB because a golden fixture is downloaded by every clone and read by every CI run, and
+#: because a cap nobody can exceed by accident is what keeps a freeze corridor-clipped rather
+#: than table-wide. A route that needs more should drop a layer and say so in its README —
+#: `loop-bayarea` carries four of nine and explains the 9 MB it declined.
+MAX_FIXTURE_BYTES = 50 * 1024 * 1024
+
+
+def test_the_committed_fixtures_stay_under_the_cap() -> None:
+    """The cap the plan has claimed since M0, asserted for the first time.
+
+    Fails with the per-route breakdown rather than one number, because the answer to being over
+    is always "which route, and which layer in it".
+    """
+    routes = Path(__file__).parent / "routes"
+    sizes = {
+        directory.name: sum(f.stat().st_size for f in directory.rglob("*") if f.is_file())
+        for directory in sorted(routes.iterdir())
+        if directory.is_dir()
+    }
+    total = sum(sizes.values())
+    breakdown = "\n".join(f"  {n:<20} {b / 1024 / 1024:6.1f} MB" for n, b in sorted(sizes.items()))
+    assert total <= MAX_FIXTURE_BYTES, (
+        f"golden fixtures are {total / 1024 / 1024:.1f} MB, over the "
+        f"{MAX_FIXTURE_BYTES / 1024 / 1024:.0f} MB cap:\n{breakdown}\n"
+        "Drop a layer a route does not exercise and record the choice in its README, or "
+        "VACUUM the cassettes — do not raise the cap without deciding to."
+    )
+
+
 @pytest.mark.parametrize("name", ROUTE_NAMES)
 def test_the_route_directory_is_complete(name: str) -> None:
     """A missing pin is a run that is not reproducible, so it fails before it runs."""

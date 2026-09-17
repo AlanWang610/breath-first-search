@@ -75,6 +75,9 @@ def plan(
         MAX_ROUNDS, "--rounds", help="Scope 8.1 step 6's cap. 0 scores the route once."
     ),
     router_url: str | None = typer.Option(None, "--router", help="GraphHopper base URL."),
+    region: str | None = typer.Option(
+        None, "--region", help="Region whose graph to route on. Default: from the waypoints."
+    ),
     profile_path: Path | None = typer.Option(None, "--profile", help="Preference profile YAML."),
     fixtures: Path | None = typer.Option(None, "--fixtures", help="Layer/raster directory."),
     snapshot_path: Path | None = typer.Option(None, "--snapshot", help="Data-snapshot pins."),
@@ -88,6 +91,7 @@ def plan(
 ) -> None:
     """Route between points and score the result through the scope 8.1 loop."""
     from longrun.core.routing.graphhopper import GraphHopperRouter
+    from longrun.regions.routers import resolve
 
     if request_file is not None:
         try:
@@ -141,15 +145,23 @@ def plan(
     store = cache_path or cache_path_from_env()
     with SqliteCache(store, offline=offline) as cache:
         budget = Budget(latency_budget_s=PLAN_LATENCY_BUDGET_S)
-        engine = GraphHopperRouter(router_url)
+        # M9: five regions, five graphs, five ports. Resolved from the waypoints unless
+        # `--region` or `--router` says otherwise, and never guessed - a route whose ends fall
+        # in two regions, or in none, falls back to the single-region default and says so,
+        # because a line drawn on the wrong region's graph has real streets and a real
+        # elevation profile and belongs to a different city.
+        chosen = resolve(waypoints, region=region, explicit=router_url)
+        engine = GraphHopperRouter(chosen.url)
         router = CachedRouter(
             engine,
             cache,
             budget,
             # A route is a function of the graph it was drawn on, and scope 13 rebuilds
             # that. Two graphs must not share a cache key.
-            graph=snapshot.osm_extract_date,
+            graph=snapshot.graph_identity,
         )
+        if chosen.region and snapshot.region is None:
+            snapshot.region = chosen.region
         # M6.1: the six scope 7.1 parameters as a vector rather than one dict literal.
         # Still opt-in, and still neutral by default - ADR 0021, and risk R1 is the
         # measurement behind it. A neutral vector emits no model at all, so the request
@@ -157,7 +169,7 @@ def plan(
         params = AVOID_HIGH_STRESS if avoid_high_stress else NEUTRAL
         profile = load_profile(profile_path)
         model = to_custom_model(params, profile) or None
-        typer.echo(f"routing {len(waypoints)} point(s) through {engine.url}")
+        typer.echo(f"routing {len(waypoints)} point(s) through {chosen.note}")
 
         try:
             route = router.route(waypoints, custom_model=model)

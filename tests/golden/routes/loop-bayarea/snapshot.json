@@ -13,6 +13,8 @@
   "extra": {
     "dem": "USGS 3DEP 1/3 arc-second, tile n38w123, clipped to the corridor",
     "fixtures": "ways, amenities, transit_stops and dem. The first three are what make `bailouts` and `services_along` *answer* rather than abstain, and a route with no flags gives the loop nothing to do - which would pin zero rounds and detect no regression in them.",
-    "graph": "the cache key for a recorded route is osm_extract_date; see ADR 0017"
-  }
+    "graph": "M9: the route cache key is now `<extract>+lts<version>` rather than the extract date alone (ADR 0025). This route's recorded answers were drawn on the placeholder-LTS graph until M9 rebuilt it; the composite pin is what forced them to be re-recorded rather than replaying from a graph that no longer exists. See ADR 0017 for the key, 0026 for the port."
+  },
+  "region": "bayarea",
+  "graph": "2026-09-04+lts1"
 }

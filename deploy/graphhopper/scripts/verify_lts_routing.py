@@ -28,12 +28,50 @@ import math
 import urllib.error
 import urllib.request
 
+#: The Bay Area pairs decision 0001 measured, kept as the default so the ADR's own numbers stay
+#: reproducible with no arguments. Every other region brings its own: `verify_pairs` in the
+#: region spec, because "does the LTS term move a route here" is a question about the city.
+#: Four Bay Area streets asked of the Ozarks would answer nothing at all.
 PAIRS = [
     ("SF: Ferry Building -> de Young", (-122.3937, 37.7955), (-122.4686, 37.7715)),
     ("Peninsula: Stanford -> Mountain View", (-122.1430, 37.4419), (-122.0808, 37.3894)),
     ("East Bay: Lake Merritt -> UC Berkeley", (-122.2585, 37.8020), (-122.2585, 37.8719)),
     ("South Bay: San Jose State -> Santana Row", (-121.8811, 37.3352), (-121.9482, 37.3210)),
 ]
+
+
+def pairs_for_region(region: str) -> list[tuple[str, tuple[float, float], tuple[float, float]]]:
+    """`verify_pairs` out of `deploy/regions/<region>.yaml`, as (label, (lon, lat), (lon, lat)).
+
+    The spec writes `[lat, lon]`, matching `LatLon` and every other coordinate in the project;
+    GraphHopper takes `[lon, lat]`, and this is the one place the two meet.
+    """
+    from pathlib import Path
+
+    from longrun.regions.build import RegionSpec
+
+    spec_path = Path(f"deploy/regions/{region}.yaml")
+    if not spec_path.exists():
+        raise SystemExit(f"no region spec at {spec_path}")
+    spec = RegionSpec.load(spec_path)
+    if not spec.verify_pairs:
+        raise SystemExit(
+            f"{region} has no `verify_pairs` in {spec_path}. Add two or three endpoint pairs "
+            f"inside the region polygon; without them there is nothing to verify against."
+        )
+    out = []
+    for pair in spec.verify_pairs:
+        start = pair["from"]
+        end = pair["to"]
+        out.append(
+            (
+                str(pair.get("name", "unnamed")),
+                (float(start[1]), float(start[0])),
+                (float(end[1]), float(end[0])),
+            )
+        )
+    return out
+
 
 # Two ways of carrying LTS, per decision 0001:
 #   lts        -- the custom encoded value built by the import wrapper (the chosen approach)
@@ -44,9 +82,15 @@ CARRIERS = {
         "models": {
             "neutral": [],
             "avoid": [{"if": "lts >= 3", "multiply_by": "0.02"}],
-            "seek": [{"if": "lts <= 2", "multiply_by": "0.02"}],
+            # `lts >= 1 &&`, not a bare `lts <= 2`. The encoded value is three bits and stores
+            # **0 for a way that carried no `lts` tag** (`LtsImportRegistry`, `OSMLtsParser`:
+            # a parse failure or an out-of-range value leaves the default). A bare `lts <= 2`
+            # therefore rewards every untagged way as though it were low stress, while `avoid`'s
+            # `lts >= 3` does not touch them - so the two models were not mirror images and the
+            # comparison flattered `seek`. Corrected in M9; it had been wrong since the spike.
+            "seek": [{"if": "lts >= 1 && lts <= 2", "multiply_by": "0.02"}],
         },
-        # detail values come back as ints 0-4
+        # detail values come back as ints 0-4, where 0 means "no lts tag on this way"
         "decode": lambda v: v if isinstance(v, int) else 0,
     },
     "track_type": {
@@ -128,7 +172,12 @@ def geometry_overlap(a: dict, b: dict) -> float:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--url", default="http://localhost:8989")
+    ap.add_argument("--url", default=None, help="GraphHopper base URL. Default: the region's.")
+    ap.add_argument(
+        "--region",
+        default=None,
+        help="Region to verify. Its `verify_pairs` and its port come from the registry.",
+    )
     ap.add_argument(
         "--ev",
         choices=sorted(CARRIERS),
@@ -137,10 +186,19 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    pairs = pairs_for_region(args.region) if args.region else PAIRS
+    url = args.url
+    if url is None:
+        from longrun.regions.routers import router_url
+
+        url = router_url(args.region)
+
     carrier = CARRIERS[args.ev]
-    print(f"carrier encoded value: {args.ev}   server: {args.url}")
+    where = args.region or "bayarea (default pairs)"
+    print(f"carrier encoded value: {args.ev}   region: {where}   server: {url}")
+    args.url = url
     failures = 0
-    for label, start, end in PAIRS:
+    for label, start, end in pairs:
         print(f"\n=== {label} ===")
         paths = {}
         for name, priority in carrier["models"].items():

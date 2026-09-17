@@ -1,23 +1,26 @@
-# GraphHopper config for the Bay Area spike region, WITH the custom `lts` encoded value.
+# GENERATED from deploy/regions/bayarea.yaml -- do not edit by hand.
 #
-# Identical to config-bayarea.yml except for three lines: the input pbf (which has the
-# synthetic `lts=1..4` tag written onto every highway way), the graph location, and `lts`
-# in graph.encoded_values.
+#   uv run longrun region-config deploy/regions/bayarea.yaml
 #
-# The graph MUST be built with the wrapper, which is the only thing that knows what `lts`
-# is:  ./deploy/graphhopper/import-lts.ps1
+# `tests/unit/test_region_routers.py` regenerates every committed config and fails on a diff,
+# so an edit here is reverted by CI rather than silently kept. Change the region spec or
+# `regions/routers.py`.
+#
+# GraphHopper config for 'bayarea', WITH the custom `lts` encoded value. The graph MUST
+# be built with the wrapper, which is the only thing that knows what `lts` is:
+#   ./deploy/graphhopper/import-lts.ps1 -Region bayarea
 # Once built, the stock graphhopper-web jar serves it:
-#   ./deploy/graphhopper/run.ps1 -Config deploy/graphhopper/config-bayarea-lts.yml
+#   ./deploy/graphhopper/run.ps1 -Region bayarea
 #
-# Built for scope 4.3 / 7.1: flexible + LM mode with CH switched off, so the custom model
-# is a query-time parameter and not baked into a contraction hierarchy.
+# The `lts` tag on the input pbf comes from `osm_lts.way_lts` via
+# deploy/graphhopper/scripts/add_lts_tags.py, which reads the same `lts_from_tags` every
+# scorer uses (ADR 0025). Build the region first or that step refuses.
+#
+# Built for scope 4.3 / 7.1: flexible + LM mode with CH switched off, so the custom model is a
+# query-time parameter and not baked into a contraction hierarchy.
 #
 # Paths are relative to the repository root -- start the server from there, or use
 # deploy/graphhopper/run.ps1 which does the cd for you.
-#
-# Extract: data/osm/bayarea.osm.pbf, produced by
-#   uv run python deploy/graphhopper/scripts/clip_pbf.py \
-#       data/osm/norcal-latest.osm.pbf data/osm/bayarea.osm.pbf "--bbox=-123.2,36.9,-121.5,38.5"
 
 graphhopper:
   datareader.file: data/osm/bayarea-lts.osm.pbf
@@ -100,8 +103,8 @@ graphhopper:
   routing.snap_preventions_default: tunnel, bridge, ferry
   routing.non_ch.max_waypoint_distance: 1000000
 
-  # Elevation is off for the spike (scope 7.1 wants the region DEM here). Turning it on
-  # changes nothing about how `lts` behaves; it only adds import time.
+  # Elevation is off (scope 7.1 wants the region DEM here). Turning it on changes nothing
+  # about how `lts` behaves; it only adds import time.
   # graph.elevation.provider: srtm
   # graph.elevation.cache_dir: data/srtm/
 
