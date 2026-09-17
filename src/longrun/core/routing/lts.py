@@ -57,6 +57,18 @@ MISSING_SPEED_PENALTY = 0.2
 MISSING_SIDEWALK_PENALTY = 0.25
 UNKNOWN_HIGHWAY_PENALTY = 0.5
 
+#: Which revision of the rules below produced a level. Bump it whenever a change here would
+#: give an existing way a different level or a different confidence.
+#:
+#: It exists because M9 writes these levels into a routing graph (`osm_lts.way_lts`, then a
+#: synthetic `lts` tag, then a GraphHopper encoded value — ADR 0001). A graph is built once
+#: and served for a week, so "the router steered on rules this process no longer holds" is a
+#: state the system can be in, and nothing else can detect it: the extract date pins the
+#: *input* and says nothing about the rules applied to it. The composite vintage
+#: `<extract>+lts<version>` is what makes a stale graph visible, and it is the graph identity
+#: the route cache keys on.
+LTS_VERSION = 1
+
 
 class LTSResult(BaseModel):
     """A level, how confident we are in it, and why it came out that way."""
