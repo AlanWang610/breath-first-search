@@ -4,16 +4,18 @@ Scope §7.1 asks for two things this document is the answer to: the ~6 priority 
 *"fit against pairwise route preferences"*, and acceptance metrics *"published for a set of
 reference routes"*.
 
-**The short version: the metrics are published below, and the parameters are not fitted,
-because there is nothing yet to fit them against.** Risk R1 asked whether these parameters
-help. After three measurements the answer is still *no evidence that they do*, and this
-document says so rather than shipping six numbers.
+**The short version: the metrics are published below, the parameters are still not fitted for
+want of human preference pairs — and as of M9 we know *why* the Bay Area measurements kept
+coming back empty.** It was never that the parameters do nothing. It is that four of the five
+built regions have a low-stress network so well connected that GraphHopper's stock
+`foot_priority` already finds it, and the LTS term merely agrees. In the one region without
+that luxury the same term is worth tripling a route's length.
 
-Last updated 2026-09-13 (M6).
+Last updated 2026-09-16 (M9).
 
-## The question R1 asked
+## The question R1 asked, and M9's answer
 
-§7.1 treats the six parameters as useful. R1 measured and disagreed:
+§7.1 treats the six parameters as useful. Three Bay Area measurements disagreed:
 
 | When | What was compared | Result |
 |---|---|---|
@@ -22,15 +24,49 @@ Last updated 2026-09-13 (M6).
 | M5.4 | severe `lts>=2 ×0.02` on the same request | 8152 → 8095 m, so the mechanism *does* work |
 | M6.2 | `--avoid-high-stress` vs neutral, Ferry Building → de Young | **identical**: 7694.7 m both |
 
-The M5.4 severe case is the one that keeps this from being a story about broken plumbing.
-The custom model reaches the router and changes routes when pushed hard enough. What the
-gentle, plausible settings do on real Bay Area geometry is nothing, because GraphHopper's
-stock `foot_priority` already keeps pedestrians off arterials.
+M6 recorded a hypothesis: *"the likeliest explanation is not that the parameters are wrong but
+that these pairs offer no choice… the way to test it is more pairs in more places."* M9 built
+the other three regions' graphs and ran exactly that test, on real LTS rather than the
+placeholder the graph had carried until then.
 
-The likeliest explanation is not that the parameters are wrong but that **these pairs offer
-no choice**: a dense city grid with one bridge gives the router nothing to express a
-preference over. That is a hypothesis, and the way to test it is more pairs in more places,
-not a bolder default. Hence ADR 0021.
+**`avoid` against `neutral`, 2026-09-16, all five regions, real LTS:**
+
+| Region | Network | Detour | LTS ≥ 3 share, neutral → avoid |
+|---|---|---|---|
+| Bay Area | dense grid | +0.0%, +0.1%, +0.8%, +0.0% | 0–3% → 0% |
+| Boston | dense grid | −0.1%, +0.0%, +0.2% | small → 0% |
+| Kansas City | dense grid | +0.0%, +0.0%, +0.0% | small → 0% |
+| Phoenix | arterial sprawl | +0.0%, +0.0% | small → 0% |
+| **Ozarks** | **one highway** | **+50.1%, +207.5%, +104.4%** | **100% → 1.9%** |
+
+The hypothesis was right, and the answer is sharper than "no evidence":
+
+**The six §7.1 parameters are near-inert wherever a parallel low-stress street exists, and
+decisive wherever none does.** That is a statement about *regions*, not about the parameters.
+In Shannon County, Missouri, Highway 19 is the only road between Eminence and Round Spring:
+the neutral route runs **100% at LTS 4**, and avoiding it costs three times the distance. In
+San Francisco the same term changes nothing, because `foot_priority` has already done the job.
+
+Two consequences worth stating:
+
+- **This is not an argument for turning the default on.** ADR 0021 stands. The regions where
+  the term is free are the regions where it is also pointless, and the region where it bites
+  produces a 44 km answer to a 14 km question — which a runner might well refuse. Whether that
+  trade is wanted is a *preference*, which is exactly what there is still no human data for.
+- **It does explain why Bay Area pairs were never going to settle R1.** A preference set drawn
+  from a dense grid cannot distinguish a good LTS weight from a useless one, because every
+  candidate vector produces the same route. Pairs from thin-network regions carry far more
+  signal per pair, and M14's labelling effort should be weighted accordingly.
+
+`seek` — the control, `lts >= 1 && lts <= 2` — reaches 80–99% of length at LTS ≥ 3 in every
+region, so the mechanism demonstrably steers everywhere. The small detours are the cities
+answering, not the model failing.
+
+*One correction M9 made to the instrument itself.* The `seek` control had been
+`lts <= 2` since the spike, and the `lts` encoded value stores **0 for a way with no `lts`
+tag** — so `seek` rewarded every untagged way while `avoid`'s `lts >= 3` ignored them. The two
+were not mirror images. Every route above carries `lts0 = 0.0%`, so no measurement here is
+affected, but earlier `seek` figures were flattered by an unknown amount.
 
 ## Acceptance metrics for the reference routes
 

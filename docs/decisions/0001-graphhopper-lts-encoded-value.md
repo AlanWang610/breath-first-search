@@ -3,6 +3,10 @@
 Status: **accepted**. Proven end-to-end on 2026-09-04 (spike S1) against GraphHopper 11.0
 and a Bay Area extract of `norcal-latest.osm.pbf`. Scope §7.1's claim survives unchanged.
 
+**Amended 2026-09-16 (M9) — see the amendment at the foot of this file.** The placeholder
+scoring this ADR shipped with is gone; three of its statements need qualifying, and one number
+in "Reproducing" was measuring something other than what it appeared to.
+
 ## Context
 
 Scope §7.1 states, as settled fact, that an LTS 1–4 score is "computed offline per way in PostGIS
@@ -200,3 +204,46 @@ Note that `osmium-tool` has no usable Windows build and `winget` has no Maven pa
 is done with pyosmium's native `IdTracker` (installed with `uv pip install osmium`, deliberately not
 added to `pyproject.toml` — it is a region-build tool, not a library dependency), and Maven 3.9.16
 was unpacked from the Apache binary zip to `C:\Users\Amosq\tools\`.
+
+---
+
+## Amendment, 2026-09-16 (M9)
+
+The mechanism above is unchanged and still correct. Four things around it were not.
+
+**1. The placeholder is gone, and it had been wrong for eight milestones.** Step 2 of
+"Reproducing" reads *"synthetic LTS tag (placeholder scoring — replace with the PostGIS
+lookup)"*. That replacement is ADR 0025. Measured before doing it: the placeholder and
+`core/routing/lts.py::lts_from_tags` — the function every scorer uses — disagreed about **469
+of the Ozarks' 1,600 ways**, `service` and `bridleway` by one level each and `primary` and
+`tertiary` in opposite directions. The routing proof below was therefore a proof that *a*
+number steers routing, not that the project's LTS does. It is now the same number.
+
+**2. The encoded value stores 0 for "no `lts` tag", and `verify_lts_routing.py`'s `seek`
+model rewarded it.** `IntEncodedValueImpl("lts", 3, false)` defaults to 0, and `OSMLtsParser`
+returns silently on a missing, unparseable or out-of-range tag. The script's control was
+`{"if": "lts <= 2"}`, which therefore favoured every untagged way, while `avoid`'s `lts >= 3`
+ignored them. The two were not mirror images, and `seek`'s figures in the table above were
+flattered by an unknown amount. Now `lts >= 1 && lts <= 2`. The table's `avoid` column and the
+way-id overlaps are unaffected.
+
+**3. The import silently loads an existing graph rather than rebuilding it.** Not stated here
+and easy to assume otherwise. Re-running `import-lts.ps1` against a populated
+`graph.location` completes in about a second, exits 0, prints nothing alarming, and leaves the
+old graph — including its old scores — in place. Found by rebuilding the Bay Area on real LTS
+and getting a 1.4-second "success" that kept the 4 September graph. The script now refuses an
+existing directory and names its build date; `-Force` replaces it. The honest rebuild took
+**68.0 s**, against the 68.2 s measured here, so the figure in the table above stands.
+
+**4. Four pairs in one city could not answer the tuning question, and now five regions have.**
+The note above — *"`avoid` and `neutral` are nearly identical on all four pairs… an argument
+for fitting the §7.1 parameters against real preference pairs rather than assuming large
+gains"* — was right about the Bay Area and wrong as a generalisation. On real LTS across five
+regions, `avoid` costs +0.0% to +0.8% in four of them and **+50% to +207% in the Ozarks**,
+where the neutral route runs 100% at LTS 4 because Highway 19 is the only road. The parameters
+are near-inert where a parallel low-stress street exists and decisive where none does. See
+`docs/tuning.md`.
+
+**Unchanged:** the import/serve split, the wrapper, the stock jar serving an LTS graph, the
+`max_value: 4` evidence, the retired R4 finding, and the `track_type` fallback — which is
+still a working escape hatch and still rejected on merit.
