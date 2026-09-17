@@ -211,8 +211,8 @@ def step_osm_graph(ctx: BuildContext) -> StepRecord:
         status="done",
         detail=(
             f"{extract.name}, {size_mb:.0f} MB. The routing graph is a JVM step and is not "
-            f"run here: deploy/graphhopper/scripts/add_lts_tags.py then "
-            f"deploy/graphhopper/import-lts.ps1 (ADR 0001)"
+            f"run here: deploy/graphhopper/scripts/add_lts_tags.py (after the way_lts step "
+            f"below, which is what it reads) then deploy/graphhopper/import-lts.ps1 (ADR 0001)"
         ),
     )
 
