@@ -504,25 +504,43 @@ def open_meteo_root(day: date, today: date | None = None) -> str:
     )
 
 
+def _open_meteo_fetch(root: str, args: dict[str, Any]) -> Any:
+    """One site's hours, falling back to the archive when the forecast endpoint refuses.
+
+    The endpoint choice is deliberately **not** in the cache key: a cassette recorded from the
+    archive has to replay for a scorer that would have asked the forecast endpoint, and it is
+    the same weather either way.
+
+    **Chosen by asking rather than by arithmetic, because the arithmetic could not work.**
+    `open_meteo_root` compares the day against "today", and the only clock `core/` may read is
+    `ctx.clock` — which is `FrozenClock(start_at)`, pinned to *the plan's own date* so plans are
+    reproducible. So the reference and the day were always the same date, the difference was
+    always zero, and the archive branch could never be taken. Found in M9 recording a January
+    cassette in September: the forecast endpoint answered `400 Bad Request` for a day 244 days
+    past, and `ARCHIVE_AFTER_DAYS` had never once fired. `phoenix-heat` had not caught it
+    because its July date was 57 days back, inside the forecast endpoint's own ~92-day window.
+
+    Asking is better than a wall clock here regardless: it needs no clock at all, so the
+    no-implicit-clock rule stands, and it cannot drift as the provider changes its window.
+    """
+    try:
+        return _get_json(root, args, {"Accept": "application/json"})
+    except Exception:
+        if root == OPEN_METEO_ARCHIVE_ROOT:
+            raise
+        return _get_json(OPEN_METEO_ARCHIVE_ROOT, args, {"Accept": "application/json"})
+
+
 def _open_meteo_site(site: ForecastSite, ctx: ScorerContext, day: date) -> SiteForecast:
     args = open_meteo_args(site.lat, site.lon, day)
-    # The endpoint is chosen from the day but is deliberately **not** in the cache key: a
-    # cassette recorded from the archive has to replay for a scorer that would have asked
-    # the forecast endpoint, and the answer is the same weather either way.
     root = open_meteo_root(day, ctx.clock.now().date())
+    query = {**args, "hourly": ",".join(OPEN_METEO_FIELDS)}
     payload = fetch(
         ctx.cache,
         "open_meteo.forecast",
         args,
         day,
-        _producer(
-            ctx,
-            lambda: _get_json(
-                root,
-                {**args, "hourly": ",".join(OPEN_METEO_FIELDS)},
-                {"Accept": "application/json"},
-            ),
-        ),
+        _producer(ctx, lambda: _open_meteo_fetch(root, query)),
     )
     hours = parse_open_meteo(payload or {})
     if not hours:

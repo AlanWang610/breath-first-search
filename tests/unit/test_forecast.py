@@ -340,3 +340,62 @@ def test_the_budget_stops_the_sweep_and_says_so(
 def test_the_points_lookup_is_keyed_without_a_date() -> None:
     """A coordinate's forecast grid has no vintage; keying it by day multiplies cassettes."""
     assert STATIC_DAY == "static"
+
+
+class TestTheArchiveFallback:
+    """The archive endpoint was unreachable for eight milestones, and nothing said so.
+
+    `open_meteo_root(day, today)` is only useful if `today` is the real date. Every call site
+    passed `ctx.clock.now().date()`, and that clock is `FrozenClock(start_at)` — pinned to the
+    plan's *own* date so plans are reproducible. Reference and day were therefore always equal,
+    `(reference - day).days` was always 0, and `ARCHIVE_AFTER_DAYS` never once fired.
+
+    It went unnoticed because `phoenix-heat` pins a date 57 days back, and Open-Meteo's
+    *forecast* endpoint serves about 92 days of history itself — so the wrong endpoint returned
+    the right answer. `boston-winter` is 244 days back, got `400 Bad Request` at every site, and
+    would have pinned a golden with no forecast in it at all.
+
+    The fix asks rather than calculates, so no wall clock enters `core/` (scope 3.3).
+    """
+
+    QUERY = {"latitude": 42.37, "longitude": -71.13, "start_date": "2026-01-15"}
+
+    def test_the_forecast_endpoint_is_tried_first(self, monkeypatch: Any) -> None:
+        from longrun.core.data import forecast as module
+
+        asked: list[str] = []
+        monkeypatch.setattr(
+            module, "_get_json", lambda root, *_a, **_k: asked.append(root) or {"ok": 1}
+        )
+        module._open_meteo_fetch(module.OPEN_METEO_ROOT, self.QUERY)
+        assert asked == [module.OPEN_METEO_ROOT]
+
+    def test_a_refusal_falls_back_to_the_archive(self, monkeypatch: Any) -> None:
+        from longrun.core.data import forecast as module
+
+        asked: list[str] = []
+
+        def fake(root: str, *_a: Any, **_k: Any) -> Any:
+            asked.append(root)
+            if root == module.OPEN_METEO_ROOT:
+                raise RuntimeError("400 Bad Request")
+            return {"hourly": {}}
+
+        monkeypatch.setattr(module, "_get_json", fake)
+        module._open_meteo_fetch(module.OPEN_METEO_ROOT, self.QUERY)
+        assert asked == [module.OPEN_METEO_ROOT, module.OPEN_METEO_ARCHIVE_ROOT]
+
+    def test_the_archive_refusing_is_raised_rather_than_looped(self, monkeypatch: Any) -> None:
+        """A day neither endpoint covers is a reason on the coverage line, not a retry storm."""
+        from longrun.core.data import forecast as module
+
+        calls: list[str] = []
+
+        def always_fails(root: str, *_a: Any, **_k: Any) -> Any:
+            calls.append(root)
+            raise RuntimeError("nope")
+
+        monkeypatch.setattr(module, "_get_json", always_fails)
+        with pytest.raises(RuntimeError):
+            module._open_meteo_fetch(module.OPEN_METEO_ARCHIVE_ROOT, self.QUERY)
+        assert calls == [module.OPEN_METEO_ARCHIVE_ROOT]
