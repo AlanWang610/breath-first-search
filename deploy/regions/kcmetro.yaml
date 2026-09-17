@@ -36,3 +36,17 @@ huc4:
 # None loaded. KCATA publishes GTFS for the metro and it is not here, so `transit` and
 # `bailouts` report what the loaded feeds say - nothing - rather than what Kansas City has.
 gtfs: {}
+
+# Endpoint pairs for `verify_lts_routing.py --region kcmetro`. The third crosses State Line
+# Road, which is what region 4 exists for: one graph has to answer for both states, and a
+# route that stops at the border is a graph clipped to one side of it.
+verify_pairs:
+  - name: "Union Station -> Country Club Plaza"
+    from: [39.0850, -94.5860]
+    to: [39.0417, -94.5920]
+  - name: "Westport -> Brookside"
+    from: [39.0520, -94.5910]
+    to: [39.0270, -94.5920]
+  - name: "across State Line Road: KS -> MO"
+    from: [39.0300, -94.6080]
+    to: [39.0300, -94.5850]

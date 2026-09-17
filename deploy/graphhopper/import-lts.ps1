@@ -19,8 +19,16 @@
     uses -- importing with one config and serving with another is how you get GraphHopper's
     "profiles do not match the graph" refusal, and sharing the resolver is what prevents it.
 
+    **An existing graph directory is refused, not overwritten.** GraphHopper's import loads an
+    existing graph instead of rebuilding it and exits 0, so re-importing after the scores
+    changed takes 1.4 seconds, reports success, and leaves the old graph in place. That is the
+    stale-graph failure in its purest form: nothing is wrong anywhere except the answers. Found
+    in M9 while rebuilding the Bay Area on real LTS -- the "rebuilt" graph was still the one
+    built on 4 September with the placeholder scores. Use -Force to replace it.
+
 .EXAMPLE
     ./deploy/graphhopper/import-lts.ps1 -Region ozarks
+    ./deploy/graphhopper/import-lts.ps1 -Region bayarea -Force
 #>
 [CmdletBinding()]
 param(
@@ -29,6 +37,7 @@ param(
     [string]$Jar     = "data/graphhopper/graphhopper-web-11.0.jar",
     [string]$Wrapper = "deploy/graphhopper/lts-wrapper/target/graphhopper-lts-wrapper-0.1.0.jar",
     [string]$Xmx     = "",
+    [switch]$Force,
     [string]$JavaHome = "C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot"
 )
 
@@ -47,6 +56,23 @@ foreach ($p in @($java, $Jar, $Wrapper, $entry.Config)) {
 Write-Host "region:  $($entry.Region)"
 Write-Host "config:  $($entry.Config)"
 Write-Host "heap:    $($entry.Xmx)"
+
+# `graph.location` is the only thing here that knows where the graph lands, so read it back
+# out of the config rather than reconstructing the convention in a second place.
+$graphLocation = (Select-String -Path $entry.Config -Pattern '^\s*graph\.location:\s*(.+?)\s*$').Matches[0].Groups[1].Value
+if (Test-Path $graphLocation) {
+    if (-not $Force) {
+        throw @"
+A graph already exists at $graphLocation (built $((Get-Item (Join-Path $graphLocation 'properties')).LastWriteTime)).
+
+GraphHopper's import would LOAD it rather than rebuild it, exit 0 in about a second, and
+leave the old scores in place -- so a rebuild after add_lts_tags.py changed the `lts` tag
+would report success and change nothing. Re-run with -Force to replace it.
+"@
+    }
+    Write-Host "removing: $graphLocation (-Force)"
+    Remove-Item -Recurse -Force $graphLocation
+}
 
 # Wrapper first on the classpath so its classes win any name collision.
 $cp = "$Wrapper;$Jar"

@@ -22,3 +22,15 @@ huc4:
 # report what the loaded feeds say - nothing - rather than what Phoenix has. The coverage
 # manifest is where that distinction has to survive.
 gtfs: {}
+
+# Endpoint pairs for `verify_lts_routing.py --region phoenix`. Region 2's arterials are wide,
+# fast and gridded at a mile spacing, so the parallel residential street the LTS term wants is
+# often half a mile away - the case between the Bay Area's dense grid and the Ozarks' single
+# highway.
+verify_pairs:
+  - name: "downtown Phoenix, west to east"
+    from: [33.4515, -112.0850]
+    to: [33.4515, -112.0300]
+  - name: "Roosevelt Row -> Encanto Park"
+    from: [33.4590, -112.0680]
+    to: [33.4730, -112.0930]
