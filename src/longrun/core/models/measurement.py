@@ -9,6 +9,7 @@ profile, hard thresholds are fixed safety floors that a user may raise but never
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import IntEnum
 from typing import Annotated
 
@@ -83,6 +84,30 @@ class ScorerResult(BaseModel):
     measurements: list[SegmentMeasurement] = Field(default_factory=list)
     flags: list[Flag] = Field(default_factory=list)
     coverage: list[CoverageEntry] = Field(default_factory=list)
+    #: Set when this result was not produced by the pass that returned it: the planned
+    #: start of the pass that *was*. `None` means this pass measured it.
+    #:
+    #: A partial re-score (`run_scorers(only=...)`) carries the scorers it did not run, and
+    #: a carried result that cannot say so is the whole failure mode of a refresh — a sheet
+    #: claiming a fresh check nobody made. The claim belongs here because a `ScorerResult` is
+    #: exactly the thing that was or was not re-run.
+    #:
+    #: Not a coverage entry, which was the obvious home and is the wrong one:
+    #: `cli/export.py` already reads source-keyed `unchecked()` as a statement about a
+    #: scorer, so a carried marker there would flip carried scorers to "unavailable" in
+    #: `longrun summary` — a lie in the opposite direction. And not `ToolCall.cached`, which
+    #: is written by `cache.fetch` and means "this external call was served from SQLite": a
+    #: carried scorer makes no external call, so marking one would mean fabricating a
+    #: `ToolCall` for work that did not happen.
+    #:
+    #: A `datetime` rather than a `bool` because `lighting` at 05:00 and at 19:00 are
+    #: different answers, and a reader needs to know how stale rather than merely that it is.
+    carried_from: datetime | None = None
+
+    @property
+    def carried(self) -> bool:
+        """Whether this result was brought forward rather than measured by this pass."""
+        return self.carried_from is not None
 
     def worst(self, n: int = 5) -> list[Flag]:
         """The n most severe flags, hard before soft, ties broken by segment id.
