@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import time
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, cast
 
@@ -66,6 +67,62 @@ SCORERS: dict[str, str] = {
 #: and `access_hours` were reported from M1 until M4.4 wrote them. The next scorer the scope
 #: names and a milestone defers belongs here, not in a comment.
 NOT_YET_IMPLEMENTED: dict[str, str] = {}
+
+
+#: Scorer -> the earlier scorers it reads out of `prior`. The `_call` docstring below argues
+#: that these dependencies are the scope's rather than an implementation shortcut; this is
+#: that argument written down in a form something can check.
+#:
+#: It exists because a partial re-score can otherwise produce a *wrong* number rather than a
+#: stale one. Carrying `sun_exposure` while re-running `heat_stress` against a new date feeds
+#: WBGT a shaded fraction computed from last month's solar geometry - silently, in the
+#: physiological tier. `closure()` is what makes that impossible to ask for by accident.
+PRIOR_DEPENDENCIES: dict[str, frozenset[str]] = {
+    "heat_stress": frozenset({"sun_exposure"}),
+    "resupply_schedule": frozenset({"heat_stress"}),
+}
+
+
+class UnknownScorer(ValueError):
+    """A scorer was named that nothing answers to - usually a typo in `--only`."""
+
+
+class StalePrior(ValueError):
+    """A partial pass would have fed a scorer an earlier result it did not re-run."""
+
+
+def closure(names: Iterable[str]) -> frozenset[str]:
+    """`names`, plus everything they read out of `prior`, transitively.
+
+    The public helper a caller uses to widen its own request *and be able to say so*.
+    `run_scorers` deliberately refuses an unclosed set rather than expanding one quietly:
+    asking for one scorer and getting three is a thing the user should be told, and the
+    place to tell them is the caller that has a terminal.
+    """
+    wanted = set(names)
+    frontier = list(wanted)
+    while frontier:
+        for dependency in PRIOR_DEPENDENCIES.get(frontier.pop(), frozenset()):
+            if dependency not in wanted:
+                wanted.add(dependency)
+                frontier.append(dependency)
+    return frozenset(wanted)
+
+
+def carry(result: ScorerResult, as_of: datetime) -> ScorerResult:
+    """A stored result, restated as one this pass did not produce.
+
+    `result.carried_from or as_of` rather than `as_of`, and that is the whole function: a
+    result carried through five successive refreshes must keep the date it was *originally
+    measured for*. Overwriting it each time would make a six-month-old `legality` report as
+    one day old after a single refresh, which turns the honesty field into a laundering
+    mechanism.
+
+    `deep=True` because `ScorerResult` is the one measurement model that is not frozen and
+    `record_coverage` appends to `result.coverage` in place - a shallow copy would share its
+    lists with the stored plan's objects.
+    """
+    return result.model_copy(update={"carried_from": result.carried_from or as_of}, deep=True)
 
 
 def load_scorer(module_path: str) -> Any | None:
@@ -155,4 +212,14 @@ def run_scorers(
     return results
 
 
-__all__ = ["NOT_YET_IMPLEMENTED", "SCORERS", "load_scorer", "run_scorers"]
+__all__ = [
+    "NOT_YET_IMPLEMENTED",
+    "PRIOR_DEPENDENCIES",
+    "SCORERS",
+    "StalePrior",
+    "UnknownScorer",
+    "carry",
+    "closure",
+    "load_scorer",
+    "run_scorers",
+]
