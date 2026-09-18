@@ -12,5 +12,10 @@ Planned modules:
     arbitrate.py     lexicographic tiers safety -> physiological -> comfort; weighted sum
                      within a tier; same-tier conflicts surfaced, never resolved silently
     coverage.py      which sources were checked and which were not, per jurisdiction
-    diff.py          route_diff with per-difference score deltas
+    diff.py          route_diff, where two lines part company; result_diff, what two
+                     scorings of one line disagree about. The second half was described
+                     here from M1 and written in M10, which is the milestone that needed
+                     it: a refresh does not re-route, so a geometry diff of one is vacuous
+    refresh.py       re-score the date-sensitive scorers against a new date and carry the
+                     rest, reporting which was which (scope 7.8)
 """
