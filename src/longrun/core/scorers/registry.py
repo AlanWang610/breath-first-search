@@ -15,7 +15,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import time
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable, Sequence
 from datetime import datetime
 from typing import Any, cast
 
@@ -157,12 +157,30 @@ def _call(
     return cast("ScorerResult", func(route, segments, ctx, etas))
 
 
+def _check_only(only: Collection[str]) -> None:
+    """Refuse a partial pass that would misreport, before any of it runs."""
+    known = set(SCORERS) | set(NOT_YET_IMPLEMENTED)
+    unknown = sorted(set(only) - known)
+    if unknown:
+        raise UnknownScorer(f"no scorer answers to {unknown}; known names are {sorted(known)}")
+    missing = sorted(closure(only) - set(only))
+    if missing:
+        raise StalePrior(
+            f"{missing} would be carried while a scorer that reads them is re-run, so they "
+            f"would be measured against a different date. Add them, or use `closure()`."
+        )
+
+
 def run_scorers(
     route: Any,
     segments: list[Any],
     ctx: ScorerContext,
     etas: list[datetime],
     manifest: Manifest | None = None,
+    *,
+    only: Collection[str] | None = None,
+    carried: Sequence[ScorerResult] = (),
+    carried_as_of: datetime | None = None,
 ) -> list[ScorerResult]:
     """Run every scorer that exists; report every one that does not.
 
@@ -170,8 +188,30 @@ def run_scorers(
     ~3-minute budget is measured rather than assumed, and until M2 `Manifest.tool_calls`
     existed with nothing writing to it - so "which scorer is slow" was a question only a
     profiler could answer, and only on a machine that had one.
+
+    `only` names the scorers to actually run; the rest are taken from `carried` and stamped
+    with `carried_as_of`. `only=None` runs everything and must stay a bit-exact no-op - the
+    golden suite is what checks that.
+
+    **The merge happens here rather than in a caller, and that is the load-bearing choice.**
+    Two things force it. `prior` is assembled from the list under construction, so a carried
+    result is only visible to a later scorer if it already sits at its registry position when
+    that scorer runs - no post-hoc merge can achieve that, and both real `prior` readers scan
+    by name, so an incomplete list does not raise but silently finds nothing. And the coverage
+    drain at the bottom of this function iterates `results`, so carried results seeded here
+    drain with no new code; merging outside means either losing their coverage entries or
+    draining in two places, and the second is a double-count waiting for its first refactor.
     """
+    if only is not None:
+        _check_only(only)
+    wanted = set(SCORERS) if only is None else set(only)
+    stored = {result.name: result for result in carried}
+    as_of = carried_as_of or (etas[0] if etas else None)
+
     results: list[ScorerResult] = []
+    #: Scorers this pass actually invoked, as opposed to carried. Counted separately so the
+    #: degradation message below says "17 of 17" rather than "17 of 21" on a partial pass.
+    ran = 0
     #: Set once the plan outruns scope 6.4's latency target. Every scorer after that is
     #: reported as not run rather than dropped, because a sheet that is quietly shorter is
     #: the failure scope 3.6 exists to prevent - and the degradation is named in the
@@ -179,6 +219,17 @@ def run_scorers(
     exhausted: str | None = None
 
     for name, module_path in SCORERS.items():
+        # Above the deadline check, deliberately: a carried scorer costs no latency, so an
+        # exhausted budget must not convert it into "not scored". That would take a result
+        # the pass already had and throw it away for want of time it never spent.
+        if name not in wanted:
+            previous = stored.get(name)
+            results.append(
+                carry(previous, as_of)
+                if previous is not None and as_of is not None
+                else unavailable(name, "not re-scored, and no stored result was available to carry")
+            )
+            continue
         if exhausted is None:
             try:
                 ctx.budget.check_deadline()
@@ -186,11 +237,12 @@ def run_scorers(
                 exhausted = str(exc)
                 if manifest is not None:
                     manifest.degradation.append(
-                        f"stopped scoring after {len(results)} of {len(SCORERS)}: {exhausted}"
+                        f"stopped scoring after {ran} of {len(wanted)}: {exhausted}"
                     )
         if exhausted is not None:
             results.append(unavailable(name, f"not scored: {exhausted}"))
             continue
+        ran += 1
         func = load_scorer(module_path)
         if func is None:
             results.append(unavailable(name, "scorer not implemented yet"))
