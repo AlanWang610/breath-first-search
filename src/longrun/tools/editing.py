@@ -70,38 +70,46 @@ def register(server: Any, settings: ToolSettings) -> None:
         return {"interval_m": interval_m, "markers": markers}
 
     @server.tool(name="refresh_plan", description="Scope 7.8: re-score a stored plan.")
-    def refresh_plan(plan_path: str, date: str, start: str = "07:00") -> dict[str, Any]:
-        """Closes `longrun refresh plan.json`, named in `cli/__init__.py` and never built.
+    def refresh_plan(
+        plan_path: str, date: str, start: str = "07:00", write: bool = False
+    ) -> dict[str, Any]:
+        """The same function `longrun refresh` calls, so the two cannot drift.
 
         Re-scores the stored *route* rather than re-drawing it: a refresh answers "is this
         still true today", and re-routing would answer a different question.
+
+        `write` defaults to False here and to True on the CLI, deliberately. An agent
+        calling a tool that reads like a query should not silently overwrite the user's file.
+
+        The context is opened with the stored plan's own snapshot pins. `ToolSettings.snapshot`
+        defaults to empty and `from_env` never fills it, so every fresh coverage entry
+        reported `vintage=None` while the manifest it was merged into still claimed the
+        original pins.
         """
+        from dataclasses import replace as _replace
         from pathlib import Path as _Path
 
         from longrun.core.models.plan import Plan
-        from longrun.core.plan.pipeline import build_plan, score_once
+        from longrun.core.plan.refresh import rescore_plan
         from longrun.tools.base import scoring_context, start_of
 
         stored = Plan.model_validate_json(_Path(plan_path).read_text(encoding="utf-8"))
         start_at = start_of(date, start)
-        request = stored.request.model_copy(
-            update={"date": start_at.date(), "start_time": start_at.time()}
-        )
-        with scoring_context(settings, stored.route, start_at) as ctx:
-            scored = score_once(stored.route, request, ctx, start_at=start_at)
-            fresh = build_plan(
-                scored,
-                request,
-                profile=stored.profile,
-                coverage=scored.coverage,
-                manifest=stored.manifest,
-            )
+        pinned = _replace(settings, snapshot=stored.manifest.snapshot)
+        with scoring_context(pinned, stored.route, start_at) as ctx:
+            out = rescore_plan(stored, ctx, start_at=start_at)
+        if write:
+            _Path(plan_path).write_text(out.plan.model_dump_json(indent=2), encoding="utf-8")
         return {
-            "plan_id": fresh.id,
+            "plan_id": out.plan.id,
             "was": stored.request.date.isoformat(),
             "now": start_at.date().isoformat(),
-            "residual_flags": len(fresh.residual_flags),
-            "verify": fresh.verify.summary() if fresh.verify else None,
+            "rescored": list(out.delta.rescored),
+            "carried": list(out.delta.carried),
+            "changed": out.delta.lines(),
+            "residual_flags": len(out.plan.residual_flags),
+            "verify": out.plan.verify.summary() if out.plan.verify else None,
+            "written": plan_path if write else None,
         }
 
     @server.tool(name="pin_waypoint", description="Scope 7.8: not available in this build.")
