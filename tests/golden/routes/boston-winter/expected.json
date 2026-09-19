@@ -443,6 +443,7 @@
         "agencies_answered": 0,
         "agencies_crossed": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "air_quality": {
@@ -459,6 +460,7 @@
         "sites_answered": 2,
         "source": "open-meteo (CAMS model)"
       },
+      "waypoints": {},
       "worst": []
     },
     "bailouts": {
@@ -475,6 +477,7 @@
         "transit_checked": false,
         "worst_exit_m": 34.3
       },
+      "waypoints": {},
       "worst": []
     },
     "cell_coverage": {
@@ -485,6 +488,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "closures": {
@@ -500,6 +504,7 @@
         "jurisdictions_crossed": 0,
         "jurisdictions_unanswered": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "crew_points": {
@@ -510,6 +515,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "crossings": {
@@ -526,6 +532,7 @@
         "signals_checked": false,
         "unsignalized": null
       },
+      "waypoints": {},
       "worst": []
     },
     "hazards": {
@@ -540,6 +547,7 @@
         "sources_checked": 2,
         "sources_missing": 4
       },
+      "waypoints": {},
       "worst": []
     },
     "heat_stress": {
@@ -557,6 +565,7 @@
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
+      "waypoints": {},
       "worst": []
     },
     "legality": {
@@ -572,6 +581,7 @@
         "prohibited_segments": 0,
         "unknown_m": 562.807
       },
+      "waypoints": {},
       "worst": []
     },
     "lighting": {
@@ -592,6 +602,7 @@
         "utc_offset_hours": -5.0,
         "utc_offset_source": "stated"
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "soft",
@@ -624,6 +635,7 @@
         "sites_answered": 2,
         "spacing_m": 5000.0
       },
+      "waypoints": {},
       "worst": []
     },
     "resupply_schedule": {
@@ -634,6 +646,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "segment_hostility": {
@@ -650,6 +663,7 @@
         "scored_m": 1894.241,
         "traffic_tolerance": 2
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "hard",
@@ -668,6 +682,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "start_time_optimizer": {
@@ -685,6 +700,7 @@
         "step_minutes": 30.0,
         "window_hours": 3.0
       },
+      "waypoints": {},
       "worst": []
     },
     "stop_density": {
@@ -695,6 +711,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "sun_exposure": {
@@ -714,6 +731,7 @@
         "utc_offset_hours": -5.0,
         "utc_offset_source": "stated"
       },
+      "waypoints": {},
       "worst": []
     },
     "surface_profile": {
@@ -732,6 +750,7 @@
         "unpaved_fraction": 0.0,
         "unpaved_m": 0.0
       },
+      "waypoints": {},
       "worst": []
     },
     "trail_status": {
@@ -746,6 +765,7 @@
         "agencies_crossed": 0,
         "trail_alerts": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "transit": {
@@ -756,6 +776,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     }
   },
@@ -820,5 +841,11 @@
       "offenders": 0,
       "status": "skipped"
     }
-  ]
+  ],
+  "waypoints": {
+    "by_kind": {},
+    "by_scorer": {},
+    "max_offset_m": null,
+    "total": 0
+  }
 }

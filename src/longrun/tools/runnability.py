@@ -26,21 +26,47 @@ def register(server: Any, settings: ToolSettings) -> None:
 
     @server.tool(
         name="cue_sheet",
-        description="Scope 7: cue_sheet - not available in this build.",
+        description=(
+            "Scope 7.2: the turn list for a route drawn between these points, with turn "
+            "count and ambiguity flags."
+        ),
     )
-    def _cue_sheet(**kwargs: Any) -> dict[str, Any]:
-        # `work`, and more of it than the reason makes it sound. Flipping `instructions` to
-        # True in `route_body` is the obvious first move and it would fail silently:
-        # `instructions` is not among the fields `CachedRouter._paths` keys a route on, so
-        # every cassette recorded without instructions would be served to a request that
-        # wants them, and the result would be a cue sheet with no turns in it - which is
-        # indistinguishable from a route that has none. The key has to learn the flag first.
-        return unavailable(
-            "cue_sheet",
-            "GraphHopper turn instructions are not requested - `route_body` sets "
-            "`instructions: False` - so there is nothing to build a cue sheet from",
-            blocked_on="work",
-        )
+    def cue_sheet(points: list[list[float]], profile: str = "foot") -> dict[str, Any]:
+        """`points` are [lat, lon], the order everything outside the router uses.
+
+        **Scope 7.2 spells this `cue_sheet(gpx)` and this takes points instead.** A GPX track
+        has no turns in it, and there are exactly two ways to give one turns. Re-routing
+        between its endpoints draws a *different line* and describes that - the dishonesty
+        this tool was blocked on, wearing a different hat. Map-matching it does work:
+        measured on 2026-09-18 against GraphHopper 11, `POST /match?instructions=true`
+        returns instructions, which would also make the frame shift structurally zero. That
+        is the follow-up, and it needs `CachedRouter.map_match`'s key to learn the flag by
+        elision exactly as `route_args` now does.
+        """
+        from longrun.core.models.geometry import LatLon
+        from longrun.core.routing.base import NoRouteError, RouterUnavailable
+        from longrun.core.routing.graphhopper import GraphHopperRouter
+
+        waypoints = [LatLon(lat=float(p[0]), lon=float(p[1])) for p in points]
+        try:
+            route, sheet = GraphHopperRouter(settings.router_url).route_cues(
+                waypoints, profile=profile
+            )
+        except (RouterUnavailable, NoRouteError) as exc:
+            # No `blocked_on`: the tool exists now, so this is a fact about the call rather
+            # than a gap in the build.
+            return unavailable("cue_sheet", f"{type(exc).__name__}: {exc}")
+
+        return {
+            "name": "cue_sheet",
+            "checked": sheet.checked,
+            "reason": sheet.reason,
+            "route_id": route.id,
+            "length_m": round(route.length_m, 1),
+            "turn_count": sheet.turn_count,
+            "ambiguous_count": len(sheet.ambiguous),
+            "cues": [c.model_dump(mode="json") for c in sheet.cues],
+        }
 
 
 __all__ = ["TOOLS", "register"]

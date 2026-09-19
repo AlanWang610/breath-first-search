@@ -27,10 +27,24 @@ def export(
     out: Path | None = typer.Option(None, "--out", help="File to write; stdout if omitted."),
     html: bool = typer.Option(False, "--html", help="Self-contained HTML sheet."),
     markdown: bool = typer.Option(False, "--md", help="Markdown sheet."),
+    gpx: bool = typer.Option(False, "--gpx", help="GPX 1.1 track with waypoints."),
+    fit: bool = typer.Option(False, "--fit", help="Garmin FIT course file."),
+    tcx: bool = typer.Option(False, "--tcx", help="TCX course file."),
 ) -> None:
-    """Render a stored plan as a plan sheet."""
-    if html and markdown:
-        typer.echo("error: choose one of --html or --md", err=True)
+    """Render a stored plan as a plan sheet, or write it as a course."""
+    chosen = [
+        flag
+        for flag, on in (
+            ("--html", html),
+            ("--md", markdown),
+            ("--gpx", gpx),
+            ("--fit", fit),
+            ("--tcx", tcx),
+        )
+        if on
+    ]
+    if len(chosen) > 1:
+        typer.echo(f"error: choose one of {', '.join(chosen)}", err=True)
         raise typer.Exit(code=2)
 
     try:
@@ -38,6 +52,10 @@ def export(
     except (OSError, ValueError) as exc:
         typer.echo(f"error: could not read {plan_path}: {exc}", err=True)
         raise typer.Exit(code=2) from exc
+
+    if gpx or fit or tcx:
+        _write_course(plan, out, gpx=gpx, fit=fit)
+        return
 
     if html:
         text = render_html(plan)
@@ -52,6 +70,44 @@ def export(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
     typer.echo(f"wrote {out} ({len(text.encode('utf-8')) / 1024:.0f} kB)")
+
+
+def _write_course(plan: Plan, out: Path | None, *, gpx: bool, fit: bool) -> None:
+    """Write a course file. Notes go to stderr, so the text formats stay pipeable.
+
+    `--out` is required for all three. FIT is binary and cannot use the stdout path at all;
+    GPX and TCX could, but a course is a file you load onto a watch rather than something
+    you read in a terminal, and one rule is easier to remember than two.
+    """
+    from longrun.core.export.course import ExportError
+    from longrun.core.export.fit import fit_write
+    from longrun.core.export.tcx import tcx_write
+    from longrun.core.geo.gpx import gpx_write
+
+    if out is None:
+        typer.echo("error: a course needs --out; it is a file, not terminal output", err=True)
+        raise typer.Exit(code=2)
+
+    try:
+        if gpx:
+            # The GPX keeps each waypoint's TRUE position; the course formats put a point
+            # on the line. `core/export/course.py` says why.
+            written = gpx_write(
+                plan.route, out, waypoints=[(w.position, w.label, w.kind) for w in plan.waypoints]
+            )
+            notes: list[str] = []
+        elif fit:
+            written, notes = fit_write(plan.route, plan.waypoints, out, etas=plan.etas)
+        else:
+            written, notes = tcx_write(plan.route, plan.waypoints, out, etas=plan.etas)
+    except ExportError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    for note in notes:
+        typer.echo(note, err=True)
+    size = written.stat().st_size
+    typer.echo(f"wrote {written} ({size / 1024:.0f} kB, {len(plan.waypoints)} waypoint(s))")
 
 
 def summary(

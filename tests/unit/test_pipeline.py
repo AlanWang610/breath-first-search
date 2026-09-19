@@ -15,6 +15,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from longrun.core.data.cache import SqliteCache
 from longrun.core.data.file_store import FileLayerStore, FileRasterStore
 from longrun.core.export.sheet_md import render_markdown
@@ -209,3 +211,73 @@ def test_a_stored_plan_still_carries_its_pacing_caveats(tmp_path: Path) -> None:
     sheet = render_markdown(reloaded)
     for caveat in plan.pacing_caveats:
         assert caveat in sheet
+
+
+def test_a_partial_pass_produces_the_same_coverage_block_as_a_full_one(
+    tmp_path: Path,
+) -> None:
+    """The strongest single check on the merge: nothing lost, nothing duplicated, in order.
+
+    Coverage reaches the manifest from two places - scorers, drained from their results, and
+    `_score_pass` itself, which records `way_matching` directly into `ctx.coverage` and
+    attaches it to no result. A merge that rebuilt the block from the result list alone would
+    drop that entry; one that drained carried results separately would duplicate every other.
+    Order is asserted too, because `expectation.digest` compares this block line by line.
+    """
+    ctx = _ctx(tmp_path, Budget())
+    request = _request()
+    full = score_once(_route(), request, ctx, start_at=START)
+
+    time_independent = {
+        "legality",
+        "segment_hostility",
+        "crossings",
+        "stop_density",
+        "surface_profile",
+        "services_along",
+        "cell_coverage",
+    }
+    partial = score_once(
+        _route(),
+        request,
+        ctx,
+        start_at=START,
+        only={name for name in SCORERS if name not in time_independent},
+        carried=[r for r in full.results if r.name in time_independent],
+        carried_as_of=START,
+    )
+
+    assert [(e.source, e.kind, e.checked) for e in partial.coverage.entries] == [
+        (e.source, e.kind, e.checked) for e in full.coverage.entries
+    ]
+
+
+def test_a_refresh_does_not_erase_a_stored_elevation_profile(tmp_path: Path) -> None:
+    """Bug #5, and the sabotage half is the point of the test.
+
+    `_score_pass` writes whatever `sample_elevation` returns onto the route, and that is
+    all-`None` where the DEM has no coverage. Harmless while `refresh_plan` wrote nothing;
+    the moment a refresh writes back it is silent destruction of the profile it refreshed.
+    So the test asserts both that the override saves it *and* that its absence loses it -
+    otherwise the fix outlives the reason for it.
+    """
+    ctx = _ctx(tmp_path, Budget())
+    request = _request()
+    route = _route()
+    stored = [100.0 + index for index in range(len(route.points))]
+
+    kept = score_once(route, request, ctx, start_at=START, elevations=list(stored))
+    assert [p.ele_m for p in kept.route.points] == stored
+
+    # Sabotage: the same call without the override, against a root with no DEM at all.
+    lost = score_once(route, request, ctx, start_at=START)
+    assert all(p.ele_m is None for p in lost.route.points), (
+        "this root has no DEM, so a pass that reads one must wipe the elevations - if this "
+        "assertion fails the hazard has moved and the override above may no longer be needed"
+    )
+
+
+def test_a_supplied_elevation_vector_must_match_the_route(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path, Budget())
+    with pytest.raises(ValueError, match="elevations"):
+        score_once(_route(), _request(), ctx, start_at=START, elevations=[1.0, 2.0])

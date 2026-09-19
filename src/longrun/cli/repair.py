@@ -23,9 +23,10 @@ import typer
 
 from longrun.core.data.cache import offline_from_env
 from longrun.core.export.sheet_md import render_markdown
-from longrun.core.geo.gpx import GpxError, gpx_read
+from longrun.core.geo.gpx import GpxError, gpx_read, gpx_write
 from longrun.core.models.plan import Manifest, Plan, SnapshotPins
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.routing import NO_ROUTER, NOT_REQUESTED, CueSheet
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.preferences.store import load_profile
 from longrun.runtime import open_context
@@ -147,7 +148,16 @@ def score_route(
             route, request, ctx, start_at=start_at, router=router, manifest=manifest
         )
         plan = build_plan(
-            scored, request, profile=profile, coverage=scored.coverage, manifest=manifest
+            scored,
+            request,
+            profile=profile,
+            coverage=scored.coverage,
+            manifest=manifest,
+            # Repair mode has no router by design (scope 6.1), so it says *that* rather than
+            # reporting a route with no turns. Nothing here synthesises cues from geometry:
+            # a bearing detector would invent street names and turn a measurement into a
+            # guess, which is the one thing a cue sheet must never do.
+            cues=CueSheet(checked=False, reason=NO_ROUTER if router is None else NOT_REQUESTED),
         )
         sheet = render_markdown(
             plan,
@@ -160,11 +170,31 @@ def score_route(
             out.mkdir(parents=True, exist_ok=True)
             (out / "sheet.md").write_text(sheet, encoding="utf-8")
             (out / "plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-            typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
+            # Scope 9's first listed output, and the first time this project has written
+            # one. Called `course.gpx` rather than `route.gpx` for two reasons: what is
+            # written is the route *plus its waypoints*, a different artefact from the line
+            # the user handed in, and `longrun repair route.gpx --out .` would otherwise
+            # overwrite their input.
+            gpx_write(plan.route, out / "course.gpx", waypoints=_gpx_waypoints(plan))
+            typer.echo(f"wrote {out / 'sheet.md'}, {out / 'plan.json'} and {out / 'course.gpx'}")
         else:
             _echo_utf8(sheet)
 
     return plan
+
+
+def _gpx_waypoints(plan: Plan) -> list[tuple[Any, str, Any]]:
+    """`Plan.waypoints` in the shape `gpx_write` has taken since M1.
+
+    Adapting here rather than changing `gpx_write`'s signature: it is the one piece of this
+    that already shipped, and `tools/io.py` calls it.
+
+    The GPX carries the **true** position - `w.position` - and never the point on the line.
+    A fountain fifty metres down a side street belongs where it is; a runner reading the map
+    needs to see the detour. The course formats make the opposite choice, and
+    `core/export/course.py` says why.
+    """
+    return [(w.position, w.label, w.kind) for w in plan.waypoints]
 
 
 def _load_snapshot(path: Path | None) -> SnapshotPins:

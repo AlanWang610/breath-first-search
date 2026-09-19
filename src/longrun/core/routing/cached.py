@@ -39,9 +39,15 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from longrun.core.data.cache import COORD_PRECISION, STATIC_DAY, fetch
 from longrun.core.models.geometry import LatLon, Route
+from longrun.core.models.routing import CueSheet
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
 from longrun.core.routing.detour import detour_area, detour_waypoints, round_coordinates
-from longrun.core.routing.graphhopper import FOOT_PROFILE, path_to_route, route_body
+from longrun.core.routing.graphhopper import (
+    FOOT_PROFILE,
+    cue_sheet_of,
+    path_to_route,
+    route_body,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.data.base import Cache
@@ -117,6 +123,23 @@ class CachedRouter:
         body = route_body(waypoints, profile, avoid_polygons, custom_model)
         paths = self._paths(body, waypoints, lambda: self.inner_paths(body, waypoints))
         return path_to_route(paths[0], route_id="generated")
+
+    def route_cues(
+        self,
+        waypoints: list[LatLon],
+        profile: str = FOOT_PROFILE,
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> tuple[Route, CueSheet]:
+        """Recorded under its own key, because it is a different question.
+
+        A `route_cues` recording is a superset of a `route` one, so `cue_sheet_of` reads the
+        instructions straight off the replayed payload and cues work offline with no special
+        handling.
+        """
+        body = route_body(waypoints, profile, avoid_polygons, custom_model, instructions=True)
+        paths = self._paths(body, waypoints, lambda: self.inner_paths(body, waypoints))
+        return path_to_route(paths[0], route_id="generated"), cue_sheet_of(paths[0])
 
     def alternatives(
         self,
@@ -196,21 +219,7 @@ class CachedRouter:
         waypoints: list[LatLon],
         producer: Any,
     ) -> list[dict[str, Any]]:
-        args = {
-            "graph": self.graph,
-            "points": _rounded(waypoints),
-            "profile": body.get("profile"),
-            # Rounded for the same reason `points` is, and it had been missed: a custom
-            # model carries `areas`, and `areas` carries a buffered polygon at 17
-            # significant digits. Two platforms' GEOS and PROJ agree on where that polygon
-            # is and disagree in the last bit about how to say so, which was enough to give
-            # one detour request two cache keys - and to make the `loop-bayarea` golden
-            # replay on Windows and miss on Linux. `detour_area` now rounds at the source;
-            # this covers every other polygon, including ones a user drew.
-            "custom_model": round_coordinates(body.get("custom_model")),
-            "algorithm": body.get("algorithm"),
-            "max_paths": body.get("alternative_route.max_paths"),
-        }
+        args = route_args(body, waypoints, self.graph)
         payload = fetch(self.cache, ROUTE_TOOL, args, STATIC_DAY, lambda: {"paths": producer()})
         paths = payload.get("paths") or []
         if not paths:
@@ -220,6 +229,53 @@ class CachedRouter:
         return list(paths)
 
 
+def route_args(
+    body: dict[str, Any], waypoints: Sequence[LatLon], graph: str | None
+) -> dict[str, Any]:
+    """The cache key for one routing request, as a dict `args_hash` will hash.
+
+    A module-level function rather than an expression inside `_paths` because it is the one
+    thing here that must be *pinned* rather than merely tested: a cassette is permanent, and
+    a change to this silently re-keys every recorded answer in the repository.
+    """
+    args: dict[str, Any] = {
+        "graph": graph,
+        "points": _rounded(list(waypoints)),
+        "profile": body.get("profile"),
+        # Rounded for the same reason `points` is, and it had been missed: a custom
+        # model carries `areas`, and `areas` carries a buffered polygon at 17
+        # significant digits. Two platforms' GEOS and PROJ agree on where that polygon
+        # is and disagree in the last bit about how to say so, which was enough to give
+        # one detour request two cache keys - and to make the `loop-bayarea` golden
+        # replay on Windows and miss on Linux. `detour_area` now rounds at the source;
+        # this covers every other polygon, including ones a user drew.
+        "custom_model": round_coordinates(body.get("custom_model")),
+        "algorithm": body.get("algorithm"),
+        "max_paths": body.get("alternative_route.max_paths"),
+    }
+    # Present only when instructions were asked for, and that asymmetry is the whole design.
+    #
+    # `args_hash` is `sha256(json.dumps(args, sort_keys=True))`, so a key holding `False`
+    # changes the hash exactly as much as one holding `True` - and every cassette in this
+    # repository was recorded before this field existed. Measured on `loop-bayarea`'s opening
+    # route: the six-field dict hashes to b7c32678..., which its cassette holds; adding
+    # `"instructions": False` gives c4599f26... and `True` gives 032d99e2..., neither of
+    # which is recorded. So inserting the key unconditionally would orphan every recorded
+    # route and the fix would be a re-record against a graph that has to be rebuilt first.
+    #
+    # Omitting it when false reproduces the historical hash byte for byte, and asking for
+    # instructions becomes a genuinely different question with its own recording - which is
+    # the correct behaviour, and the reason `cue_sheet` was blocked rather than switched on.
+    #
+    # This holds only while not asking is the default. Flipping `route_body`'s default would
+    # re-key everything - loudly, as a CacheMiss, which is the safe direction. The dangerous
+    # one is a *new* body field that changes the answer and is not added here; the tests
+    # guard the general invariant rather than this one field.
+    if body.get("instructions"):
+        args["instructions"] = True
+    return args
+
+
 def _rounded_track(track: Route) -> list[list[float]]:
     return [
         [round(point.lon, COORD_PRECISION), round(point.lat, COORD_PRECISION)]
@@ -227,4 +283,4 @@ def _rounded_track(track: Route) -> list[list[float]]:
     ]
 
 
-__all__ = ["MATCH_TOOL", "ROUTE_TOOL", "CachedRouter", "PathRouter"]
+__all__ = ["route_args", "MATCH_TOOL", "ROUTE_TOOL", "CachedRouter", "PathRouter"]

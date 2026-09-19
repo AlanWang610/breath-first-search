@@ -33,7 +33,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from longrun.core.data.cache import CacheMiss
+from longrun.core.geo.gpx import DEFAULT_DEDUPE_M, cumulative_after_normalize
 from longrun.core.models.geometry import LatLon, Route
+from longrun.core.models.routing import NOT_REQUESTED, NOT_RETURNED, Cue, CueSheet
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
 from longrun.core.routing.detour import detour_area, detour_waypoints
 
@@ -67,6 +69,8 @@ def route_body(
     avoid_polygons: list[dict[str, Any]] | None = None,
     custom_model: CostingModel | None = None,
     alternatives: int = 0,
+    *,
+    instructions: bool = False,
 ) -> dict[str, Any]:
     """The POST body for one routing request.
 
@@ -79,7 +83,12 @@ def route_body(
         "profile": profile,
         "points": [[point.lon, point.lat] for point in waypoints],
         "points_encoded": False,
-        "instructions": False,
+        # Always emitted, including when False. GraphHopper's own default for this is
+        # *true*, so dropping the key from the body would silently turn instructions on
+        # and grow every response. The elision that keeps cassettes valid is a property
+        # of the cache-key args dict only - see `cached.route_args`. Blurring those two
+        # is how this gets built wrong.
+        "instructions": instructions,
         "elevation": False,
         # Flexible mode. Without it a custom model is either ignored or rejected, and the
         # difference between those two is a routing result that looks fine and is not.
@@ -167,6 +176,18 @@ class GraphHopperRouter:
     ) -> Route:
         paths = self.paths(route_body(waypoints, profile, avoid_polygons, custom_model), waypoints)
         return path_to_route(paths[0], route_id="generated")
+
+    def route_cues(
+        self,
+        waypoints: list[LatLon],
+        profile: str = FOOT_PROFILE,
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> tuple[Route, CueSheet]:
+        """One request, two decoders - the route and its turns from the same path."""
+        body = route_body(waypoints, profile, avoid_polygons, custom_model, instructions=True)
+        paths = self.paths(body, waypoints)
+        return path_to_route(paths[0], route_id="generated"), cue_sheet_of(paths[0])
 
     def alternatives(
         self,
@@ -361,3 +382,111 @@ __all__ = [
     "route_body",
     "url_from_env",
 ]
+
+
+#: GraphHopper's `sign` vocabulary (GH 11).
+#:
+#: A code absent from this table renders as `f"sign {n}"` rather than as "straight": an
+#: unrecognised manoeuvre is not a non-manoeuvre, and a cue sheet that says "continue" at a
+#: fork is worse than one that admits it does not know.
+TURN_SIGNS: dict[int, str] = {
+    -98: "u-turn",
+    -8: "left u-turn",
+    -7: "keep left",
+    -3: "sharp left",
+    -2: "left",
+    -1: "slight left",
+    0: "straight",
+    1: "slight right",
+    2: "right",
+    3: "sharp right",
+    4: "arrive",
+    5: "arrive at via point",
+    6: "roundabout",
+    7: "keep right",
+    8: "right u-turn",
+}
+
+#: Two cues closer together than this cannot be separated at running pace.
+#:
+#: Scope 7.2 asks for ambiguity flags; this and an unnamed way are the two that are
+#: measurable from the response alone. Inventing a third from imagery or tags would make
+#: this a scorer rather than a decoder.
+AMBIGUOUS_GAP_M = 25.0
+
+
+def path_to_cues(path: dict[str, Any], *, dedupe_m: float = DEFAULT_DEDUPE_M) -> list[Cue]:
+    """One path's turn instructions, located by distance along the route.
+
+    A **second** decoder, deliberately not folded into `path_to_route`. That one is the
+    single decoder for geometry and runs on every replayed route, every alternative and
+    every map-match result - including the synthetic `{"points": {"coordinates": ...}}` dict
+    `CachedRouter.map_match` builds. Teaching it about turns would staple instruction text
+    onto all of them, and onto both sides of every `route_diff`.
+
+    Returns `[]` for any path with no `instructions` key, which is every cassette recorded
+    before M10. A caller that needs to tell "no turns" from "not asked" uses `cue_sheet_of`.
+    """
+    coordinates = (path.get("points") or {}).get("coordinates") or []
+    instructions = path.get("instructions")
+    if not instructions or len(coordinates) < 2:
+        return []
+
+    # The same tuple construction `path_to_route` uses, so the two frames are the same by
+    # construction rather than by coincidence.
+    raw: list[tuple[float, float, float | None]] = [
+        (float(c[1]), float(c[0]), None) for c in coordinates
+    ]
+    cumulative = cumulative_after_normalize(raw, dedupe_m=dedupe_m)
+
+    cues: list[Cue] = []
+    for instruction in instructions:
+        interval = instruction.get("interval") or [0, 0]
+        # Clamped rather than trusted: a malformed interval must not raise inside a decoder
+        # a scored plan depends on.
+        index = min(max(int(interval[0]), 0), len(coordinates) - 1)
+        sign = instruction.get("sign")
+        street = instruction.get("street_name")
+        cues.append(
+            Cue(
+                cum_dist_m=cumulative[index],
+                sign=sign,
+                manoeuvre=TURN_SIGNS.get(sign, f"sign {sign}") if sign is not None else "",
+                text=str(instruction.get("text") or ""),
+                street_name=street or None,
+                lat=float(coordinates[index][1]),
+                lon=float(coordinates[index][0]),
+                distance_m=float(instruction.get("distance") or 0.0),
+            )
+        )
+
+    return _flag_ambiguity(cues)
+
+
+def _flag_ambiguity(cues: list[Cue]) -> list[Cue]:
+    """Scope 7.2's ambiguity flags: an unnamed way, and two turns too close to separate."""
+    out: list[Cue] = []
+    for index, cue in enumerate(cues):
+        reasons: list[str] = []
+        if cue.street_name is None and cue.manoeuvre not in ("arrive", "arrive at via point"):
+            reasons.append("the way carries no name")
+        if index + 1 < len(cues):
+            gap = cues[index + 1].cum_dist_m - cue.cum_dist_m
+            if 0 <= gap < AMBIGUOUS_GAP_M:
+                reasons.append(f"{gap:.0f} m to the next turn")
+        out.append(
+            cue.model_copy(
+                update={"ambiguous": bool(reasons), "ambiguity": "; ".join(reasons) or None}
+            )
+        )
+    return out
+
+
+def cue_sheet_of(path: dict[str, Any]) -> CueSheet:
+    """`path_to_cues` plus the distinction it cannot make: turns, none, or not asked."""
+    if "instructions" not in path:
+        return CueSheet(checked=False, reason=NOT_REQUESTED)
+    cues = path_to_cues(path)
+    if not cues:
+        return CueSheet(checked=False, reason=NOT_RETURNED)
+    return CueSheet(cues=cues, checked=True)

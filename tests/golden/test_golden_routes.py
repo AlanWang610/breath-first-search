@@ -44,18 +44,26 @@ def test_the_golden_suite_is_not_empty() -> None:
 
 #: Total bytes the committed golden fixtures may occupy.
 #:
-#: The number has been in the build plan since M0 and was enforced by **nothing** — not a test,
-#: not a CI step. What stood in for it was M0's 15-minute CI timeout, on the reasoning that
-#: "keeping CI short is itself the enforcement mechanism for small fixtures"; M6 raised that to
-#: 30 when the fifth golden pushed the Windows job over, and said so in a comment sitting a
-#: file away from anything about fixtures. So the only mechanism was relaxed by the milestone
-#: that discovered it, and the cap has been a number in prose since.
+#: The number was in the build plan from M0 and enforced by **nothing** - not a test, not a CI
+#: step. What stood in for it was M0's 15-minute CI timeout, on the reasoning that "keeping CI
+#: short is itself the enforcement mechanism for small fixtures"; M6 raised that to 30 when the
+#: fifth golden pushed the Windows job over. So the only mechanism was relaxed by the milestone
+#: that discovered it, and M9 finally made the cap a test - at which point the suite was already
+#: at 48.50 MB of 50, with 1.50 MB of headroom and no room for a seventh route.
 #:
-#: 50 MB because a golden fixture is downloaded by every clone and read by every CI run, and
-#: because a cap nobody can exceed by accident is what keeps a freeze corridor-clipped rather
-#: than table-wide. A route that needs more should drop a layer and say so in its README —
-#: `loop-bayarea` carries four of nine and explains the 9 MB it declined.
-MAX_FIXTURE_BYTES = 50 * 1024 * 1024
+#: **Raised to 64 MB in M10, deliberately and by decision rather than by pressure** (ADR 0032).
+#: Three things about that are worth stating where somebody will read them:
+#:
+#: * M10 spends almost none of it. Waypoints added ~2 kB across six `expected.json` files, and
+#:   the cue sheet records no fixture at all. The raise is provision for M11-M13, not a need of
+#:   the milestone that made it.
+#: * 64 rather than a round 75 because `boston-winter` at 8.0 MB is the model for a dense new
+#:   route, so this leaves room for about two more - and past that the CI job binds first.
+#: * **Disk is not the constraint that bites; CI wall clock is.** The Windows job ran 26m2s
+#:   against a 30-minute per-job timeout after M9, and every golden test reads these
+#:   GeoPackages. Raising the byte cap does nothing about that, and a future milestone that
+#:   finds itself here again should look at the clock before it looks at this number.
+MAX_FIXTURE_BYTES = 64 * 1024 * 1024
 
 
 def test_the_committed_fixtures_stay_under_the_cap() -> None:
@@ -121,6 +129,20 @@ def test_the_route_matches_its_expectation(name: str, tmp_path: Path, update_gol
         f"{name} no longer scores the way it used to.\n\n"
         f"{describe_difference(expected, actual)}\n"
         "If this change is intended, rerun with --update-golden and review the diff."
+    )
+
+    # Folded in here rather than given its own parametrized test. There are already six
+    # route-parametrized tests over six routes, so each new one is another six full pipeline
+    # runs - and the Windows CI job was at 26m2s of a 30-minute cap after M9.
+    #
+    # The GPX is invisible to `digest`, which reads `plan.json` alone. So this is the only
+    # thing standing between a plan that carries waypoints and a GPX that drops them, which
+    # is precisely the failure scope 9's first output has had since M1: `gpx_write` took a
+    # `waypoints` argument for nine milestones and no caller ever passed one.
+    assert run.gpx, f"{name} wrote no course.gpx"
+    assert run.gpx.count("<wpt") == len(run.plan.waypoints), (
+        f"{name} carries {len(run.plan.waypoints)} waypoints and its GPX has "
+        f"{run.gpx.count('<wpt')}"
     )
 
 
@@ -189,4 +211,51 @@ def test_every_recorded_source_has_a_licence(name: str, tmp_path: Path) -> None:
     assert "LICENCE NOT RECORDED" not in run.sheet, (
         "a source reached the plan sheet with no scope 14 licence row; add it to "
         "attribution.LICENCES or map it in DERIVED_SOURCES"
+    )
+
+
+def test_the_opening_route_key_still_matches_the_recorded_cassette() -> None:
+    """The strongest guard on the route cache key, and it costs nothing.
+
+    `loop-bayarea` replays because `cli/plan.py`'s opening call hashes to a key its cassette
+    holds. Asserted against the committed artifact rather than against a constant a developer
+    can update, and without running the route - so a re-keying is reported *as* a re-keying
+    rather than as a CacheMiss five frames down inside a CLI invocation.
+
+    M10 is the milestone that made this necessary: adding `instructions` to the key would
+    have orphaned every recorded route in the repository, and the fix was to elide the field
+    in its default state rather than to re-record against a graph that no longer exists.
+    """
+    import sqlite3
+
+    import yaml
+
+    from longrun.core.data.cache import args_hash
+    from longrun.core.models.geometry import LatLon
+    from longrun.core.models.plan import SnapshotPins
+    from longrun.core.routing.cached import route_args
+    from longrun.core.routing.graphhopper import route_body
+
+    directory = harness.ROUTES_DIR / "loop-bayarea"
+    request = yaml.safe_load((directory / "request.yaml").read_text(encoding="utf-8"))
+    snapshot = SnapshotPins.model_validate_json(
+        (directory / "snapshot.json").read_text(encoding="utf-8")
+    )
+    waypoints = [
+        LatLon(
+            lat=float(str(request[end]).split(",")[0]), lon=float(str(request[end]).split(",")[1])
+        )
+        for end in ("from", "to")
+    ]
+    key = args_hash(route_args(route_body(waypoints), waypoints, snapshot.graph_identity))
+
+    with sqlite3.connect(directory / "cache.sqlite") as db:
+        recorded = {
+            row[0]
+            for row in db.execute("SELECT args_hash FROM cache WHERE tool = 'graphhopper.route'")
+        }
+    assert key in recorded, (
+        "the route cache key no longer matches what loop-bayarea recorded, so every route in "
+        "every cassette has just been orphaned. A new field belongs in `route_args` only in "
+        "its non-default state - see the comment there."
     )

@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -99,6 +100,15 @@ def _scorer_digest(result: ScorerResult) -> dict[str, Any]:
             }
             for flag in result.worst(WORST_N)
         ],
+        # Added in M10, and counts rather than positions. A lat/lon in `expected.json`
+        # fails on a libm difference inside `Transformer.transform`, which is the exact
+        # class `test_the_expectation_is_machine_independent` exists to catch. A count per
+        # kind still catches what matters: a scorer that stops emitting, one that emits
+        # twice, or a dedup rule that changed.
+        #
+        # Kinds with no finds are omitted rather than written as zero. "No key" and "zero"
+        # should read differently - `kc-stateline` crosses two states and finds no toilet.
+        "waypoints": dict(sorted(Counter(w.kind for w in result.waypoints).items())),
     }
 
 
@@ -237,6 +247,20 @@ def digest(plan: Plan, scratchpad: Any = None) -> dict[str, Any]:
             }
             for entry in plan.coverage.entries
         ],
+        # The merged, deduplicated list scope 9's GPX and the courses are written from.
+        # `by_scorer` is what shows a scorer going quiet; `max_offset_m` is the one
+        # geometric property worth pinning, because it is what moves if someone confuses a
+        # waypoint's true position for its position on the course.
+        "waypoints": {
+            "total": len(plan.waypoints),
+            "by_kind": dict(sorted(Counter(w.kind for w in plan.waypoints).items())),
+            "by_scorer": dict(sorted(Counter(w.scorer for w in plan.waypoints).items())),
+            "max_offset_m": (
+                round(max(w.offset_m or 0.0 for w in plan.waypoints), QUANTITY_DP)
+                if plan.waypoints
+                else None
+            ),
+        },
         "measurements_sha256": measurements_hash(plan),
     }
 

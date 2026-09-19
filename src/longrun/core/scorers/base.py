@@ -100,13 +100,9 @@ def record_coverage(
     return result
 
 
-def publish(ctx: ScorerContext, result: ScorerResult) -> ScorerResult:
-    """Copy a scorer's coverage entries into the plan-wide manifest.
-
-    Coverage is a sink (scope 3.6): the manifest on the context is the single place the
-    plan sheet reads from, so a result's entries have to reach it. Scorers return their
-    own entries too, which keeps them independently testable without a context.
-    """
-    for entry in result.coverage:
-        ctx.coverage.record(entry)
-    return result
+# `publish(ctx, result)` lived here from M1 to M10 with no caller. It copied a result's
+# coverage entries into `ctx.coverage` - which is exactly what `run_scorers` does, once, for
+# every result it returns. Deleted rather than kept, because a partial re-score made it a
+# live hazard: its first caller would have doubled one scorer's coverage entries on refreshed
+# plans only, in the block `expectation.digest` compares verbatim, and no existing test would
+# have caught it. Coverage is still a sink (scope 3.6); the drain just has one owner.

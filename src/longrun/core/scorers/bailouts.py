@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor
 from longrun.core.models.coverage import CoverageEntry
-from longrun.core.models.geometry import Route, Segment
+from longrun.core.models.geometry import LatLon, Route, Segment
 from longrun.core.models.measurement import (
     Flag,
     FlagKind,
@@ -38,6 +38,7 @@ from longrun.core.models.measurement import (
     SegmentMeasurement,
     Tier,
 )
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, WAYS_LAYER, row_tags
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.transit import STOPS_LAYER, in_service
@@ -149,7 +150,9 @@ def bailouts(
     # Stops are tested for service at the segment's own ETA, so the set is rebuilt per
     # segment rather than once: a 90 km run finishing after the last train has a different
     # set of exits at 8 km than it does at 85 km, and that difference is the measurement.
-    stop_points: list[tuple[Point, dict[str, Any]]] = []
+    # The WGS84 position is kept alongside the projected point rather than inverted back
+    # later: an inverse transform would add numerical error to a coordinate we already have.
+    stop_points: list[tuple[Point, LatLon, dict[str, Any]]] = []
     if stops is not None:
         for _, row in stops.iterrows():
             geometry = row.geometry
@@ -158,6 +161,7 @@ def bailouts(
             stop_points.append(
                 (
                     Point(*to_local.transform(geometry.x, geometry.y)),
+                    LatLon(lat=geometry.y, lon=geometry.x),
                     dict(row.drop(labels=[stops.geometry.name])),
                 )
             )
@@ -170,7 +174,7 @@ def bailouts(
         midpoint = _midpoint(route, segment, to_local)
         eta = _eta_for(etas, segment, route, index)
 
-        stop_m, unreadable = _nearest_served_stop(stop_points, midpoint, eta)
+        stop_m, stop_at, stop_row, unreadable = _nearest_served_stop(stop_points, midpoint, eta)
         unknown_service += 1 if unreadable else 0
         road_m = _nearest_road(road_tree, midpoint)
 
@@ -209,6 +213,28 @@ def bailouts(
                 confidence=1.0 if sources == 2 else ONE_SOURCE_CONFIDENCE,
             )
         )
+
+        # A waypoint only where the exit is a *served transit stop*, and deliberately not
+        # for the road case. The nearest drivable road for a city segment is the unnamed
+        # street the runner is already standing on, forty metres away: on `loop-bayarea`
+        # that is 126 markers of no information, and a course nobody can read. Where there
+        # is no exit at all, nothing is emitted either - the `no_bailout_in_reach` flag
+        # already says so, and a marker at a place you cannot leave from would be a lie.
+        if stop_at is not None and stop_m is not None and stop_m <= BAILOUT_REACH_M:
+            label = str((stop_row or {}).get("name") or "transit stop")
+            if not any(w.position == stop_at for w in result.waypoints):
+                result.waypoints.append(
+                    PlanWaypoint(
+                        position=stop_at,
+                        kind="bailout",
+                        label=label,
+                        cum_dist_m=segment.cum_start_m,
+                        scorer=name,
+                        offset_m=round(stop_m, 1),
+                        eta=eta,
+                        detail=f"in service at {eta:%H:%M}" if eta else None,
+                    )
+                )
 
     result.measurements.append(
         SegmentMeasurement(
@@ -302,17 +328,22 @@ def _eta_for(
 
 
 def _nearest_served_stop(
-    stops: list[tuple[Any, dict[str, Any]]], where: Any, when: datetime | None
-) -> tuple[float | None, bool]:
-    """Distance to the nearest stop in service, and whether any stop could not be judged.
+    stops: list[tuple[Any, LatLon, dict[str, Any]]], where: Any, when: datetime | None
+) -> tuple[float | None, LatLon | None, dict[str, Any] | None, bool]:
+    """The nearest stop in service: how far, where, what, and whether any was unreadable.
 
     A stop whose service is unreadable is skipped rather than counted either way, and the
     caller is told it happened — reporting an unknown as an exit is the failure this scorer
     exists to avoid, and reporting it as no exit is the opposite one.
+
+    The winner's position and attributes used to be dropped on the return. They are the only
+    bailout worth putting on a course: a *named place* a runner can walk to and leave from.
     """
     best: float | None = None
+    at: LatLon | None = None
+    winner: dict[str, Any] | None = None
     unreadable = False
-    for point, attributes in stops:
+    for point, position, attributes in stops:
         if when is not None:
             served = in_service(attributes, when)
             if served is None:
@@ -322,8 +353,8 @@ def _nearest_served_stop(
                 continue
         distance = where.distance(point)
         if best is None or distance < best:
-            best = distance
-    return best, unreadable
+            best, at, winner = distance, position, attributes
+    return best, at, winner, unreadable
 
 
 def _nearest_road(tree: Any, where: Any) -> float | None:

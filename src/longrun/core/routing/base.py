@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from longrun.core.models.geometry import LatLon, Route
+from longrun.core.models.routing import CueSheet
 
 #: The costing model is opaque above the adapter: a dict here, a GraphHopper custom model
 #: in the adapter, something else entirely under a different router.
@@ -79,6 +80,24 @@ class Router(Protocol):
         custom_model: CostingModel | None = None,
     ) -> Route: ...
 
+    def route_cues(
+        self,
+        waypoints: list[LatLon],
+        profile: str = "foot",
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> tuple[Route, CueSheet]:
+        """The line and its turns, from one request (scope 7.2).
+
+        A fourth method rather than a flag on `route`, because `route` returns a `Route` and
+        a flag whose *result* cannot travel back through the return type produces either a
+        stateful `self._last_cues` or a breaking change at six call sites.
+
+        One request, two decoders, from the same path: asking twice would draw a second line
+        and the turns would describe neither.
+        """
+        ...
+
     def alternatives(
         self,
         gpx: Route,
@@ -111,6 +130,23 @@ class NullRouter:
         avoid_polygons: list[dict[str, Any]] | None = None,
         custom_model: CostingModel | None = None,
     ) -> Route:
+        raise RouterUnavailable(
+            "no router configured: generate mode needs one, repair mode does not"
+        )
+
+    def route_cues(
+        self,
+        waypoints: list[LatLon],
+        profile: str = "foot",
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> tuple[Route, CueSheet]:
+        """The same refusal `route` gives, for the same reason.
+
+        Not a degradation to an empty cue sheet: a caller that asked for turns and got
+        silence would be told this route has none, which is the confusion the whole design
+        is arranged around.
+        """
         raise RouterUnavailable(
             "no router configured: generate mode needs one, repair mode does not"
         )

@@ -15,6 +15,7 @@ written by the caller, which is also where `typer` lives.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
@@ -31,7 +32,9 @@ from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Manifest, Plan
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.routing import NOT_REQUESTED, CueSheet
 from longrun.core.models.verification import VerifyReport
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.pacing.model import pacing_model
 from longrun.core.plan.arbitrate import residual_flags
 from longrun.core.plan.metrics import acceptance_metrics
@@ -74,6 +77,10 @@ def score_once(
     router: Any = None,
     manifest: Manifest | None = None,
     original: Route | None = None,
+    only: Collection[str] | None = None,
+    carried: Sequence[ScorerResult] = (),
+    carried_as_of: datetime | None = None,
+    elevations: list[float | None] | None = None,
 ) -> ScoredRoute:
     """Score a route once against an open context.
 
@@ -91,6 +98,16 @@ def score_once(
     candidates against one shared manifest would put four copies of every entry into the
     block `expectation.digest` compares verbatim. It is also the wrong claim: a candidate
     that was scored and rejected is not what the sheet reports having checked.
+
+    `only` / `carried` / `carried_as_of` make this a partial pass - see `run_scorers`, which
+    is where the merge happens and why.
+
+    `elevations` supplies the per-point terrain heights instead of reading the DEM. A refresh
+    passes the stored route's, which is both the semantically right answer - terrain does not
+    change between Tuesday and Friday - and the thing that makes `longrun refresh` runnable
+    on a machine with no rasters. Without it `sample_elevation` returns all-`None` off-DEM and
+    the pass writes that onto the route, so a refresh on such a machine would silently destroy
+    the profile it was refreshing.
     """
     outer = ctx.coverage
     ctx.coverage = CoverageManifest()
@@ -104,6 +121,10 @@ def score_once(
             router=router,
             manifest=manifest,
             original=original,
+            only=only,
+            carried=carried,
+            carried_as_of=carried_as_of,
+            elevations=elevations,
         )
         if manifest is not None:
             # The cache logs every external call; the manifest wants the ones this pass
@@ -125,6 +146,10 @@ def _score_pass(
     router: Any,
     manifest: Manifest | None,
     original: Route | None = None,
+    only: Collection[str] | None = None,
+    carried: Sequence[ScorerResult] = (),
+    carried_as_of: datetime | None = None,
+    elevations: list[float | None] | None = None,
 ) -> ScoredRoute:
     """The pass itself, with `ctx.coverage` already scoped to it by `score_once`."""
     # Repair mode has no router by design (scope 6.1), so it snaps geometrically instead;
@@ -163,7 +188,17 @@ def _score_pass(
 
     # sample_elevation already returns all-None where the DEM has no coverage, which is
     # what "unknown elevation" looks like downstream (scope 12).
-    elevations = sample_elevation(route, ctx.rasters)
+    #
+    # A supplied vector replaces the read rather than filling gaps in it. Merging the two
+    # would be the wrong rule for a first pass on a user's GPX, where scope 7.1 is explicit
+    # that elevation comes from the terrain model and never from the file; the supplied
+    # vector on a refresh is a terrain-model value already, so the two cases stay distinct.
+    if elevations is not None and len(elevations) != len(route.points):
+        raise ValueError(
+            f"supplied {len(elevations)} elevations for a route of {len(route.points)} points"
+        )
+    if elevations is None:
+        elevations = sample_elevation(route, ctx.rasters)
     elevation = elevation_profile(route, elevations)
     # Scope 7.1: elevation comes from the terrain model, never from the GPX. Writing it
     # onto the stored route makes that true of `plan.json` too, so a later `export` or
@@ -183,7 +218,16 @@ def _score_pass(
     eta_vector = pacing_model(
         route, start_at, curves=ctx.profile.pacing.value, elevations=elevations
     )
-    results = run_scorers(route, segments, ctx, eta_vector.etas, manifest)
+    results = run_scorers(
+        route,
+        segments,
+        ctx,
+        eta_vector.etas,
+        manifest,
+        only=only,
+        carried=carried,
+        carried_as_of=carried_as_of,
+    )
 
     # Verification runs before the plan is assembled so the plan can carry its own report:
     # `plan.json` is the golden-test artifact and the scope 10.3 API contract, and a
@@ -217,6 +261,37 @@ def _score_pass(
     )
 
 
+#: Which scorer's copy of a duplicated waypoint to keep. `services_along` and
+#: `resupply_schedule` read the same nodes layer with the same buffer, so every fountain
+#: arrives twice; the resupply copy carries an ETA and whether the place is open at it, which
+#: is strictly more for the same point. A priority table rather than "first wins", because
+#: `SCORERS` is ordered by dependency and that order is free to change.
+WAYPOINT_PRIORITY = ("resupply_schedule", "services_along", "bailouts", "crew_points")
+
+
+def merge_waypoints(results: list[ScorerResult]) -> list[PlanWaypoint]:
+    """Every scorer's waypoints, deduplicated and ordered along the route.
+
+    Dedup is on `(kind, position)` at six decimal places - about 11 cm, far finer than two
+    scorers disagreeing and far coarser than float noise. Sorting by `(cum_dist_m, kind,
+    label)` is a total order for the same reason `ScorerResult.worst` has one: without it
+    the list reorders between runs and anything counting it flaps.
+    """
+    rank = {name: index for index, name in enumerate(WAYPOINT_PRIORITY)}
+    best: dict[tuple[str, float, float], PlanWaypoint] = {}
+    for result in results:
+        for waypoint in result.waypoints:
+            key = (
+                waypoint.kind,
+                round(waypoint.position.lat, 6),
+                round(waypoint.position.lon, 6),
+            )
+            held = best.get(key)
+            if held is None or rank.get(waypoint.scorer, 99) < rank.get(held.scorer, 99):
+                best[key] = waypoint
+    return sorted(best.values(), key=lambda w: (w.cum_dist_m, w.kind, w.label))
+
+
 def build_plan(
     scored: ScoredRoute,
     request: PlanRequest,
@@ -225,6 +300,7 @@ def build_plan(
     coverage: Any,
     manifest: Manifest,
     plan_id: str | None = None,
+    cues: CueSheet | None = None,
 ) -> Plan:
     """Assemble the stored plan from one pass's output."""
     return Plan(
@@ -241,6 +317,10 @@ def build_plan(
         elevation=scored.elevation,
         manifest=manifest,
         pacing_caveats=scored.caveats,
+        waypoints=merge_waypoints(scored.results),
+        # `None` means the caller did not say, which is not the same as asking and getting
+        # nothing back.
+        cues=cues if cues is not None else CueSheet(checked=False, reason=NOT_REQUESTED),
         # Scope 7.1's acceptance metrics, minus the detour ratio. The two LTS numbers are
         # a read of `segment_hostility`'s own route summary and cost nothing; they have
         # been computed on every plan since M1 and reached no sheet, no API and no test.

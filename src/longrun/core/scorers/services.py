@@ -32,8 +32,9 @@ from shapely.geometry import Point
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor
 from longrun.core.models.coverage import CoverageEntry
-from longrun.core.models.geometry import Route, Segment
+from longrun.core.models.geometry import LatLon, Route, Segment
 from longrun.core.models.measurement import ScorerResult, SegmentMeasurement
+from longrun.core.models.waypoint import PlanWaypoint, WaypointKind
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, row_tags
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.crossings import NODES_LAYER
@@ -45,7 +46,10 @@ name = "services_along"
 
 #: Categories the plan sheet reports, and the raw amenity kinds that feed each. OSM and
 #: Overture disagree about singular and plural, so both are accepted.
-SERVICE_CATEGORIES: dict[str, tuple[str, ...]] = {
+#: These three keys are `WaypointKind` members verbatim, which is why nothing here maps
+#: between the two vocabularies. If a fourth category is ever added it needs a kind too, or
+#: it silently stops reaching the GPX.
+SERVICE_CATEGORIES: dict[WaypointKind, tuple[str, ...]] = {
     "water": ("water", "drinking_water", "water_point", "fountain"),
     "toilet": ("toilet", "toilets"),
     "food": ("food", "cafe", "convenience", "supermarket", "fast_food", "restaurant", "deli"),
@@ -61,7 +65,7 @@ PARKS_LAYER = "parks"
 PARKS_UNKNOWN_CONFIDENCE = 0.8
 
 
-def category_of(tags: dict[str, Any]) -> str | None:
+def category_of(tags: dict[str, Any]) -> WaypointKind | None:
     """Which service category a point belongs to, or None if it is not a service."""
     kind = str(tags.get("kind", "")).strip().lower()
     amenity = str(tags.get("amenity", "")).strip().lower()
@@ -118,23 +122,38 @@ def services_along(
     except LayerNotFound:
         return unavailable(name, "no amenities layer: services not established")
 
-    positions: dict[str, list[float]] = {category: [] for category in SERVICE_CATEGORIES}
+    positions: dict[WaypointKind, list[float]] = {c: [] for c in SERVICE_CATEGORIES}
+    found_places: list[PlanWaypoint] = []
     for _, row in points.iterrows():
         geometry = row.geometry
         if geometry is None or geometry.is_empty:
             continue
-        category = category_of(row_tags(row))
+        tags = row_tags(row)
+        category = category_of(tags)
         if category is None:
             continue
         cum_m, offset_m = frame.locate(geometry.x, geometry.y)
         if offset_m <= buffer_m:
             positions[category].append(cum_m)
+            # The lat/lon was in hand here from M1 and thrown away on the next line, so a
+            # stored plan could not say where the water was (scope 9). `geometry.y` is the
+            # latitude and `.x` the longitude: the layer is WGS84 lon/lat.
+            found_places.append(
+                PlanWaypoint(
+                    position=LatLon(lat=geometry.y, lon=geometry.x),
+                    kind=category,
+                    label=tags.get("name") or category,
+                    cum_dist_m=cum_m,
+                    scorer=name,
+                    offset_m=round(offset_m, 1),
+                )
+            )
     for found in positions.values():
         found.sort()
 
     parks = _park_shapes(route, ctx)
 
-    result = ScorerResult(name=name)
+    result = ScorerResult(name=name, waypoints=found_places)
     for segment in segments:
         values: dict[str, float | int | str | bool | None] = {}
         for category, found in positions.items():

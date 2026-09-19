@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor
 from longrun.core.models.coverage import CoverageEntry
-from longrun.core.models.geometry import Route, Segment
+from longrun.core.models.geometry import LatLon, Route, Segment
 from longrun.core.models.measurement import (
     Flag,
     FlagKind,
@@ -40,6 +40,7 @@ from longrun.core.models.measurement import (
     SegmentMeasurement,
     Tier,
 )
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.scorers._common import (
     ROUTE_SUMMARY_ID,
     WAYS_LAYER,
@@ -175,10 +176,32 @@ def hazards(
     counts: dict[str, dict[str, int]] = {s.id: {} for s in segments}
     lowered: set[str] = set()
 
-    def record(segment_id: str, code: str, detail: str) -> None:
+    def record(
+        segment_id: str,
+        code: str,
+        detail: str,
+        *,
+        at: LatLon | None = None,
+        cum_m: float | None = None,
+    ) -> None:
         counts.setdefault(segment_id, {})
         counts[segment_id][code] = counts[segment_id].get(code, 0) + 1
         result.flags.append(_flag(segment_id, code, detail))
+        # The intersection points were computed here from M1 and survived only inside the
+        # flag's prose, so a stored plan could say "crosses a railway at 2.31 km" and could
+        # not put a marker on it (scope 9). An area hazard - an NWS alert over a county -
+        # has no point and passes none.
+        if at is not None and cum_m is not None:
+            result.waypoints.append(
+                PlanWaypoint(
+                    position=at,
+                    kind="hazard",
+                    label=code,
+                    cum_dist_m=cum_m,
+                    scorer=name,
+                    detail=detail,
+                )
+            )
 
     # --- way tags: tunnels and bridges --------------------------------------
     try:
@@ -360,6 +383,8 @@ def _rail(
                 segment.id,
                 "rail_at_grade",
                 f"crosses a railway at grade at {cum_m / 1000:.2f} km",
+                at=LatLon(lat=point.y, lon=point.x),
+                cum_m=cum_m,
             )
     return found
 
@@ -395,8 +420,15 @@ def _water(
                 continue
             named = str(row.get("gnis_name") or "an unnamed watercourse")
             where = f"{cum_m / 1000:.2f} km"
+            here = LatLon(lat=point.y, lon=point.x)
             if tags is not None and _set(tags, "ford"):
-                record(segment.id, "confirmed_ford", f"tagged ford of {named} at {where}")
+                record(
+                    segment.id,
+                    "confirmed_ford",
+                    f"tagged ford of {named} at {where}",
+                    at=here,
+                    cum_m=cum_m,
+                )
             else:
                 touched.add(segment.id)
                 record(
@@ -404,6 +436,8 @@ def _water(
                     "possible_water_crossing",
                     f"{named} meets the route at {where} with no bridge tagged; "
                     f"NHD and OSM are separately digitised, so this may be culverted",
+                    at=here,
+                    cum_m=cum_m,
                 )
     return touched
 
@@ -435,7 +469,13 @@ def _grids(
         if segment is None:
             continue
         found += 1
-        record(segment.id, "cattle_grid", f"cattle grid at {cum_m / 1000:.2f} km")
+        record(
+            segment.id,
+            "cattle_grid",
+            f"cattle grid at {cum_m / 1000:.2f} km",
+            at=LatLon(lat=geometry.y, lon=geometry.x),
+            cum_m=cum_m,
+        )
     return found
 
 

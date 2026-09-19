@@ -33,8 +33,9 @@ from typing import Any
 import typer
 
 from longrun.agent.loop import MAX_ROUNDS
-from longrun.cli.repair import score_route
+from longrun.cli.repair import _gpx_waypoints, score_route
 from longrun.core.data.cache import CacheMiss, SqliteCache, cache_path_from_env, offline_from_env
+from longrun.core.geo.gpx import gpx_write
 from longrun.core.models.context import Budget
 from longrun.core.models.geometry import LatLon
 from longrun.core.models.plan import SnapshotPins
@@ -354,7 +355,16 @@ def _iterate(
     if out:
         (out / "sheet.md").write_text(sheet, encoding="utf-8")
         (out / "plan.json").write_text(outcome.plan.model_dump_json(indent=2), encoding="utf-8")
-        typer.echo(f"wrote {out / 'sheet.md'} and {out / 'plan.json'}")
+        # Generate mode writes its own outputs rather than going through
+        # `repair.score_route`, so the GPX has to be wired here too. Found by the golden
+        # suite: `loop-bayarea` is the only generate-mode route and it was the only one
+        # that wrote no course.
+        gpx_write(
+            outcome.plan.route,
+            out / "course.gpx",
+            waypoints=_gpx_waypoints(outcome.plan),
+        )
+        typer.echo(f"wrote {out / 'sheet.md'}, {out / 'plan.json'} and {out / 'course.gpx'}")
     else:
         typer.echo(sheet)
 

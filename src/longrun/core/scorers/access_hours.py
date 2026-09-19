@@ -29,7 +29,9 @@ from longrun.core.data.jurisdictions import (
     unqualified_reason,
 )
 from longrun.core.models.coverage import CoverageEntry
+from longrun.core.models.geometry import LatLon
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, SegmentMeasurement, Tier
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, segment_at
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -137,7 +139,7 @@ def access_hours(
         placed = _place(feature, frame)
         if placed is None:
             continue
-        cum_m, offset_m = placed
+        cum_m, offset_m, at = placed
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
         arrival = _eta_for(segment, segments, etas)
@@ -168,20 +170,44 @@ def access_hours(
                 ),
             )
         )
+        # Only where it flagged. A gate that is open when the runner reaches it is not a
+        # waypoint - it is the ordinary case, and a marker on every open park gate would
+        # bury the one that is shut.
+        if at is not None:
+            result.waypoints.append(
+                PlanWaypoint(
+                    position=at,
+                    kind="gate",
+                    label=str(feature.detail or feature.category or "gate"),
+                    cum_dist_m=cum_m,
+                    scorer=name,
+                    offset_m=round(offset_m, 1),
+                    eta=arrival,
+                    detail=code,
+                )
+            )
 
     return _summarise(
         result, segments, counts, agencies=len(agencies), shift=max(shifts) if shifts else None
     )
 
 
-def _place(feature: Feature, frame: RouteFrame) -> tuple[float, float] | None:
+def _place(feature: Feature, frame: RouteFrame) -> tuple[float, float, LatLon | None] | None:
+    """Where a gate sits along the route, how far off it is, and where it actually is.
+
+    The third element used to be computed and dropped. A gate is a place a runner arrives at
+    and may not get through, which is exactly what belongs on a course.
+    """
     from longrun.core.scorers.closures import _coordinates
 
     coords = _coordinates(feature.geometry)
     if not coords:
-        return 0.0, 0.0
+        return 0.0, 0.0, None
     cum_m, offset_m = frame.locate_path(coords)
-    return (cum_m, offset_m) if offset_m <= GATE_REACH_M else None
+    if offset_m > GATE_REACH_M:
+        return None
+    lon, lat = coords[0]
+    return cum_m, offset_m, LatLon(lat=lat, lon=lon)
 
 
 def _eta_for(

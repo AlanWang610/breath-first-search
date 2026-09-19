@@ -55,6 +55,14 @@ REQUIRED_FILES = (
 #: the forecast is.
 GENERATED_FILES = tuple(f for f in REQUIRED_FILES if f != "route.gpx")
 
+#: What a run *writes*, as opposed to what a route directory must carry.
+#:
+#: Deliberately a separate constant. `REQUIRED_FILES` describes inputs, and `route.gpx`
+#: there is the user's own line; the course this project emits is a different artefact and
+#: goes to `--out`. Conflating the two would make a generate-mode route look like it needed
+#: the answer as an input.
+PRODUCED_FILES = ("plan.json", "sheet.md", "course.gpx")
+
 
 def required_files(directory: Path) -> tuple[str, ...]:
     """What this route must carry, which depends on how it is entered."""
@@ -77,6 +85,9 @@ class GoldenRun:
     #: Only a generate-mode run has one: `repair` scores a route once and never opens a
     #: scratchpad, which is exactly the difference this field records.
     scratchpad: Scratchpad | None = None
+    #: The GPX the run wrote, as text. Scope 9's first output, and the only one the digest
+    #: cannot see - `expectation.digest` reads `plan.json` alone.
+    gpx: str = ""
 
 
 def route_names() -> list[str]:
@@ -197,4 +208,7 @@ def _read_back(directory: Path, out_dir: Path) -> GoldenRun:
         plan=Plan.model_validate_json((out_dir / "plan.json").read_text(encoding="utf-8")),
         sheet=(out_dir / "sheet.md").read_text(encoding="utf-8"),
         scratchpad=scratchpad,
+        gpx=(out_dir / "course.gpx").read_text(encoding="utf-8")
+        if (out_dir / "course.gpx").exists()
+        else "",
     )

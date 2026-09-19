@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ from typer.testing import CliRunner
 from longrun.cli.main import app
 from longrun.core.geo.gpx import gpx_write
 from longrun.core.models.geometry import Route, RoutePoint
+from longrun.core.models.plan import Plan
 from longrun.core.scorers.registry import NOT_YET_IMPLEMENTED, SCORERS
 
 runner = CliRunner()
@@ -353,7 +355,35 @@ def test_export_refuses_two_formats_at_once(route_file: Path, tmp_path: Path) ->
     plan_path = _stored_plan(route_file, tmp_path)
     result = runner.invoke(app, ["export", str(plan_path), "--html", "--md"])
     assert result.exit_code == 2
-    assert "one of --html or --md" in result.stderr
+    # The message names the flags that were actually given, which matters now there are
+    # five of them: "choose one of --html or --md" is unhelpful when you passed --fit too.
+    assert "--html" in result.stderr and "--md" in result.stderr
+
+
+def test_export_refuses_a_course_with_no_destination(route_file: Path, tmp_path: Path) -> None:
+    """FIT is binary and cannot go to stdout; the same rule covers all three courses."""
+    plan_path = _stored_plan(route_file, tmp_path)
+    result = runner.invoke(app, ["export", str(plan_path), "--fit"])
+    assert result.exit_code == 2
+    assert "--out" in result.stderr
+
+
+def test_export_writes_a_fit_course_that_decodes(route_file: Path, tmp_path: Path) -> None:
+    """End to end through the CLI, decoded back with CRC checking on."""
+    fitdecode = pytest.importorskip("fitdecode")
+    plan_path = _stored_plan(route_file, tmp_path)
+    out = tmp_path / "course.fit"
+    result = runner.invoke(app, ["export", str(plan_path), "--fit", "--out", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    frames = list(
+        fitdecode.FitReader(BytesIO(out.read_bytes()), check_crc=fitdecode.CrcCheck.RAISE)
+    )
+    assert (
+        any(isinstance(f, fitdecode.FitDataMessage) and f.name == "course_point" for f in frames)
+        or not Plan.model_validate_json(plan_path.read_text(encoding="utf-8")).waypoints
+    )
 
 
 def test_export_reports_an_unreadable_plan_cleanly(tmp_path: Path) -> None:
@@ -395,3 +425,123 @@ def test_the_manifest_records_how_long_each_scorer_took(route_file: Path, tmp_pa
     recorded = {call.tool for call in plan.manifest.tool_calls}
     assert recorded == set(SCORERS), "every scorer that ran should be timed"
     assert plan.manifest.total_elapsed_s >= 0.0
+
+
+def test_refresh_writes_the_refreshed_plan_back(tmp_path: Path) -> None:
+    """End to end, and proof the write happens at all - the MCP tool never wrote anything.
+
+    The route comes from a golden fixture so the pass has layers to read; what matters is
+    that the file on disk afterwards carries the new date, the same id, and carried scorers.
+    """
+    directory = Path("tests/golden/routes/synthetic-hazards")
+    out = tmp_path / "out"
+    made = runner.invoke(
+        app,
+        [
+            "repair",
+            str(directory / "route.gpx"),
+            "--date",
+            "2026-03-15",
+            "--start",
+            "07:00",
+            "--fixtures",
+            str(directory / "fixtures"),
+            "--cache",
+            str(directory / "cache.sqlite"),
+            "--out",
+            str(out),
+        ],
+        env={"LONGRUN_OFFLINE": "1"},
+    )
+    assert made.exit_code == 0, made.output
+
+    plan_path = out / "plan.json"
+    before = Plan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+
+    refreshed = runner.invoke(
+        app,
+        [
+            "refresh",
+            str(plan_path),
+            "--date",
+            "2026-03-20",
+            "--fixtures",
+            str(directory / "fixtures"),
+            "--cache",
+            str(directory / "cache.sqlite"),
+        ],
+        env={"LONGRUN_OFFLINE": "1"},
+    )
+    assert refreshed.exit_code == 0, refreshed.output
+    assert "re-scored" in refreshed.output and "carried" in refreshed.output
+
+    after = Plan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+    assert after.id == before.id, "a refresh restates a plan; it does not mint a new one"
+    assert after.request.date.isoformat() == "2026-03-20"
+    assert [r.name for r in after.results if r.carried], "nothing was carried"
+    assert [p.ele_m for p in after.route.points] == [p.ele_m for p in before.route.points]
+
+
+def test_refresh_dry_run_says_what_it_would_do_and_writes_nothing(tmp_path: Path) -> None:
+    directory = Path("tests/golden/routes/synthetic-hazards")
+    out = tmp_path / "out"
+    runner.invoke(
+        app,
+        [
+            "repair",
+            str(directory / "route.gpx"),
+            "--date",
+            "2026-03-15",
+            "--fixtures",
+            str(directory / "fixtures"),
+            "--cache",
+            str(directory / "cache.sqlite"),
+            "--out",
+            str(out),
+        ],
+        env={"LONGRUN_OFFLINE": "1"},
+    )
+    plan_path = out / "plan.json"
+    stamp = plan_path.stat().st_mtime_ns
+
+    result = runner.invoke(
+        app,
+        ["refresh", str(plan_path), "--date", "2026-03-20", "--dry-run"],
+        env={"LONGRUN_OFFLINE": "1"},
+    )
+    assert result.exit_code == 0, result.output
+    assert "would re-score" in result.output and "would carry" in result.output
+    assert plan_path.stat().st_mtime_ns == stamp, "--dry-run wrote to the plan"
+
+
+def test_refresh_refuses_a_file_that_is_not_a_plan(tmp_path: Path) -> None:
+    bad = tmp_path / "not-a-plan.json"
+    bad.write_text("{}", encoding="utf-8")
+    result = runner.invoke(app, ["refresh", str(bad), "--date", "2026-03-20"])
+    assert result.exit_code == 2
+
+
+def test_refresh_refuses_a_scorer_no_one_answers_to(tmp_path: Path) -> None:
+    directory = Path("tests/golden/routes/synthetic-hazards")
+    out = tmp_path / "out"
+    runner.invoke(
+        app,
+        [
+            "repair",
+            str(directory / "route.gpx"),
+            "--date",
+            "2026-03-15",
+            "--fixtures",
+            str(directory / "fixtures"),
+            "--cache",
+            str(directory / "cache.sqlite"),
+            "--out",
+            str(out),
+        ],
+        env={"LONGRUN_OFFLINE": "1"},
+    )
+    result = runner.invoke(
+        app,
+        ["refresh", str(out / "plan.json"), "--date", "2026-03-20", "--only", "lightng"],
+    )
+    assert result.exit_code == 2

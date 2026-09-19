@@ -1,4 +1,4 @@
-"""How a plan asks the router for a line (scope 6.4, 7.1).
+"""How a plan asks the router for a line, and the turns it answers with (scope 6.4, 7.1, 7.2).
 
 One place for the two things every routing call in a plan must carry, because until M8 they
 were carried by one call and dropped by the rest. `cli/plan.py` built a costing model,
@@ -62,3 +62,81 @@ class RoutingPolicy(BaseModel):
 NEUTRAL_POLICY = RoutingPolicy()
 
 __all__ = ["NEUTRAL_POLICY", "RoutingPolicy"]
+
+
+#: Why a plan holds no cue sheet. Four facts, four sentences, and never collapsed into "no
+#: cues": a runner told "no turns" about a route with forty of them has been misinformed,
+#: and each cause needs a different thing done about it.
+NO_ROUTER = (
+    "this route was supplied rather than drawn (repair mode), and turns are not synthesised "
+    "from geometry - a bearing detector would invent street names and turn a measurement "
+    "into a guess"
+)
+NOT_REQUESTED = "turn instructions were not requested; re-run with --cue-sheet"
+NOT_RETURNED = "the router was asked for turn instructions and returned none"
+REROUTED = (
+    "the loop rerouted after the cues were drawn, so the turns on record describe a line "
+    "this plan no longer holds"
+)
+
+
+class Cue(BaseModel):
+    """One turn, located by distance along the route (scope 7.2)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    #: The locator, and the only one.
+    #:
+    #: Never a point index. A router numbers its instructions against the points it sent,
+    #: and `path_to_route` renormalizes and then densifies those - measured on a real
+    #: GraphHopper answer, the final "Arrive at destination" indexes raw point 258 at
+    #: 18,153.9 m and reads as 10,058.8 m if taken as a route index. 8.1 km early on an
+    #: 18.2 km route, and a plausible number.
+    cum_dist_m: float
+    #: The engine's own manoeuvre code, kept beside the word so a consumer that knows the
+    #: vocabulary is not forced through this module's English.
+    sign: int | None = None
+    #: `sign` as a word, or `f"sign {n}"` for one this build does not know. Never silently
+    #: "straight" - an unrecognised turn is not a non-turn.
+    manoeuvre: str = ""
+    #: The engine's instruction text, verbatim. Not regenerated from `sign` and
+    #: `street_name`: the router composes roundabout exits and ramp text this cannot.
+    text: str = ""
+    #: `None` is *unknown*, not *unnamed* - scope 12's rule. An unnamed way and a way whose
+    #: name the extract does not carry are different facts.
+    street_name: str | None = None
+    lat: float = 0.0
+    lon: float = 0.0
+    #: Metres from this cue to the next, as the engine measured this instruction's span.
+    distance_m: float = 0.0
+    #: Scope 7.2's "ambiguity flags", and only what is measurable from the response alone.
+    ambiguous: bool = False
+    ambiguity: str | None = None
+
+
+class CueSheet(BaseModel):
+    """The turns, or which of four reasons there are none. Never two states at once.
+
+    `checked=True` with an empty `cues` is a route that genuinely has no turns.
+    `checked=False` is a cue sheet that was not produced, and `reason` says why. Collapsing
+    those is exactly the failure `tools/runnability.py` refused to ship: a cue sheet with no
+    turns in it, and a route with no turns, rendered identically.
+    """
+
+    cues: list[Cue] = Field(default_factory=list)
+    checked: bool = False
+    reason: str | None = None
+    #: How far the line the cues were drawn on differs in length from the line the plan
+    #: holds. Non-zero after map matching, which returns a different point list from the one
+    #: the router drew. Reported rather than gated on: the honest thing is to say how far
+    #: apart the two readings are, not to invent a threshold and fail above it.
+    frame_shift_m: float = 0.0
+
+    @property
+    def turn_count(self) -> int:
+        """Cues that are actually a turn - the arrival is not one."""
+        return sum(1 for cue in self.cues if cue.manoeuvre != "arrive")
+
+    @property
+    def ambiguous(self) -> list[Cue]:
+        return [cue for cue in self.cues if cue.ambiguous]

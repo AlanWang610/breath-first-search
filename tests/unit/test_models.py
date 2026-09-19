@@ -141,6 +141,25 @@ def test_has_hard_flag() -> None:
     assert hard.has_hard_flag
 
 
+def test_a_result_this_pass_measured_does_not_claim_to_have_been_carried() -> None:
+    """The default has to be the honest one: every plan ever produced measured everything."""
+    assert ScorerResult(name="legality").carried_from is None
+    assert not ScorerResult(name="legality").carried
+
+
+def test_a_carried_result_says_when_it_was_measured() -> None:
+    measured_at = datetime(2026, 3, 15, 7, 30)
+    result = ScorerResult(name="legality", carried_from=measured_at)
+    assert result.carried
+    assert result.carried_from == measured_at
+
+
+def test_a_plan_written_before_carrying_existed_still_loads() -> None:
+    """`carried_from` is absent from every `plan.json` on disk, and `None` is true of them."""
+    stored = '{"name": "legality", "measurements": [], "flags": [], "coverage": []}'
+    assert ScorerResult.model_validate_json(stored).carried_from is None
+
+
 def test_measurement_confidence_degrades_rather_than_dropping_the_value() -> None:
     """Scope 12: a missing tag is unknown, not absent."""
     m = SegmentMeasurement(segment_id="s", values={"lts": 3}, confidence=0.4)

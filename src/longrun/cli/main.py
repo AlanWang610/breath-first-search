@@ -18,6 +18,7 @@ from longrun.cli import (
     jobs,
     metrics,
     plan,
+    refresh,
     region,
     repair,
     serve,
@@ -52,6 +53,7 @@ def main(
 
 
 repair.register(app)
+refresh.register(app)
 freeze.register(app)
 export.register(app)
 region.register(app)

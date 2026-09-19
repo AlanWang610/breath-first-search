@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Literal
+from typing import IO, TYPE_CHECKING
 
 import gpxpy
 import gpxpy.gpx
 
 from longrun.core.models.geometry import Route, RoutePoint
+from longrun.core.models.waypoint import WaypointKind
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.geometry import LatLon
@@ -27,8 +28,6 @@ if TYPE_CHECKING:  # pragma: no cover
 DEFAULT_DEDUPE_M = 1.0
 
 _EARTH_RADIUS_M = 6_371_008.8
-
-WaypointKind = Literal["water", "toilet", "food", "bailout", "hazard", "gate", "marker", "crew"]
 
 
 class GpxError(ValueError):
@@ -131,6 +130,44 @@ def densify(
     # Distances are recomputed rather than adjusted: the inserted points change every
     # cumulative distance after them, and `cum_dist_m` is what every scorer keys off.
     return normalize([(p.lat, p.lon, p.ele_m) for p in out], dedupe_m=0.0)
+
+
+def cumulative_after_normalize(
+    raw: list[tuple[float, float, float | None]], dedupe_m: float = DEFAULT_DEDUPE_M
+) -> list[float]:
+    """Distance along the *normalized* line, for every index of the **raw** list.
+
+    `normalize`'s inverse index, and the thing a cue sheet cannot be built without. A router
+    numbers its turn instructions against the points it sent; `path_to_route` renormalizes
+    those and then densifies them, so the number an instruction carries addresses neither the
+    route nor anything else.
+
+    Measured on a real GraphHopper answer (259 raw points over 18.2 km, Ozarks MO 19): the
+    final "Arrive at destination" instruction indexes raw point 258, which is 18,153.9 m
+    along. Read as an index into the densified route it is 10,058.8 m - **8.1 km early**, and
+    a perfectly plausible number for a route that length. That is the failure this exists to
+    prevent.
+
+    One entry per raw index, non-decreasing, and equal to `normalize(raw)[k].cum_dist_m` at
+    every index `normalize` kept. A point it dropped collapses onto the distance of the last
+    one it did not, which is where that point was to within `dedupe_m`.
+
+    Replays `normalize`'s own rule rather than summing haversines, and the difference is
+    small, systematic and free to avoid: `normalize` *drops* a sub-`dedupe_m` step instead of
+    accumulating it, so a plain cumulative sum runs long.
+    """
+    if not raw:
+        return []
+    total = 0.0
+    anchor_lat, anchor_lon, _ = raw[0]
+    out: list[float] = []
+    for lat, lon, _elevation in raw:
+        step = haversine_m(anchor_lat, anchor_lon, lat, lon)
+        if step >= dedupe_m:
+            total += step
+            anchor_lat, anchor_lon = lat, lon
+        out.append(total)
+    return out
 
 
 def gpx_read(
