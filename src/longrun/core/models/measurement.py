@@ -16,6 +16,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 from longrun.core.models.coverage import CoverageEntry
+from longrun.core.models.waypoint import PlanWaypoint
 
 #: Per-segment severity, always in [0, 1]. Comparable within a scorer, not across them.
 Severity = Annotated[float, Field(ge=0.0, le=1.0)]
@@ -84,6 +85,14 @@ class ScorerResult(BaseModel):
     measurements: list[SegmentMeasurement] = Field(default_factory=list)
     flags: list[Flag] = Field(default_factory=list)
     coverage: list[CoverageEntry] = Field(default_factory=list)
+    #: Places this scorer found, for scope 9's GPX and the course exports.
+    #:
+    #: A fourth sibling list rather than coordinates inside `SegmentMeasurement.values`,
+    #: which is scalars-only by design. The practical consequence is that
+    #: `expectation.measurements_hash` cannot see a waypoint, so recording one moves no
+    #: golden content hash - and a waypoint is free to carry a real `datetime` and a nested
+    #: `LatLon`, neither of which a measurement value may be.
+    waypoints: list[PlanWaypoint] = Field(default_factory=list)
     #: Set when this result was not produced by the pass that returned it: the planned
     #: start of the pass that *was*. `None` means this pass measured it.
     #:

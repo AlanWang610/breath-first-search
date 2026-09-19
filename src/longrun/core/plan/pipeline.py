@@ -33,6 +33,7 @@ from longrun.core.models.plan import Manifest, Plan
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import PlanRequest
 from longrun.core.models.verification import VerifyReport
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.pacing.model import pacing_model
 from longrun.core.plan.arbitrate import residual_flags
 from longrun.core.plan.metrics import acceptance_metrics
@@ -259,6 +260,37 @@ def _score_pass(
     )
 
 
+#: Which scorer's copy of a duplicated waypoint to keep. `services_along` and
+#: `resupply_schedule` read the same nodes layer with the same buffer, so every fountain
+#: arrives twice; the resupply copy carries an ETA and whether the place is open at it, which
+#: is strictly more for the same point. A priority table rather than "first wins", because
+#: `SCORERS` is ordered by dependency and that order is free to change.
+WAYPOINT_PRIORITY = ("resupply_schedule", "services_along", "bailouts", "crew_points")
+
+
+def merge_waypoints(results: list[ScorerResult]) -> list[PlanWaypoint]:
+    """Every scorer's waypoints, deduplicated and ordered along the route.
+
+    Dedup is on `(kind, position)` at six decimal places - about 11 cm, far finer than two
+    scorers disagreeing and far coarser than float noise. Sorting by `(cum_dist_m, kind,
+    label)` is a total order for the same reason `ScorerResult.worst` has one: without it
+    the list reorders between runs and anything counting it flaps.
+    """
+    rank = {name: index for index, name in enumerate(WAYPOINT_PRIORITY)}
+    best: dict[tuple[str, float, float], PlanWaypoint] = {}
+    for result in results:
+        for waypoint in result.waypoints:
+            key = (
+                waypoint.kind,
+                round(waypoint.position.lat, 6),
+                round(waypoint.position.lon, 6),
+            )
+            held = best.get(key)
+            if held is None or rank.get(waypoint.scorer, 99) < rank.get(held.scorer, 99):
+                best[key] = waypoint
+    return sorted(best.values(), key=lambda w: (w.cum_dist_m, w.kind, w.label))
+
+
 def build_plan(
     scored: ScoredRoute,
     request: PlanRequest,
@@ -283,6 +315,7 @@ def build_plan(
         elevation=scored.elevation,
         manifest=manifest,
         pacing_caveats=scored.caveats,
+        waypoints=merge_waypoints(scored.results),
         # Scope 7.1's acceptance metrics, minus the detour ratio. The two LTS numbers are
         # a read of `segment_hostility`'s own route summary and cost nothing; they have
         # been computed on every plan since M1 and reached no sheet, no API and no test.

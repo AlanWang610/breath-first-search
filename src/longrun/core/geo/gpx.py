@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Literal
+from typing import IO, TYPE_CHECKING
 
 import gpxpy
 import gpxpy.gpx
 
 from longrun.core.models.geometry import Route, RoutePoint
+from longrun.core.models.waypoint import WaypointKind
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.geometry import LatLon
@@ -27,8 +28,6 @@ if TYPE_CHECKING:  # pragma: no cover
 DEFAULT_DEDUPE_M = 1.0
 
 _EARTH_RADIUS_M = 6_371_008.8
-
-WaypointKind = Literal["water", "toilet", "food", "bailout", "hazard", "gate", "marker", "crew"]
 
 
 class GpxError(ValueError):

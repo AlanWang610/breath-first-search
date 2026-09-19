@@ -20,6 +20,7 @@ from longrun.core.models.measurement import Flag, ScorerResult
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import PlanRequest
 from longrun.core.models.verification import VerifyReport
+from longrun.core.models.waypoint import PlanWaypoint
 
 PlanStatus = Literal["complete", "needs_input", "failed"]
 
@@ -179,6 +180,14 @@ class Plan(BaseModel):
     #: rather than spending an API call and 180 s of latency budget on a number nobody
     #: asked this plan for.
     metrics: dict[str, Any] = Field(default_factory=dict)
+    #: Water, toilets, food, bailouts, crew points, hazards and gates - merged from every
+    #: scorer's own list and sorted along the route. Scope 9's GPX and the FIT/TCX courses
+    #: are written from this.
+    #:
+    #: Stored rather than derived from `results` on demand, for the reason `pacing_caveats`,
+    #: `verify` and `elevation` give above: `longrun export` renders a stored plan and must
+    #: not have to re-derive anything.
+    waypoints: list[PlanWaypoint] = Field(default_factory=list)
     status: PlanStatus = "complete"
 
     @property
