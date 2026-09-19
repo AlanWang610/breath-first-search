@@ -882,6 +882,7 @@
         "agencies_answered": 0,
         "agencies_crossed": 5
       },
+      "waypoints": {},
       "worst": []
     },
     "air_quality": {
@@ -898,6 +899,7 @@
         "sites_answered": 2,
         "source": "open-meteo (CAMS model)"
       },
+      "waypoints": {},
       "worst": []
     },
     "bailouts": {
@@ -914,6 +916,9 @@
         "transit_checked": true,
         "worst_exit_m": 120.7
       },
+      "waypoints": {
+        "bailout": 1
+      },
       "worst": []
     },
     "cell_coverage": {
@@ -924,6 +929,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "closures": {
@@ -939,6 +945,7 @@
         "jurisdictions_crossed": 5,
         "jurisdictions_unanswered": 5
       },
+      "waypoints": {},
       "worst": []
     },
     "crew_points": {
@@ -953,6 +960,9 @@
         "meet_points": 28,
         "reach_m": 400.0,
         "road_access_checked": true
+      },
+      "waypoints": {
+        "crew": 28
       },
       "worst": []
     },
@@ -970,6 +980,7 @@
         "signals_checked": true,
         "unsignalized": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "hazards": {
@@ -984,6 +995,9 @@
         "rail_at_grade": 2,
         "sources_checked": 5,
         "sources_missing": 1
+      },
+      "waypoints": {
+        "hazard": 2
       },
       "worst": [
         {
@@ -1017,6 +1031,7 @@
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
+      "waypoints": {},
       "worst": []
     },
     "legality": {
@@ -1032,6 +1047,7 @@
         "prohibited_segments": 7,
         "unknown_m": 775.573
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "hard",
@@ -1088,6 +1104,7 @@
         "utc_offset_hours": -7.0,
         "utc_offset_source": "zone America/Los_Angeles"
       },
+      "waypoints": {},
       "worst": []
     },
     "microclimate": {
@@ -1105,6 +1122,7 @@
         "sites_answered": 2,
         "spacing_m": 5000.0
       },
+      "waypoints": {},
       "worst": []
     },
     "resupply_schedule": {
@@ -1125,6 +1143,11 @@
         "water_soft_threshold_min": 90.0,
         "wbgt_used_c": 19.16
       },
+      "waypoints": {
+        "food": 34,
+        "toilet": 15,
+        "water": 11
+      },
       "worst": []
     },
     "segment_hostility": {
@@ -1141,6 +1164,7 @@
         "scored_m": 1251.064,
         "traffic_tolerance": 2
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "hard",
@@ -1182,6 +1206,11 @@
         "toilet_count": 15,
         "water_count": 11
       },
+      "waypoints": {
+        "food": 39,
+        "toilet": 15,
+        "water": 11
+      },
       "worst": []
     },
     "start_time_optimizer": {
@@ -1199,6 +1228,7 @@
         "step_minutes": 30.0,
         "window_hours": 3.0
       },
+      "waypoints": {},
       "worst": []
     },
     "stop_density": {
@@ -1215,6 +1245,7 @@
         "stops_per_km": 5.921,
         "stops_tolerance": 3.0
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "soft",
@@ -1270,6 +1301,7 @@
         "utc_offset_hours": -7.0,
         "utc_offset_source": "zone America/Los_Angeles"
       },
+      "waypoints": {},
       "worst": []
     },
     "surface_profile": {
@@ -1288,6 +1320,7 @@
         "unpaved_fraction": 0.0,
         "unpaved_m": 0.0
       },
+      "waypoints": {},
       "worst": []
     },
     "trail_status": {
@@ -1302,6 +1335,7 @@
         "agencies_crossed": 5,
         "trail_alerts": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "transit": {
@@ -1320,6 +1354,7 @@
         "start_stop_m": 423.1,
         "stops_in_corridor": 6
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "soft",
@@ -1392,5 +1427,24 @@
       "offenders": 0,
       "status": "skipped"
     }
-  ]
+  ],
+  "waypoints": {
+    "by_kind": {
+      "bailout": 1,
+      "crew": 28,
+      "food": 39,
+      "hazard": 2,
+      "toilet": 15,
+      "water": 11
+    },
+    "by_scorer": {
+      "bailouts": 1,
+      "crew_points": 28,
+      "hazards": 2,
+      "resupply_schedule": 60,
+      "services_along": 5
+    },
+    "max_offset_m": 423.1,
+    "total": 96
+  }
 }

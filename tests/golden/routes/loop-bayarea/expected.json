@@ -509,6 +509,7 @@
         "agencies_answered": 0,
         "agencies_crossed": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "air_quality": {
@@ -525,6 +526,7 @@
         "sites_answered": 2,
         "source": "open-meteo (CAMS model)"
       },
+      "waypoints": {},
       "worst": []
     },
     "bailouts": {
@@ -540,6 +542,9 @@
         "segments_out_of_reach": 8,
         "transit_checked": true,
         "worst_exit_m": 3586.2
+      },
+      "waypoints": {
+        "bailout": 5
       },
       "worst": [
         {
@@ -587,6 +592,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "closures": {
@@ -602,6 +608,7 @@
         "jurisdictions_crossed": 0,
         "jurisdictions_unanswered": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "crew_points": {
@@ -616,6 +623,9 @@
         "meet_points": 109,
         "reach_m": 400.0,
         "road_access_checked": true
+      },
+      "waypoints": {
+        "crew": 109
       },
       "worst": []
     },
@@ -633,6 +643,7 @@
         "signals_checked": false,
         "unsignalized": null
       },
+      "waypoints": {},
       "worst": []
     },
     "hazards": {
@@ -647,6 +658,7 @@
         "sources_checked": 1,
         "sources_missing": 5
       },
+      "waypoints": {},
       "worst": []
     },
     "heat_stress": {
@@ -664,6 +676,7 @@
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
+      "waypoints": {},
       "worst": []
     },
     "legality": {
@@ -679,6 +692,7 @@
         "prohibited_segments": 0,
         "unknown_m": 6688.494
       },
+      "waypoints": {},
       "worst": []
     },
     "lighting": {
@@ -699,6 +713,7 @@
         "utc_offset_hours": -7.0,
         "utc_offset_source": "stated"
       },
+      "waypoints": {},
       "worst": []
     },
     "microclimate": {
@@ -716,6 +731,7 @@
         "sites_answered": 3,
         "spacing_m": 5000.0
       },
+      "waypoints": {},
       "worst": []
     },
     "resupply_schedule": {
@@ -736,6 +752,11 @@
         "water_soft_threshold_min": 90.0,
         "wbgt_used_c": 18.504
       },
+      "waypoints": {
+        "food": 198,
+        "toilet": 11,
+        "water": 6
+      },
       "worst": []
     },
     "segment_hostility": {
@@ -752,6 +773,7 @@
         "scored_m": 1204.968,
         "traffic_tolerance": 2
       },
+      "waypoints": {},
       "worst": []
     },
     "services_along": {
@@ -771,6 +793,11 @@
         "toilet_count": 11,
         "water_count": 6
       },
+      "waypoints": {
+        "food": 252,
+        "toilet": 11,
+        "water": 6
+      },
       "worst": []
     },
     "start_time_optimizer": {
@@ -788,6 +815,7 @@
         "step_minutes": 30.0,
         "window_hours": 3.0
       },
+      "waypoints": {},
       "worst": []
     },
     "stop_density": {
@@ -798,6 +826,7 @@
       "mean_confidence": null,
       "measured_segments": 0,
       "summary": null,
+      "waypoints": {},
       "worst": []
     },
     "sun_exposure": {
@@ -817,6 +846,7 @@
         "utc_offset_hours": -7.0,
         "utc_offset_source": "stated"
       },
+      "waypoints": {},
       "worst": []
     },
     "surface_profile": {
@@ -835,6 +865,7 @@
         "unpaved_fraction": 0.0,
         "unpaved_m": 0.0
       },
+      "waypoints": {},
       "worst": []
     },
     "trail_status": {
@@ -849,6 +880,7 @@
         "agencies_crossed": 0,
         "trail_alerts": 0
       },
+      "waypoints": {},
       "worst": []
     },
     "transit": {
@@ -867,6 +899,7 @@
         "start_stop_m": 422.4,
         "stops_in_corridor": 6
       },
+      "waypoints": {},
       "worst": [
         {
           "kind": "soft",
@@ -939,5 +972,22 @@
       "offenders": 0,
       "status": "passed"
     }
-  ]
+  ],
+  "waypoints": {
+    "by_kind": {
+      "bailout": 5,
+      "crew": 109,
+      "food": 252,
+      "toilet": 11,
+      "water": 6
+    },
+    "by_scorer": {
+      "bailouts": 5,
+      "crew_points": 109,
+      "resupply_schedule": 215,
+      "services_along": 54
+    },
+    "max_offset_m": 422.4,
+    "total": 383
+  }
 }
