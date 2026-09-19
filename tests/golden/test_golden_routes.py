@@ -44,18 +44,26 @@ def test_the_golden_suite_is_not_empty() -> None:
 
 #: Total bytes the committed golden fixtures may occupy.
 #:
-#: The number has been in the build plan since M0 and was enforced by **nothing** — not a test,
-#: not a CI step. What stood in for it was M0's 15-minute CI timeout, on the reasoning that
-#: "keeping CI short is itself the enforcement mechanism for small fixtures"; M6 raised that to
-#: 30 when the fifth golden pushed the Windows job over, and said so in a comment sitting a
-#: file away from anything about fixtures. So the only mechanism was relaxed by the milestone
-#: that discovered it, and the cap has been a number in prose since.
+#: The number was in the build plan from M0 and enforced by **nothing** - not a test, not a CI
+#: step. What stood in for it was M0's 15-minute CI timeout, on the reasoning that "keeping CI
+#: short is itself the enforcement mechanism for small fixtures"; M6 raised that to 30 when the
+#: fifth golden pushed the Windows job over. So the only mechanism was relaxed by the milestone
+#: that discovered it, and M9 finally made the cap a test - at which point the suite was already
+#: at 48.50 MB of 50, with 1.50 MB of headroom and no room for a seventh route.
 #:
-#: 50 MB because a golden fixture is downloaded by every clone and read by every CI run, and
-#: because a cap nobody can exceed by accident is what keeps a freeze corridor-clipped rather
-#: than table-wide. A route that needs more should drop a layer and say so in its README —
-#: `loop-bayarea` carries four of nine and explains the 9 MB it declined.
-MAX_FIXTURE_BYTES = 50 * 1024 * 1024
+#: **Raised to 64 MB in M10, deliberately and by decision rather than by pressure** (ADR 0032).
+#: Three things about that are worth stating where somebody will read them:
+#:
+#: * M10 spends almost none of it. Waypoints added ~2 kB across six `expected.json` files, and
+#:   the cue sheet records no fixture at all. The raise is provision for M11-M13, not a need of
+#:   the milestone that made it.
+#: * 64 rather than a round 75 because `boston-winter` at 8.0 MB is the model for a dense new
+#:   route, so this leaves room for about two more - and past that the CI job binds first.
+#: * **Disk is not the constraint that bites; CI wall clock is.** The Windows job ran 26m2s
+#:   against a 30-minute per-job timeout after M9, and every golden test reads these
+#:   GeoPackages. Raising the byte cap does nothing about that, and a future milestone that
+#:   finds itself here again should look at the clock before it looks at this number.
+MAX_FIXTURE_BYTES = 64 * 1024 * 1024
 
 
 def test_the_committed_fixtures_stay_under_the_cap() -> None:

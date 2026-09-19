@@ -67,12 +67,16 @@ What was dropped and where it is pinned instead: `nodes` → `synthetic-hazards`
 (sun_exposure over 8,480 Overture footprints). None of them is what *this* route is for: `lit`
 lives on `ways`, and darkness is arithmetic.
 
-**The suite is now 48.49 MB against its 50 MB cap.** That is 1.5 MB of headroom for a seventh
-route, which is not enough for one. The cap is asserted by
-`test_the_committed_fixtures_stay_under_the_cap`, and the next route to want space should force
-a decision about the cap rather than shave this one — the honest options are trimming
-`bay-urban` (14.4 MB, nine layers) or raising 50, and both are choices somebody should make on
-purpose.
+**The suite was 48.49 MB against its 50 MB cap when this route landed** — 1.5 MB of headroom,
+which is not enough for a seventh route. This entry said the next route to want space should
+force a decision rather than shave itself, and name the honest options: trim `bay-urban`
+(14.4 MB, nine layers), or raise the cap.
+
+**M10 raised it, to 64 MB, with ADR 0031.** Worth reading that ADR before adding a route,
+because it says two things this paragraph could not: M10 itself spends almost none of the new
+headroom (waypoints cost ~2 kB across six `expected.json` files), and **the constraint that
+actually binds is not disk but the 30-minute CI job**, which every one of these fixtures is
+read by on every run. The Windows job was at 26m2s after M9.
 
 ## Reproducing
 

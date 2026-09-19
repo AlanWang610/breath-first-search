@@ -429,14 +429,82 @@ def render_html(plan: Plan, pacing_caveats: list[str] | None = None) -> str:
 <h2>Verification</h2>
 {_verify_table(plan)}
 
+{_trade_offs_table(plan)}
+
 <h2>Coverage</h2>
 {_coverage_table(plan)}
+
+{_manifest_block(plan)}
 
 {"<h2>Caveats</h2><ul>" + caveats + warnings + "</ul>" if (caveats or warnings) else ""}
 
 <footer>{_e(render_attribution([e.source for e in plan.coverage.entries]))}</footer>
 </main></body></html>
 """
+
+
+def _trade_offs_table(plan: Plan) -> str:
+    """Scope 8.4's same-tier choices, which the markdown sheet has rendered since M5.
+
+    One of two sections the HTML sheet was missing that the markdown one had. Not a
+    formatting difference: a reader handed the HTML sheet would not know the plan was
+    waiting on them.
+    """
+    if not plan.trade_offs:
+        return ""
+    rows = "".join(
+        f"<tr><td><code>{_e(t.segment_id)}</code></td><td>{_e(t.option_a)}</td>"
+        f"<td>{_e(t.option_b)}</td><td>{_e(t.comparison)}</td></tr>"
+        for t in plan.trade_offs
+    )
+    return (
+        "<h2>Choices left to you</h2>"
+        "<table><thead><tr><th>Segment</th><th>A</th><th>B</th><th>How they differ</th>"
+        f"</tr></thead><tbody>{rows}</tbody></table>"
+    )
+
+
+def _manifest_block(plan: Plan) -> str:
+    """Scope 6.4: snapshot pins, tool calls and budgets, which every sheet must report.
+
+    The other missing section, and the one that makes an HTML sheet auditable rather than
+    merely readable - without it a reader cannot tell which OSM extract drew the route or
+    whether the plan touched the network at all.
+    """
+    manifest = plan.manifest
+    pins = {
+        "OSM extract": manifest.snapshot.osm_extract_date,
+        "Graph": manifest.snapshot.graph,
+        "Region": manifest.snapshot.region,
+        "DEM resolution": manifest.snapshot.dem_resolution_m,
+        "Canopy": manifest.snapshot.canopy_version,
+    }
+    rows = "".join(
+        f"<tr><td>{_e(label)}</td><td>{_e(str(value))}</td></tr>"
+        for label, value in pins.items()
+        if value is not None
+    )
+    for label, vintage in sorted(manifest.snapshot.layer_vintages.items()):
+        rows += f"<tr><td>{_e(label)}</td><td>{_e(vintage)}</td></tr>"
+    if not rows:
+        rows = '<tr><td colspan="2" class="unchecked">no data-snapshot pins recorded</td></tr>'
+
+    carried = sum(1 for r in plan.results if r.carried)
+    spend = (
+        f"{manifest.api_calls_used} external call(s), "
+        f"{manifest.imagery_tiles_used} imagery tile(s), "
+        f"{len(manifest.tool_calls)} tool call(s) in {manifest.total_elapsed_s:.1f} s"
+    )
+    if manifest.model_calls_used:
+        spend += f", {manifest.model_calls_used} model call(s)"
+    if carried:
+        spend += f". {carried} scorer result(s) were carried from an earlier pass, not re-measured"
+    degraded = "".join(f"<li>{_e(line)}</li>" for line in manifest.degradation)
+    return (
+        "<h2>Manifest</h2>"
+        f"<table><thead><tr><th>Pin</th><th>Vintage</th></tr></thead><tbody>{rows}</tbody></table>"
+        f"<p>{_e(spend)}.</p>" + (f"<ul>{degraded}</ul>" if degraded else "")
+    )
 
 
 __all__ = ["TIER_COLOUR", "WORST_N", "render_html"]
