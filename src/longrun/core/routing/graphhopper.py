@@ -67,6 +67,8 @@ def route_body(
     avoid_polygons: list[dict[str, Any]] | None = None,
     custom_model: CostingModel | None = None,
     alternatives: int = 0,
+    *,
+    instructions: bool = False,
 ) -> dict[str, Any]:
     """The POST body for one routing request.
 
@@ -79,7 +81,12 @@ def route_body(
         "profile": profile,
         "points": [[point.lon, point.lat] for point in waypoints],
         "points_encoded": False,
-        "instructions": False,
+        # Always emitted, including when False. GraphHopper's own default for this is
+        # *true*, so dropping the key from the body would silently turn instructions on
+        # and grow every response. The elision that keeps cassettes valid is a property
+        # of the cache-key args dict only - see `cached.route_args`. Blurring those two
+        # is how this gets built wrong.
+        "instructions": instructions,
         "elevation": False,
         # Flexible mode. Without it a custom model is either ignored or rejected, and the
         # difference between those two is a routing result that looks fine and is not.

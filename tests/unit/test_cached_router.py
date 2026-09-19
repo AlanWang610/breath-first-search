@@ -17,11 +17,12 @@ from typing import Any
 
 import pytest
 
-from longrun.core.data.cache import CacheMiss, SqliteCache
+from longrun.core.data.cache import CacheMiss, SqliteCache, args_hash
 from longrun.core.models.context import Budget
 from longrun.core.models.geometry import LatLon, Route, RoutePoint
 from longrun.core.routing.base import NoRouteError, RouterUnavailable
-from longrun.core.routing.cached import ROUTE_TOOL, CachedRouter
+from longrun.core.routing.cached import ROUTE_TOOL, CachedRouter, route_args
+from longrun.core.routing.graphhopper import route_body
 
 FERRY = LatLon(lat=37.7955, lon=-122.3937)
 DEYOUNG = LatLon(lat=37.7715, lon=-122.4686)
@@ -191,3 +192,88 @@ def test_a_call_that_raised_is_not_logged_as_a_call(cache: Any) -> None:
         router.route([FERRY, DEYOUNG])
 
     assert cache.calls == []
+
+
+# --- the key learning a field, and not re-keying anything --------------------------------
+
+#: The args hash `loop-bayarea`'s opening route call has carried since M9 re-recorded it.
+#:
+#: Read off the committed cassette with sqlite3, never computed by the code under test - a
+#: constant this file derived would move whenever the derivation moved, which is the one
+#: thing it exists to catch.
+HISTORICAL_ROUTE_KEY = "b7c326780d10196cbf8b4485d730a9ade662fdc1d696b9d2e4d6807d44463c9b"
+
+_FERRY = LatLon(lat=37.7955, lon=-122.3937)
+_DEYOUNG = LatLon(lat=37.7715, lon=-122.4686)
+_GRAPH = "2026-09-04+lts1"
+
+
+def test_an_instruction_free_request_still_hashes_as_it_always_did() -> None:
+    """The pin that says no cassette needs re-recording.
+
+    If this fails, every recorded route in this repository has just been orphaned, and the
+    fix is not to update the constant - it is to elide the new field rather than add it.
+    """
+    body = route_body([_FERRY, _DEYOUNG])
+    assert args_hash(route_args(body, [_FERRY, _DEYOUNG], _GRAPH)) == HISTORICAL_ROUTE_KEY
+
+
+def test_the_body_still_tells_the_router_not_to_send_instructions() -> None:
+    """The elision is a property of the cache key, never of the request.
+
+    GraphHopper's own default for `instructions` is *true*, so dropping the key from the
+    body would silently turn them on and grow every response. Blurring the two is how this
+    gets built wrong.
+    """
+    assert route_body([_FERRY, _DEYOUNG])["instructions"] is False
+    assert route_body([_FERRY, _DEYOUNG], instructions=True)["instructions"] is True
+
+
+def test_asking_for_instructions_is_a_different_question() -> None:
+    """Not merely a different key - a different recording.
+
+    A cassette taken without instructions must never be served to a request that wants them:
+    the result would be a cue sheet with no turns in it, which is indistinguishable from a
+    route that has none. That is the failure `tools/runnability.py` recorded and refused to
+    ship.
+    """
+    plain = args_hash(route_args(route_body([_FERRY, _DEYOUNG]), [_FERRY, _DEYOUNG], _GRAPH))
+    cues = args_hash(
+        route_args(route_body([_FERRY, _DEYOUNG], instructions=True), [_FERRY, _DEYOUNG], _GRAPH)
+    )
+    assert plain != cues
+
+
+def test_no_two_distinct_requests_share_a_key() -> None:
+    """The general invariant, of which `instructions` is one instance.
+
+    The guard is not really about this field. A *new* body field that changes the answer and
+    is not added to `route_args` fails here, rather than three milestones later on a cue
+    sheet with no turns in it.
+    """
+    pair = [_FERRY, _DEYOUNG]
+    variants = {
+        "plain": route_body(pair),
+        "cues": route_body(pair, instructions=True),
+        "model": route_body(pair, custom_model={"priority": [{"if": "true", "multiply_by": "2"}]}),
+        "alts": route_body(pair, alternatives=3),
+        "cues+alts": route_body(pair, alternatives=3, instructions=True),
+        "other-profile": route_body(pair, profile="car"),
+    }
+    keys = {name: args_hash(route_args(body, pair, _GRAPH)) for name, body in variants.items()}
+    assert len(set(keys.values())) == len(keys), f"two distinct requests collide: {keys}"
+
+
+def test_the_fields_the_key_ignores_are_the_ones_that_never_vary() -> None:
+    """`route_args` reads six of nine body fields. The other three are safe to ignore only
+    because no input can change them; the moment one becomes variable it must be keyed."""
+    pair = [_FERRY, _DEYOUNG]
+    for body in (
+        route_body(pair),
+        route_body(pair, instructions=True),
+        route_body(pair, alternatives=2),
+        route_body(pair, profile="car"),
+    ):
+        assert body["points_encoded"] is False
+        assert body["elevation"] is False
+        assert body["ch.disable"] is True

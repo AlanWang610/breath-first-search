@@ -204,3 +204,50 @@ def test_every_recorded_source_has_a_licence(name: str, tmp_path: Path) -> None:
         "a source reached the plan sheet with no scope 14 licence row; add it to "
         "attribution.LICENCES or map it in DERIVED_SOURCES"
     )
+
+
+def test_the_opening_route_key_still_matches_the_recorded_cassette() -> None:
+    """The strongest guard on the route cache key, and it costs nothing.
+
+    `loop-bayarea` replays because `cli/plan.py`'s opening call hashes to a key its cassette
+    holds. Asserted against the committed artifact rather than against a constant a developer
+    can update, and without running the route - so a re-keying is reported *as* a re-keying
+    rather than as a CacheMiss five frames down inside a CLI invocation.
+
+    M10 is the milestone that made this necessary: adding `instructions` to the key would
+    have orphaned every recorded route in the repository, and the fix was to elide the field
+    in its default state rather than to re-record against a graph that no longer exists.
+    """
+    import sqlite3
+
+    import yaml
+
+    from longrun.core.data.cache import args_hash
+    from longrun.core.models.geometry import LatLon
+    from longrun.core.models.plan import SnapshotPins
+    from longrun.core.routing.cached import route_args
+    from longrun.core.routing.graphhopper import route_body
+
+    directory = harness.ROUTES_DIR / "loop-bayarea"
+    request = yaml.safe_load((directory / "request.yaml").read_text(encoding="utf-8"))
+    snapshot = SnapshotPins.model_validate_json(
+        (directory / "snapshot.json").read_text(encoding="utf-8")
+    )
+    waypoints = [
+        LatLon(
+            lat=float(str(request[end]).split(",")[0]), lon=float(str(request[end]).split(",")[1])
+        )
+        for end in ("from", "to")
+    ]
+    key = args_hash(route_args(route_body(waypoints), waypoints, snapshot.graph_identity))
+
+    with sqlite3.connect(directory / "cache.sqlite") as db:
+        recorded = {
+            row[0]
+            for row in db.execute("SELECT args_hash FROM cache WHERE tool = 'graphhopper.route'")
+        }
+    assert key in recorded, (
+        "the route cache key no longer matches what loop-bayarea recorded, so every route in "
+        "every cassette has just been orphaned. A new field belongs in `route_args` only in "
+        "its non-default state - see the comment there."
+    )
