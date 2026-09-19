@@ -30,7 +30,9 @@ def tools() -> dict[str, Any]:
 
 #: Scope 7's own names, read off the tool tables: the five this build cannot answer. They
 #: are registered anyway and say why. `imagery_tile` left this set with ADR 0023.
-ABSENT = {"cue_sheet", "transit_at", "pin_waypoint", "place_notes", "render"}
+#: Tools registered and honest about not working. M10 removed `cue_sheet` from this set
+#: by building it; `render` follows when the SVG renderer lands.
+ABSENT = {"transit_at", "pin_waypoint", "place_notes", "render"}
 
 
 def test_every_scorer_is_reachable_as_a_tool(tools: dict[str, Any]) -> None:

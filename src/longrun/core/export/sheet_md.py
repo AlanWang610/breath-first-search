@@ -84,6 +84,7 @@ def render_markdown(
     out.extend(_elevation_section(elevation))
     out.extend(_flags_section(plan))
     out.extend(_trade_offs_section(plan))
+    out.extend(_cue_section(plan))
     out.extend(_verify_section(verify))
     out.extend(_warnings_section(plan, pacing_caveats))
     out.extend(_coverage_section(plan))
@@ -275,3 +276,43 @@ def _manifest_section(plan: Plan) -> list[str]:
 def _attribution_section(plan: Plan) -> list[str]:
     sources = [entry.source for entry in plan.coverage.checked()]
     return ["## Attribution", "", attribution.render(sources), ""]
+
+
+def _cue_section(plan: Plan) -> list[str]:
+    """Scope 9's cue sheet - the artifact a runner actually carries.
+
+    Always printed, per this module's rule. Every cue rather than a worst-N: a truncated
+    cue sheet is useless, and 400 turns is ~24 kB against the 400 kB the sheet is capped at.
+
+    The four "not produced" reasons are four different facts and are never collapsed into
+    "no turns": a runner told a route has none, when it has forty, has been misinformed.
+    """
+    out = ["## Cue sheet", ""]
+    sheet = plan.cues
+    if not sheet.checked:
+        out.append(f"Not produced: {sheet.reason or 'no reason recorded'}.")
+        out.append("")
+        return out
+    if not sheet.cues:
+        out.append("The router returned no turns for this route.")
+        out.append("")
+        return out
+
+    ambiguous = len(sheet.ambiguous)
+    summary = f"{sheet.turn_count} turn(s) over {plan.route.length_m / 1000:.1f} km."
+    if ambiguous:
+        summary += f" {ambiguous} flagged as ambiguous."
+    if sheet.frame_shift_m:
+        summary += (
+            f" Drawn on a line {sheet.frame_shift_m:.0f} m different in length from the one "
+            f"this plan holds, because the route was matched to the graph after routing."
+        )
+    out += [summary, ""]
+    for cue in sheet.cues:
+        street = cue.street_name or "unnamed way"
+        line = f"- {cue.cum_dist_m / 1000:6.2f} km  {cue.manoeuvre:<12} {street}"
+        if cue.ambiguous and cue.ambiguity:
+            line += f"  — {cue.ambiguity}"
+        out.append(line)
+    out.append("")
+    return out

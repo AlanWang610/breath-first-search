@@ -39,9 +39,15 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from longrun.core.data.cache import COORD_PRECISION, STATIC_DAY, fetch
 from longrun.core.models.geometry import LatLon, Route
+from longrun.core.models.routing import CueSheet
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
 from longrun.core.routing.detour import detour_area, detour_waypoints, round_coordinates
-from longrun.core.routing.graphhopper import FOOT_PROFILE, path_to_route, route_body
+from longrun.core.routing.graphhopper import (
+    FOOT_PROFILE,
+    cue_sheet_of,
+    path_to_route,
+    route_body,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.data.base import Cache
@@ -117,6 +123,23 @@ class CachedRouter:
         body = route_body(waypoints, profile, avoid_polygons, custom_model)
         paths = self._paths(body, waypoints, lambda: self.inner_paths(body, waypoints))
         return path_to_route(paths[0], route_id="generated")
+
+    def route_cues(
+        self,
+        waypoints: list[LatLon],
+        profile: str = FOOT_PROFILE,
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+    ) -> tuple[Route, CueSheet]:
+        """Recorded under its own key, because it is a different question.
+
+        A `route_cues` recording is a superset of a `route` one, so `cue_sheet_of` reads the
+        instructions straight off the replayed payload and cues work offline with no special
+        handling.
+        """
+        body = route_body(waypoints, profile, avoid_polygons, custom_model, instructions=True)
+        paths = self._paths(body, waypoints, lambda: self.inner_paths(body, waypoints))
+        return path_to_route(paths[0], route_id="generated"), cue_sheet_of(paths[0])
 
     def alternatives(
         self,

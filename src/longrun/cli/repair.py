@@ -26,6 +26,7 @@ from longrun.core.export.sheet_md import render_markdown
 from longrun.core.geo.gpx import GpxError, gpx_read, gpx_write
 from longrun.core.models.plan import Manifest, Plan, SnapshotPins
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.routing import NO_ROUTER, NOT_REQUESTED, CueSheet
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.preferences.store import load_profile
 from longrun.runtime import open_context
@@ -147,7 +148,16 @@ def score_route(
             route, request, ctx, start_at=start_at, router=router, manifest=manifest
         )
         plan = build_plan(
-            scored, request, profile=profile, coverage=scored.coverage, manifest=manifest
+            scored,
+            request,
+            profile=profile,
+            coverage=scored.coverage,
+            manifest=manifest,
+            # Repair mode has no router by design (scope 6.1), so it says *that* rather than
+            # reporting a route with no turns. Nothing here synthesises cues from geometry:
+            # a bearing detector would invent street names and turn a measurement into a
+            # guess, which is the one thing a cue sheet must never do.
+            cues=CueSheet(checked=False, reason=NO_ROUTER if router is None else NOT_REQUESTED),
         )
         sheet = render_markdown(
             plan,

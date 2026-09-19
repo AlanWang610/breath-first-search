@@ -32,6 +32,7 @@ from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Manifest, Plan
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.routing import NOT_REQUESTED, CueSheet
 from longrun.core.models.verification import VerifyReport
 from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.pacing.model import pacing_model
@@ -299,6 +300,7 @@ def build_plan(
     coverage: Any,
     manifest: Manifest,
     plan_id: str | None = None,
+    cues: CueSheet | None = None,
 ) -> Plan:
     """Assemble the stored plan from one pass's output."""
     return Plan(
@@ -316,6 +318,9 @@ def build_plan(
         manifest=manifest,
         pacing_caveats=scored.caveats,
         waypoints=merge_waypoints(scored.results),
+        # `None` means the caller did not say, which is not the same as asking and getting
+        # nothing back.
+        cues=cues if cues is not None else CueSheet(checked=False, reason=NOT_REQUESTED),
         # Scope 7.1's acceptance metrics, minus the detour ratio. The two LTS numbers are
         # a read of `segment_hostility`'s own route summary and cost nothing; they have
         # been computed on every plan since M1 and reached no sheet, no API and no test.

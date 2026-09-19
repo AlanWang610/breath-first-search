@@ -19,6 +19,7 @@ from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import Flag, ScorerResult
 from longrun.core.models.profile import PreferenceProfile
 from longrun.core.models.request import PlanRequest
+from longrun.core.models.routing import CueSheet
 from longrun.core.models.verification import VerifyReport
 from longrun.core.models.waypoint import PlanWaypoint
 
@@ -188,6 +189,12 @@ class Plan(BaseModel):
     #: `verify` and `elevation` give above: `longrun export` renders a stored plan and must
     #: not have to re-derive anything.
     waypoints: list[PlanWaypoint] = Field(default_factory=list)
+    #: Turn-by-turn directions (scope 7.2, 9), or which of four reasons there are none.
+    #:
+    #: Stored for the same reason as `verify` and `elevation`: `longrun export` renders a
+    #: stored plan and cannot re-ask a router it no longer has. The default is
+    #: `checked=False` with no reason, which no producer leaves in place.
+    cues: CueSheet = Field(default_factory=CueSheet)
     status: PlanStatus = "complete"
 
     @property
