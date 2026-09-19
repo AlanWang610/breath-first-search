@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -354,7 +355,35 @@ def test_export_refuses_two_formats_at_once(route_file: Path, tmp_path: Path) ->
     plan_path = _stored_plan(route_file, tmp_path)
     result = runner.invoke(app, ["export", str(plan_path), "--html", "--md"])
     assert result.exit_code == 2
-    assert "one of --html or --md" in result.stderr
+    # The message names the flags that were actually given, which matters now there are
+    # five of them: "choose one of --html or --md" is unhelpful when you passed --fit too.
+    assert "--html" in result.stderr and "--md" in result.stderr
+
+
+def test_export_refuses_a_course_with_no_destination(route_file: Path, tmp_path: Path) -> None:
+    """FIT is binary and cannot go to stdout; the same rule covers all three courses."""
+    plan_path = _stored_plan(route_file, tmp_path)
+    result = runner.invoke(app, ["export", str(plan_path), "--fit"])
+    assert result.exit_code == 2
+    assert "--out" in result.stderr
+
+
+def test_export_writes_a_fit_course_that_decodes(route_file: Path, tmp_path: Path) -> None:
+    """End to end through the CLI, decoded back with CRC checking on."""
+    fitdecode = pytest.importorskip("fitdecode")
+    plan_path = _stored_plan(route_file, tmp_path)
+    out = tmp_path / "course.fit"
+    result = runner.invoke(app, ["export", str(plan_path), "--fit", "--out", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    frames = list(
+        fitdecode.FitReader(BytesIO(out.read_bytes()), check_crc=fitdecode.CrcCheck.RAISE)
+    )
+    assert (
+        any(isinstance(f, fitdecode.FitDataMessage) and f.name == "course_point" for f in frames)
+        or not Plan.model_validate_json(plan_path.read_text(encoding="utf-8")).waypoints
+    )
 
 
 def test_export_reports_an_unreadable_plan_cleanly(tmp_path: Path) -> None:

@@ -123,6 +123,20 @@ def test_the_route_matches_its_expectation(name: str, tmp_path: Path, update_gol
         "If this change is intended, rerun with --update-golden and review the diff."
     )
 
+    # Folded in here rather than given its own parametrized test. There are already six
+    # route-parametrized tests over six routes, so each new one is another six full pipeline
+    # runs - and the Windows CI job was at 26m2s of a 30-minute cap after M9.
+    #
+    # The GPX is invisible to `digest`, which reads `plan.json` alone. So this is the only
+    # thing standing between a plan that carries waypoints and a GPX that drops them, which
+    # is precisely the failure scope 9's first output has had since M1: `gpx_write` took a
+    # `waypoints` argument for nine milestones and no caller ever passed one.
+    assert run.gpx, f"{name} wrote no course.gpx"
+    assert run.gpx.count("<wpt") == len(run.plan.waypoints), (
+        f"{name} carries {len(run.plan.waypoints)} waypoints and its GPX has "
+        f"{run.gpx.count('<wpt')}"
+    )
+
 
 @pytest.mark.parametrize("name", ROUTE_NAMES)
 def test_the_sheet_reports_what_was_not_checked(name: str, tmp_path: Path) -> None:
