@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.models.coverage import CoverageEntry
+from longrun.core.models.geometry import LatLon
 from longrun.core.models.measurement import (
     Flag,
     FlagKind,
@@ -38,6 +39,7 @@ from longrun.core.models.measurement import (
     SegmentMeasurement,
     Tier,
 )
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.preferences.floors import DRY_GAP_HARD_MIN, WBGT_HARD_C
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, row_tags
 from longrun.core.scorers.base import record_coverage, unavailable
@@ -178,6 +180,7 @@ def resupply_schedule(
     frame = RouteFrame(route)
     open_at: dict[str, list[float]] = {"water": [], "toilet": [], "food": []}
     unknown_hours = 0
+    found_places: list[PlanWaypoint] = []
 
     for _, row in points.iterrows():
         geometry = row.geometry
@@ -192,11 +195,27 @@ def resupply_schedule(
             continue
 
         minutes = _minutes_at(route, etas, cum_m)
-        state = is_open(tags.get("opening_hours"), etas[0] + timedelta(minutes=minutes))
+        arrival = etas[0] + timedelta(minutes=minutes)
+        state = is_open(tags.get("opening_hours"), arrival)
         if state is None:
             unknown_hours += 1
         if state is not False:
             open_at[category].append(minutes)
+            # The one place that knows both *where* a service is and *whether it is open
+            # when the runner gets there*, which is why `merge_waypoints` prefers this copy
+            # over `services_along`'s for the same point.
+            found_places.append(
+                PlanWaypoint(
+                    position=LatLon(lat=geometry.y, lon=geometry.x),
+                    kind=category,
+                    label=tags.get("name") or category,
+                    cum_dist_m=cum_m,
+                    scorer=name,
+                    offset_m=round(offset_m, 1),
+                    eta=arrival,
+                    detail="open at arrival" if state else "hours not recorded; may be shut",
+                )
+            )
 
     total_min = (etas[-1] - etas[0]).total_seconds() / 60.0
     wbgt = _worst_wbgt(prior)
@@ -207,7 +226,7 @@ def resupply_schedule(
     gaps = {category: _max_gap_min(sorted(marks), total_min) for category, marks in open_at.items()}
     confidence = UNKNOWN_HOURS_CONFIDENCE if unknown_hours else 1.0
 
-    result = ScorerResult(name=name)
+    result = ScorerResult(name=name, waypoints=found_places)
     for segment in segments:
         start_min = _minutes_at(route, etas, segment.cum_start_m)
         result.measurements.append(

@@ -31,8 +31,9 @@ from typing import TYPE_CHECKING, Any
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor
 from longrun.core.models.coverage import CoverageEntry
-from longrun.core.models.geometry import Route, Segment
+from longrun.core.models.geometry import LatLon, Route, Segment
 from longrun.core.models.measurement import ScorerResult, SegmentMeasurement
+from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, WAYS_LAYER, RouteFrame, row_tags
 from longrun.core.scorers.bailouts import is_drivable
 from longrun.core.scorers.base import record_coverage, unavailable
@@ -133,6 +134,12 @@ def crew_points(
                 "road_m": None if road_m is None else round(road_m, 1),
                 "name": str(tags.get("name") or "unnamed parking"),
                 "eta": _eta_at(route, etas, cum_m),
+                # Kept so the waypoint can carry the true position. The measurement below
+                # keeps only `cum_dist_m`, from which a coordinate is recoverable only by
+                # interpolating back against the route - which is the wrong place for a
+                # car park, since the crew drives to the car park and not to the line.
+                "lat": geometry.y,
+                "lon": geometry.x,
             }
         )
 
@@ -153,13 +160,30 @@ def crew_points(
                     "offset_m": item["offset_m"],
                     "road_m": item["road_m"],
                     "name": item["name"],
-                    "runner_eta": item["eta"],
+                    # Formatted here, so `values` still holds a scalar and the golden
+                    # content hash does not move; `_eta_at` returns the datetime the
+                    # waypoint needs.
+                    "runner_eta": None if item["eta"] is None else item["eta"].strftime("%H:%M"),
                     # Along-route metres from the previous meet point. **Not** a drive
                     # time and not a road distance: no router is available in repair mode,
                     # and this is the lower bound a crew chief can read off a map.
                     "since_previous_m": gap,
                 },
                 confidence=1.0 if roads is not None else NO_ROADS_CONFIDENCE,
+            )
+        )
+        result.waypoints.append(
+            PlanWaypoint(
+                position=LatLon(lat=item["lat"], lon=item["lon"]),
+                kind="crew",
+                label=item["name"],
+                cum_dist_m=item["cum_dist_m"],
+                scorer=name,
+                offset_m=item["offset_m"],
+                eta=item["eta"],
+                detail=None
+                if item["road_m"] is None
+                else f"{item['road_m']:.0f} m from a drivable road",
             )
         )
 
@@ -234,7 +258,13 @@ def _nearest(tree: Any, where: Any) -> float | None:
     return float(tree.geometries[int(index)].distance(where))
 
 
-def _eta_at(route: Route, etas: list[datetime] | None, cum_m: float) -> str | None:
+def _eta_at(route: Route, etas: list[datetime] | None, cum_m: float) -> datetime | None:
+    """When the runner reaches this distance along the route.
+
+    Returns the `datetime` rather than the "%H:%M" string it used to, because a waypoint
+    can carry one and a `SegmentMeasurement` cannot. The measurement formats at its own call
+    site, so `values["runner_eta"]` is byte-identical and no golden hash moves.
+    """
     if not etas:
         return None
     best, arrival = None, etas[0]
@@ -242,7 +272,7 @@ def _eta_at(route: Route, etas: list[datetime] | None, cum_m: float) -> str | No
         gap = abs(point.cum_dist_m - cum_m)
         if best is None or gap < best:
             best, arrival = gap, etas[min(index, len(etas) - 1)]
-    return arrival.strftime("%H:%M")
+    return arrival
 
 
 def _largest_gap(route: Route, found: list[dict[str, Any]]) -> float:
