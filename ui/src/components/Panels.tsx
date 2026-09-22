@@ -61,7 +61,12 @@ export function TradeOffsPanel({
         <div key={trade.segment_id} className="tradeoff">
           <p>{trade.comparison}</p>
           <div className="row">
-            {trade.options.map((option) => (
+            {/* `option_a` / `option_b`, which is what the plan schema has always dumped.
+                This read `trade.options` from M7 until M12 and threw on every stored plan
+                that had a trade-off, taking the panel's siblings down with it — the types
+                in `api.ts` are hand-written, so `tsc` checked that mistake against itself
+                and agreed. M12.8 exists because nothing else was going to find it. */}
+            {[trade.option_a, trade.option_b].map((option) => (
               <button key={option} onClick={() => onChoose?.(option)} disabled={!onChoose}>
                 {option}
               </button>
@@ -69,6 +74,13 @@ export function TradeOffsPanel({
           </div>
         </div>
       ))}
+      {!onChoose && (
+        <p className="muted small">
+          These were recorded when the plan was built. A stored plan does not carry the
+          candidates' geometry, so choosing one here means drawing the line you want on the
+          map — select the stretch and use <em>Replace this stretch</em>.
+        </p>
+      )}
     </section>
   );
 }
