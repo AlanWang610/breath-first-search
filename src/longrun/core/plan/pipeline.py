@@ -80,6 +80,8 @@ def score_once(
     only: Collection[str] | None = None,
     carried: Sequence[ScorerResult] = (),
     carried_as_of: datetime | None = None,
+    carried_route: Route | None = None,
+    carried_segments: Sequence[Segment] | None = None,
     elevations: list[float | None] | None = None,
 ) -> ScoredRoute:
     """Score a route once against an open context.
@@ -100,7 +102,12 @@ def score_once(
     that was scored and rejected is not what the sheet reports having checked.
 
     `only` / `carried` / `carried_as_of` make this a partial pass - see `run_scorers`, which
-    is where the merge happens and why.
+    is where the merge happens and why. `carried_route` / `carried_segments` say what line
+    and what segmentation those stored results were measured against, and `run_scorers`
+    refuses to carry anything without them: a `segment_id` is positional, so across a
+    geometry edit a carried measurement's id is an index into a list that no longer exists
+    (ADR 0032). A refresh passes the stored plan's own route and segments, which are the same
+    ones this pass rebuilds, so nothing moves and nothing is dropped.
 
     `elevations` supplies the per-point terrain heights instead of reading the DEM. A refresh
     passes the stored route's, which is both the semantically right answer - terrain does not
@@ -124,6 +131,8 @@ def score_once(
             only=only,
             carried=carried,
             carried_as_of=carried_as_of,
+            carried_route=carried_route,
+            carried_segments=carried_segments,
             elevations=elevations,
         )
         if manifest is not None:
@@ -149,6 +158,8 @@ def _score_pass(
     only: Collection[str] | None = None,
     carried: Sequence[ScorerResult] = (),
     carried_as_of: datetime | None = None,
+    carried_route: Route | None = None,
+    carried_segments: Sequence[Segment] | None = None,
     elevations: list[float | None] | None = None,
 ) -> ScoredRoute:
     """The pass itself, with `ctx.coverage` already scoped to it by `score_once`."""
@@ -227,6 +238,8 @@ def _score_pass(
         only=only,
         carried=carried,
         carried_as_of=carried_as_of,
+        carried_route=carried_route,
+        carried_segments=carried_segments,
     )
 
     # Verification runs before the plan is assembled so the plan can carry its own report:

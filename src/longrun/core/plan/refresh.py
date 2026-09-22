@@ -150,6 +150,12 @@ def rescore_plan(
         only=wanted,
         carried=stored.results,
         carried_as_of=as_of,
+        # The stored plan's own line and its own cut of it. A refresh re-derives both from
+        # the same route, so `map_segments` finds them unchanged and every carried result
+        # keeps every measurement it had - which is what keeps this function's output what
+        # it was before M11.3.
+        carried_route=stored.route,
+        carried_segments=stored.segments,
         # Terrain does not change between Tuesday and Friday, and reading a DEM this machine
         # may not have would overwrite the stored profile with nulls. See M10.4.
         elevations=None if resample_elevation else [point.ele_m for point in stored.route.points],
