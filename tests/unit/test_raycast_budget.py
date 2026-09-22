@@ -14,6 +14,20 @@ The thresholds are deliberately loose — roughly ten times the measured figure.
 guard against a regression of *kind* (a Python loop creeping into the ray march, the tiled
 extraction being replaced by a bbox), not a benchmark to tune against. A tight threshold
 here would fail on a busy laptop and get deleted.
+
+**The marker is per test, not per module, since M13.3.** The whole file was `slow` and the
+plan that scheduled that milestone called all five "slow CPU-budget assertions". Four are:
+they read `time.perf_counter()`, and a wall clock on a shared CI runner measures the
+runner's neighbours as much as this code — a ratio between two of them (`fine_s /
+coarse_s`) more so, not less. Those stay out, and **not because they are expensive**: the
+five together are 2.0 s, of which 0.8 s is the assertions. Cost was never the reason and
+saying it was would put a wrong reason in front of the next person to look.
+
+One is not a budget assertion at all. `test_one_tile_stays_small_however_long_the_route_is`
+asserts `tile.nbytes` against a megabyte ceiling — no clock in it, the same answer on any
+machine — and it pins the finding the spike actually turned on, that a 100 km corridor bbox
+at 1 m is 10 GB and a tile is 22 MB. It was excluded from CI by a marker describing its
+neighbours, so it now runs in the default gate.
 """
 
 from __future__ import annotations
@@ -24,8 +38,6 @@ import numpy as np
 import pytest
 
 from longrun.core.geo.raycast import LADDER, horizon_profile
-
-pytestmark = pytest.mark.slow
 
 #: Scope 5's corridor buffer, plus the search radius the rays need beyond it. A tile
 #: narrower than this truncates its own horizons at the edge.
@@ -57,6 +69,7 @@ def _tile(cell_m: float) -> tuple[np.ndarray, int, int]:
     return rng.uniform(0.0, 30.0, (rows, cols)).astype(np.float32), rows, cols
 
 
+@pytest.mark.slow
 def test_a_hundred_kilometre_route_ray_casts_inside_the_budget() -> None:
     """Full rung, 1 m cells, 100 m point spacing — no degradation, worst case.
 
@@ -96,6 +109,7 @@ def test_one_tile_stays_small_however_long_the_route_is() -> None:
     assert tile.nbytes / 1e6 < MAX_TILE_MB
 
 
+@pytest.mark.slow
 def test_the_cost_does_not_depend_on_the_resolution_of_the_surface() -> None:
     """Cost is points x azimuths x steps. Cell size changes memory and accuracy, not time.
 
@@ -132,6 +146,7 @@ PLAN_BUDGET_S = 180.0
 REROUTE_ROUNDS = 5
 
 
+@pytest.mark.slow
 def test_a_hundred_kilometre_plan_leaves_room_for_five_reroute_rounds() -> None:
     """The measurement R5 asked for, which nobody had made.
 
@@ -162,6 +177,7 @@ def test_a_hundred_kilometre_plan_leaves_room_for_five_reroute_rounds() -> None:
     )
 
 
+@pytest.mark.slow
 def test_the_cost_is_linear_in_route_length_not_worse() -> None:
     """Per-tile cost constant means a 100 km route is predictable from a 20 km one.
 

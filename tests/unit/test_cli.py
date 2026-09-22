@@ -6,6 +6,7 @@ runner for speed, plus one subprocess check that the installed entry point reall
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from io import BytesIO
@@ -267,17 +268,41 @@ def test_the_offline_env_var_reaches_the_command(
     assert seen == [True]
 
 
-@pytest.mark.network
 def test_installed_entry_point_works() -> None:
-    """The subprocess smoke test: proves [project.scripts] actually resolves."""
-    result = subprocess.run(
+    """The subprocess smoke test: proves `[project.scripts]` actually resolves.
+
+    **Unmarked in M13.3.** This carried `pytest.mark.network` and opens no socket - it
+    starts a subprocess, and `conftest._block_network` patches `socket.socket.connect` in
+    *this* interpreter, which a subprocess would not inherit in any case. So the marker
+    bought nothing and cost the one thing in the suite that checks the packaging: it ran
+    on a laptop when somebody typed `-m network` and nowhere else, for ten milestones. It
+    costs about a second.
+
+    It also did not test what it says. `python -m longrun.cli.main` proves the module is
+    importable in a fresh interpreter, which is worth having and is *not* the entry point -
+    `[project.scripts] longrun = "longrun.cli.main:app"` could be missing, misspelled or
+    pointing at a name that no longer exists and this would still pass. Both are checked
+    now, and the console script is looked up rather than assumed: a sync that installed no
+    script is exactly the failure this test's name promises to catch, so it is an assertion
+    and not a skip.
+    """
+    module = subprocess.run(
         [sys.executable, "-m", "longrun.cli.main", "--version"],
         capture_output=True,
         text=True,
         check=False,
     )
-    assert result.returncode == 0
-    assert "longrun" in result.stdout
+    assert module.returncode == 0, module.stderr
+    assert "longrun" in module.stdout
+
+    script = shutil.which("longrun")
+    assert script is not None, (
+        "no `longrun` executable on PATH: [project.scripts] did not produce one, which is "
+        "the packaging failure this test exists for"
+    )
+    installed = subprocess.run([script, "--version"], capture_output=True, text=True, check=False)
+    assert installed.returncode == 0, installed.stderr
+    assert "longrun" in installed.stdout
 
 
 # --- freeze-fixture ---------------------------------------------------------
