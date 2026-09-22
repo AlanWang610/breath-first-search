@@ -15,7 +15,7 @@ The corridor here is deliberately its own, not shared with the equivalence test.
 prove different things, and a shared fixture would mean editing one test's data silently
 changed what the other one was asserting.
 
-`network`-marked: needs the live database.
+`network`-marked: needs the live database. CI has one on the ubuntu leg since M13.2.
 
     docker compose -f deploy/docker-compose.yml up -d
     uv run pytest tests/contract/test_freeze_fixture.py -m network
@@ -39,7 +39,11 @@ from longrun.core.geo.gpx import gpx_write
 from longrun.core.geo.segments import corridor
 from longrun.core.models.geometry import Route, RoutePoint
 
-pytestmark = pytest.mark.network
+# `network` because it needs a live service, `postgis` because the live service is a
+# database rather than the internet - and that distinction is what lets CI run this. A
+# Postgres service container is a thing GitHub can start; the USGS tile server is not.
+# Both markers, so the default gate still deselects this on `not network`.
+pytestmark = [pytest.mark.network, pytest.mark.postgis]
 
 #: Kept out of the layer schemas so a failed run cannot leave debris where a region build
 #: would load. `freeze-fixture` is pointed at it with `--schema`.

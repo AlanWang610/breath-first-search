@@ -7,7 +7,8 @@ and its upsert produce a table `PostGISLayerStore` can answer a corridor query f
 
 So the frames here are hand-built with the columns the normalisers emit, and the real
 normalisers are exercised on real files by `test_national.py` in CI. Between them the whole
-path is covered and neither half needs the other's cost.
+path is covered and neither half needs the other's cost. Since M13.2 both halves run in CI,
+this one against a service container on the ubuntu leg.
 
     docker compose -f deploy/docker-compose.yml up -d
     uv run pytest tests/contract/test_national_load.py -m network
@@ -25,7 +26,11 @@ from shapely.geometry import LineString, Point, Polygon
 
 from longrun.core.data.national import NHD, TIGER, NationalSource, load_frame
 
-pytestmark = pytest.mark.network
+# `network` because it needs a live service, `postgis` because the live service is a
+# database rather than the internet - and that distinction is what lets CI run this. A
+# Postgres service container is a thing GitHub can start; the USGS tile server is not.
+# Both markers, so the default gate still deselects this on `not network`.
+pytestmark = [pytest.mark.network, pytest.mark.postgis]
 
 DSN = os.environ.get("LONGRUN_POSTGIS_DSN", "postgresql://longrun:longrun@localhost:5432/longrun")
 

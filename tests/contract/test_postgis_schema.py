@@ -3,8 +3,12 @@
 `deploy/postgis/init/01-schemas.sql` runs exactly once, against an empty data directory,
 so nothing re-checks it afterwards: a container brought up months ago against an older
 version of that file looks identical to a fresh one until a loader fails. These tests are
-the check, and they are `network`-marked because they need the live database - CI has no
-services, by design (the `LayerStore` seam is what makes that possible).
+the check.
+
+**They run in CI as of M13.2**, on the ubuntu leg, against a `postgis/postgis:17-3.5`
+service container with this same file applied by `psql`. That makes them a check on the
+committed SQL rather than on whatever a developer's container happens to hold, which is the
+stronger of the two readings and the one this module was written for.
 
     docker compose -f deploy/docker-compose.yml up -d
     uv run pytest tests/contract/test_postgis_schema.py -m network
@@ -21,7 +25,11 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.network
+# `network` because it needs a live service, `postgis` because the live service is a
+# database rather than the internet - and that distinction is what lets CI run this. A
+# Postgres service container is a thing GitHub can start; the USGS tile server is not.
+# Both markers, so the default gate still deselects this on `not network`.
+pytestmark = [pytest.mark.network, pytest.mark.postgis]
 
 DSN = os.environ.get("LONGRUN_POSTGIS_DSN", "postgresql://longrun:longrun@localhost:5432/longrun")
 

@@ -8,7 +8,9 @@ wrong column names.
 
 So this loads a hand-built extract and reads it back **through the store**, with the same
 corridor query a scorer makes. `network`-marked because it needs the `ingest` extra and a
-live database; CI has neither, by design.
+live database. Since M13.2 CI has both, on the ubuntu leg only: the `test` job still syncs
+*without* `ingest`, because `mypy`'s override list turns an environment with pyosmium
+present into one that type checks differently from one without.
 
     docker compose -f deploy/docker-compose.yml up -d
     uv run pytest tests/contract/test_osm_load.py -m network
@@ -25,7 +27,11 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.network
+# `network` because it needs a live service, `postgis` because the live service is a
+# database rather than the internet - and that distinction is what lets CI run this. A
+# Postgres service container is a thing GitHub can start; the USGS tile server is not.
+# Both markers, so the default gate still deselects this on `not network`.
+pytestmark = [pytest.mark.network, pytest.mark.postgis]
 
 DSN = os.environ.get("LONGRUN_POSTGIS_DSN", "postgresql://longrun:longrun@localhost:5432/longrun")
 

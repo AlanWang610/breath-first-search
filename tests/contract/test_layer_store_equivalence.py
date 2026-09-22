@@ -9,7 +9,9 @@ Both stores are loaded from one set of records, so a disagreement is a *query* d
 rather than a data difference. The corridor geometry is shared code
 (`core.geo.segments.corridor_polygon`), so it cannot be the explanation either.
 
-`network`-marked: needs the live database.
+`network`-marked: needs the live database. Since M13.2 CI has one, on the ubuntu leg —
+which matters more here than anywhere else in the suite, because "the golden suite passes"
+says nothing about PostGIS unless this has run.
 
     docker compose -f deploy/docker-compose.yml up -d
     uv run pytest tests/contract/test_layer_store_equivalence.py -m network
@@ -32,7 +34,11 @@ from longrun.core.data.postgis import PostGISLayerStore
 from longrun.core.geo.segments import corridor
 from longrun.core.models.geometry import Route, RoutePoint
 
-pytestmark = pytest.mark.network
+# `network` because it needs a live service, `postgis` because the live service is a
+# database rather than the internet - and that distinction is what lets CI run this. A
+# Postgres service container is a thing GitHub can start; the USGS tile server is not.
+# Both markers, so the default gate still deselects this on `not network`.
+pytestmark = [pytest.mark.network, pytest.mark.postgis]
 
 DSN = os.environ.get("LONGRUN_POSTGIS_DSN", "postgresql://longrun:longrun@localhost:5432/longrun")
 
