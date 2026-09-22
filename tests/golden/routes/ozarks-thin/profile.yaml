@@ -1,0 +1,4 @@
+# Shipped defaults, unmodified. This route's subject is what the coverage manifest reports
+# when the data is thin, and a non-default preference would put a second variable into a
+# golden whose whole job is to pin which sources answered and which honestly did not.
+version: 1

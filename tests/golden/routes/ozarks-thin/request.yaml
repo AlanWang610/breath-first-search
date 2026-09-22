@@ -1,0 +1,38 @@
+# Eminence, Missouri west along MO-106 to Alley Spring - scope 11's test region 3, the
+# rural, thin-data one. 10.4 km through Ozark National Scenic Riverways, in a county whose
+# OSM extract holds 1,600 ways against the Bay Area's 932,172.
+#
+# The route's subject is what the coverage manifest says when most of the data is not
+# there. Every other golden has a rich layer to hide behind; this one has 0 railways,
+# 0 transit stops, no building footprints and no cell-coverage raster, and each of those
+# has to read as a different kind of answer from the others.
+#
+# **2026-09-26, and the date is inside two windows rather than one.** Recorded 2026-09-22.
+# Open-Meteo's weather endpoint forecast to 2026-10-07 that morning and its air-quality
+# endpoint only to 2026-09-28 - seven days against sixteen - so anything past the 28th
+# would have recorded a cassette that half-scores, which is what the first `kc-stateline`
+# attempt did. Four days out leaves two days of margin at the end that binds. Both
+# endpoints were queried for this exact date before the cassette was cut, and both
+# answered a full 24 hours.
+#
+# A Saturday on purpose. Day of week is the only input `transit` and `bailouts` have, and
+# a weekday zero would leave a reader wondering whether the stops were there and simply
+# not running. On a Saturday the zero can only mean what it means here: there is no
+# transit agency in Shannon County.
+from: "37.1508,-91.3576"
+to: "37.1497,-91.4436"
+date: 2026-09-26
+start: "07:30"
+
+# Shannon County is Central Time and observes daylight saving; the 2026 switch is
+# 2026-11-01, so late September is CDT. Pinned rather than derived - ADR 0008 settled that
+# the offset is looked up, and pinning it is what keeps the golden reproducible off-grid.
+utc_offset_hours: -5
+
+# Sunrise at Eminence on this date is about 07:01 CDT, so a 07:30 start runs the whole
+# route in daylight. Deliberate: darkness is `boston-winter`'s subject and a second route
+# pinning it would add a variable without adding a test.
+#
+# `rounds: 0` for the same reason - `loop-bayarea` is the loop golden. This route scores
+# once, which is what makes its coverage manifest the only thing moving in a diff.
+rounds: 0
