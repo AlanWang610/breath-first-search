@@ -92,6 +92,50 @@ class Scratchpad(BaseModel):
         """
         self.locked.append(LockedRange(start_m=start_m, end_m=end_m, reason=reason, source=source))
 
+    def unlock(
+        self, start_m: float, end_m: float, *, source: LockSource | None = None
+    ) -> list[LockedRange]:
+        """Release a stretch of the line, and say what was holding it.
+
+        Scope 10.3's "select a range -> lock/unlock" is one gesture with two halves and
+        only one of them existed: `lock` appended, and nothing in the tree ever removed a
+        `LockedRange` or narrowed one.
+
+        **A partial overlap is trimmed, not dropped.** A runner who unlocks 2-3 km of a
+        lock that spans 0-10 km has said nothing about the other nine, and removing the
+        whole entry would silently reopen them to the next round's reroute - which is the
+        failure scope 8.4's auto-lock exists to prevent, arriving through the undo button.
+        Each surviving piece keeps the original `reason` and `source`, because they are
+        still that lock: a trimmed range the loop wrote is still the loop's.
+
+        `source` selects which author's locks may be taken apart - this is what M11.1's
+        field is for. `None` means any, which is the honest default for a caller that said
+        only "free this range"; the UI's "unlock what I locked" passes `"user"` and leaves
+        the loop's own reroute locks standing.
+
+        Returns the locks it removed or narrowed, **as they were before**, so a caller with
+        a terminal can report what it released rather than reporting a count of nothing.
+        """
+        if end_m <= start_m:
+            raise ValueError("unlocked range must have positive length")
+
+        kept: list[LockedRange] = []
+        freed: list[LockedRange] = []
+        for lock in self.locked:
+            selected = source is None or lock.source == source
+            if not selected or lock.end_m <= start_m or lock.start_m >= end_m:
+                kept.append(lock)
+                continue
+            freed.append(lock)
+            # Up to two survivors: the head before the released range and the tail after
+            # it. Both, for a lock the range falls strictly inside.
+            if lock.start_m < start_m:
+                kept.append(lock.model_copy(update={"end_m": start_m}))
+            if lock.end_m > end_m:
+                kept.append(lock.model_copy(update={"start_m": end_m}))
+        self.locked = kept
+        return freed
+
     def locked_ids(self) -> frozenset[str]:
         from longrun.core.geo.segments import locked_segment_ids
 

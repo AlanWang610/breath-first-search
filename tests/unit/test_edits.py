@@ -14,7 +14,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from longrun.core.models.geometry import LatLon
+from longrun.core.models.geometry import LatLon, Route, RoutePoint
 from longrun.core.models.request import LockedRange, PlanRequest
 from longrun.core.plan.scratchpad import Scratchpad
 
@@ -29,6 +29,17 @@ def _request() -> PlanRequest:
 
 def _pad() -> Scratchpad:
     return Scratchpad(plan_id="p", request=_request())
+
+
+def _straight_route(points: int = 12, step_m: float = 100.0) -> Route:
+    """A line due east, spaced so `segment_route` makes more than one segment of it."""
+    return Route(
+        id="edit",
+        points=[
+            RoutePoint(lat=37.77, lon=-122.42 + index * 0.00114, cum_dist_m=index * step_m)
+            for index in range(points)
+        ],
+    )
 
 
 # --- M11.1: a lock says who wrote it -----------------------------------------
@@ -57,3 +68,84 @@ def test_a_lock_source_outside_the_two_that_exist_is_refused() -> None:
     """A third author would silently widen what `unlock(source=...)` leaves behind."""
     with pytest.raises(ValidationError):
         LockedRange(start_m=0.0, end_m=10.0, source="api")  # type: ignore[arg-type]
+
+
+# --- M11.2: and a lock can be taken off again ---------------------------------
+
+
+def _spans(pad: Scratchpad) -> list[tuple[float, float]]:
+    return [(lock.start_m, lock.end_m) for lock in pad.locked]
+
+
+def test_unlocking_a_whole_lock_removes_it() -> None:
+    pad = _pad()
+    pad.lock(1000.0, 2000.0)
+    freed = pad.unlock(900.0, 2100.0)
+
+    assert _spans(pad) == []
+    assert [(f.start_m, f.end_m) for f in freed] == [(1000.0, 2000.0)]
+
+
+def test_unlocking_the_middle_of_a_lock_leaves_the_ends_locked() -> None:
+    """A runner who frees 2-3 km of a 0-10 km lock has said nothing about the other nine.
+
+    Dropping the whole entry would reopen them to the next round's reroute, which is the
+    failure scope 8.4's auto-lock exists to prevent, arriving through the undo button.
+    """
+    pad = _pad()
+    pad.lock(0.0, 10_000.0, reason="my usual out-and-back")
+    pad.unlock(2000.0, 3000.0)
+
+    assert _spans(pad) == [(0.0, 2000.0), (3000.0, 10_000.0)]
+    assert {lock.reason for lock in pad.locked} == {"my usual out-and-back"}
+
+
+def test_a_trimmed_lock_keeps_the_author_it_had() -> None:
+    """Still that lock: narrowing a range the loop wrote does not make it the runner's."""
+    pad = _pad()
+    pad.lock(0.0, 1000.0, reason="round 1: rerouted", source="loop")
+    pad.unlock(500.0, 2000.0)
+
+    assert _spans(pad) == [(0.0, 500.0)]
+    assert pad.locked[0].source == "loop"
+
+
+def test_unlocking_what_i_locked_leaves_the_loops_own_reroute_standing() -> None:
+    """The gesture M11.1 exists for, and the whole reason `source` is on the model."""
+    pad = _pad()
+    pad.lock(0.0, 1000.0, reason="I always run this bit")
+    pad.lock(500.0, 1500.0, reason="round 1: rerouted", source="loop")
+
+    freed = pad.unlock(0.0, 2000.0, source="user")
+
+    assert _spans(pad) == [(500.0, 1500.0)]
+    assert [f.source for f in freed] == ["user"]
+
+
+def test_a_lock_that_does_not_overlap_is_left_alone() -> None:
+    pad = _pad()
+    pad.lock(0.0, 1000.0)
+    assert pad.unlock(1000.0, 2000.0) == []
+    assert _spans(pad) == [(0.0, 1000.0)]
+
+
+def test_unlocking_nothing_is_an_error_rather_than_a_silent_no_op() -> None:
+    """The same rule `LockedRange` applies to a lock: a zero-length range is a mistake."""
+    pad = _pad()
+    with pytest.raises(ValueError, match="positive length"):
+        pad.unlock(1000.0, 1000.0)
+
+
+def test_an_unlocked_range_stops_excluding_its_segments() -> None:
+    """The point of all of it: `locked_ids` is what keeps a span out of the worst-N."""
+    from longrun.core.geo.segments import segment_route
+
+    pad = _pad()
+    route = _straight_route()
+    pad.route = route
+    pad.segments = segment_route(route)
+    pad.lock(0.0, route.length_m)
+    assert pad.locked_ids(), "the lock covers the route"
+
+    pad.unlock(0.0, route.length_m)
+    assert pad.locked_ids() == frozenset()
