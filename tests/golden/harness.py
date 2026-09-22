@@ -14,6 +14,7 @@ network being up.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,12 @@ class GoldenRun:
     #: The GPX the run wrote, as text. Scope 9's first output, and the only one the digest
     #: cannot see - `expectation.digest` reads `plan.json` alone.
     gpx: str = ""
+
+
+#: What `conftest.golden_run` hands back: a route name in, that route's one run out. Named
+#: here rather than in the conftest so a test annotating the fixture imports from the module
+#: that owns `GoldenRun` instead of from a conftest.
+GoldenRunner = Callable[[str], GoldenRun]
 
 
 def route_names() -> list[str]:

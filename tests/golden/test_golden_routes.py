@@ -114,9 +114,11 @@ def test_the_request_pins_an_absolute_date(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", ROUTE_NAMES)
-def test_the_route_matches_its_expectation(name: str, tmp_path: Path, update_golden: bool) -> None:
+def test_the_route_matches_its_expectation(
+    name: str, golden_run: harness.GoldenRunner, update_golden: bool
+) -> None:
     directory = harness.ROUTES_DIR / name
-    run = harness.run(directory, tmp_path / "out")
+    run = golden_run(name)
     actual = digest(run.plan, run.scratchpad)
     expected_path = directory / "expected.json"
 
@@ -147,14 +149,16 @@ def test_the_route_matches_its_expectation(name: str, tmp_path: Path, update_gol
 
 
 @pytest.mark.parametrize("name", ROUTE_NAMES)
-def test_the_sheet_reports_what_was_not_checked(name: str, tmp_path: Path) -> None:
+def test_the_sheet_reports_what_was_not_checked(
+    name: str, golden_run: harness.GoldenRunner
+) -> None:
     """Scope 3.6 in the one place a user actually reads.
 
     Every golden runs with scorers that do not exist yet, so the honest sheet always has
     something in its unchecked list. The day that stops being true this assertion should
     be revisited, not deleted.
     """
-    run = harness.run(harness.ROUTES_DIR / name, tmp_path / "out")
+    run = golden_run(name)
     assert run.plan.coverage.unchecked(), "a plan that checked everything is not credible yet"
     assert "Coverage" in run.sheet
     for entry in run.plan.coverage.unchecked()[:3]:
@@ -175,7 +179,9 @@ def test_the_expectation_is_machine_independent(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", ROUTE_NAMES)
-def test_no_scorer_emits_two_measurements_with_the_same_id(name: str, tmp_path: Path) -> None:
+def test_no_scorer_emits_two_measurements_with_the_same_id(
+    name: str, golden_run: harness.GoldenRunner
+) -> None:
     """A duplicate `segment_id` is a measurement silently lost, and nothing else notices.
 
     Most scorers cannot produce one: their ids come from the segment list, which partitions
@@ -189,7 +195,7 @@ def test_no_scorer_emits_two_measurements_with_the_same_id(name: str, tmp_path: 
     This is the check that would have caught it, and it applies to every scorer at once
     rather than to the one that happened to break.
     """
-    run = harness.run(harness.ROUTES_DIR / name, tmp_path / "out")
+    run = golden_run(name)
     for result in run.plan.results:
         ids = [m.segment_id for m in result.measurements]
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
@@ -197,7 +203,7 @@ def test_no_scorer_emits_two_measurements_with_the_same_id(name: str, tmp_path: 
 
 
 @pytest.mark.parametrize("name", ROUTE_NAMES)
-def test_every_recorded_source_has_a_licence(name: str, tmp_path: Path) -> None:
+def test_every_recorded_source_has_a_licence(name: str, golden_run: harness.GoldenRunner) -> None:
     """Scope 14 is an obligation, and `LICENCE NOT RECORDED` is what an unmet one looks like.
 
     Twice now a source has reached a real sheet without a licence row and nothing failed.
@@ -207,7 +213,7 @@ def test_every_recorded_source_has_a_licence(name: str, tmp_path: Path) -> None:
     that table is vector only. A golden expectation does not carry the attribution block, so
     neither incident showed up as a diff. This reads the sheet.
     """
-    run = harness.run(harness.ROUTES_DIR / name, tmp_path / "out")
+    run = golden_run(name)
     assert "LICENCE NOT RECORDED" not in run.sheet, (
         "a source reached the plan sheet with no scope 14 licence row; add it to "
         "attribution.LICENCES or map it in DERIVED_SOURCES"
