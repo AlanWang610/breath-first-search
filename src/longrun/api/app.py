@@ -296,7 +296,7 @@ def create_app(
 
         areas: list[dict[str, Any]] = []
         for index, drawn in enumerate(submission.avoid_polygons):
-            area, refusal = await anyio.to_thread.run_sync(_rounded_area, drawn)
+            area, refusal = await anyio.to_thread.run_sync(_rounded_area, drawn, f"avoid-{index}")
             if area is None:
                 raise HTTPException(
                     status_code=422, detail=f"avoid polygon {index}: {refusal or 'not an area'}"
@@ -486,12 +486,15 @@ def create_app(
         import anyio
 
         path = _writable(plan_id)
-        area, refusal = await anyio.to_thread.run_sync(_rounded_area, edit.polygon)
+        # Rounded here and *numbered* inside the job, because the number is a function of
+        # what the stored plan already carries and reading the plan is the job's work.
+        area, refusal = await anyio.to_thread.run_sync(_rounded_area, edit.polygon, "avoid")
         if area is None:
             raise HTTPException(status_code=422, detail=refusal or "the polygon is not an area")
 
         def change(plan: Any) -> tuple[Any, str]:
-            polygons = [*plan.request.avoid_polygons, area]
+            numbered = {**area, "id": f"avoid-{len(plan.request.avoid_polygons)}"}
+            polygons = [*plan.request.avoid_polygons, numbered]
             return (
                 _with_request(plan, avoid_polygons=polygons),
                 f"{len(polygons)} avoid area(s) on this plan; {_line_was_drawn_without}",
@@ -705,16 +708,27 @@ def _continue_plan(pad: Any, plans: Path, report: Any) -> Any:
 _line_was_drawn_without = "the stored line was drawn without it; re-route to honour it"
 
 
-def _rounded_area(polygon: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+def _rounded_area(
+    polygon: dict[str, Any], area_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     """`core.routing.avoid.area_from_polygon`, on a worker thread.
 
     A thin wrapper so the handler can `run_sync` it: `area_from_polygon` reaches shapely and
     pyproj, and ADR 0016's rule for this module is that nothing which touches the
     geospatial stack runs on the event loop thread.
+
+    **`area_id` is a parameter and not a constant**, which is a correction rather than a
+    style. The first version passed `"avoid-drawn"` for every polygon, and an area's id is
+    not decoration: `graphhopper.route_body` uses it as the GeoJSON feature id and then
+    builds one `{"if": "in_<id>", "multiply_by": "0"}` rule per feature. Two drawn areas
+    would have produced two features with one id and two identical rules, so the second
+    area a runner drew would not have been honoured - the exact silent failure scope 6.4
+    rules out, arriving through the door built to prevent it. Numbered as
+    `longrun edit avoid` numbers them.
     """
     from longrun.core.routing.avoid import area_from_polygon
 
-    return area_from_polygon(polygon, area_id="avoid-drawn")
+    return area_from_polygon(polygon, area_id=area_id)
 
 
 def _with_request(plan: Any, **fields: Any) -> Any:

@@ -306,7 +306,7 @@ def test_a_submitted_polygon_is_rounded_before_it_reaches_a_routing_key(
             ]
         ],
     }
-    area, refusal = _rounded_area(raw)
+    area, refusal = _rounded_area(raw, "avoid-0")
 
     assert refusal is None and area is not None
     ring = area["geometry"]["coordinates"][0]
@@ -568,6 +568,22 @@ def test_a_drawn_polygon_is_rounded_server_side(client: Any, runner: Any, scored
     assert all(value == round(value, 6) for point in ring for value in point)
     messages = " ".join(event.message for event in runner.events(job_id))
     assert "drawn without it" in messages, "the frozen policy is admitted, not papered over"
+
+
+def test_two_drawn_areas_get_two_ids(client: Any, runner: Any, scored: Path) -> None:
+    """An area's id is not decoration. `graphhopper.route_body` uses it as the GeoJSON
+    feature id and builds one `{"if": "in_<id>", "multiply_by": "0"}` rule per feature, so
+    two areas sharing one id are two identical rules and one honoured polygon - the silent
+    failure scope 6.4 rules out, arriving through the door built to prevent it.
+
+    Found by drawing two of them against a running server, which is what the first version
+    of this endpoint did wrong: it passed a constant."""
+    _applied(runner, client.post("/api/plans/editable/avoid", json={"polygon": _ring(0.002)}))
+    _applied(runner, client.post("/api/plans/editable/avoid", json={"polygon": _ring(0.0015)}))
+
+    ids = [area["id"] for area in _stored(scored).request.avoid_polygons]
+    assert ids == ["avoid-0", "avoid-1"]
+    assert len(set(ids)) == len(ids)
 
 
 def test_an_over_cap_polygon_is_refused_by_name_with_its_size(client: Any, scored: Path) -> None:
