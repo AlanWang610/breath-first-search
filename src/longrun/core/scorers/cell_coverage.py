@@ -21,11 +21,14 @@ build-time layer, not a per-plan call. `.env.example` carries no FCC key and nee
 What blocks automation is the host rather than the licence: every non-browser request,
 `curl` included, comes back 403 from its CDN. So the download is a manual step into
 `data/` whatever credential you hold, in the shape the OSM extracts already use, and no
-loader here will ever fetch it unattended. `cell_coverage` reports `unavailable` until a
-region build loads one — the same answer scope 3.6 wants for any absent source, and why
-the scorer exists now: the plumbing, the layer name and the thresholds are settled and
-tested, and the day a region build loads `fcc_bdc.cell_coverage` it starts answering with
-no further code.
+loader here will ever fetch it unattended.
+
+**Since M13.4 the loader exists and the file does not.** `national.load_fcc_bdc` reads a
+hand-downloaded state file into `fcc_bdc.cell_coverage`, and a region spec names it under
+`cell_coverage:`. Nothing else has to change: this scorer answers the moment a build loads
+one. Until then it reports `unavailable` naming the errand — the answer scope 3.6 wants for
+an absent source, and the distinction worth keeping is that "nobody has run an errand" is
+not "nobody wrote the code" and neither is "there is no signal here".
 
 Soft flags in COMFORT (ADR 0011). A dead zone is a logistics fact, and one hill without
 signal must not outrank the heat findings for the whole route.

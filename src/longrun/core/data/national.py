@@ -154,7 +154,69 @@ NHD_CROSSABLE_FTYPES: frozenset[int] = frozenset({460, 558, 336, 334})
 #: the only one `hazards` has a question about.
 NHD_FLOWLINE_LAYER = "NHDFlowline"
 
-SOURCES: tuple[NationalSource, ...] = (TIGER, NHD)
+#: Where a person downloads the FCC file. Not a `url_template` anything here calls: it is a
+#: page with a form on it, and `download()` would get a 403 from its CDN.
+FCC_DOWNLOAD_PAGE = "https://broadbandmap.fcc.gov/data-download"
+
+#: FCC Broadband Data Collection, mobile broadband availability — **the one source in this
+#: module that nothing here fetches**, and the reason it is written anyway.
+#:
+#: Checked 2026-09-22 and again for M13.4: the page above publishes mobile coverage by state
+#: and by provider as Shapefile or GeoPackage, needs no account to read, and is US public
+#: domain. The account and API token at `bdc.fcc.gov` are for the *API*, which a build-time
+#: polygon layer has no use for. What blocks automation is the host, not the licence: every
+#: non-browser request, `curl` included, comes back 403 from its CDN. So the file arrives in
+#: `data/` by hand, exactly as the OSM extracts do, and a region spec names it.
+#:
+#: This is a loader for a file nobody here has held, and that is a real limitation stated
+#: plainly rather than hidden: `FCC_COLUMN_ALIASES` is read off the published field list, and
+#: `normalise_fcc_bdc` **raises** rather than writing a table of NULLs if none of the spellings
+#: is present. A wrong guess therefore fails on the first load, by name, with the columns the
+#: file actually had — which is the one behaviour that makes writing this in advance honest.
+FCC_BDC = NationalSource(
+    layer="cell_coverage",
+    schema="fcc_bdc",
+    table="cell_coverage",
+    key="coverage_id",
+    geometry="MultiPolygon",
+    columns={
+        "provider": "text",
+        "provider_id": "text",
+        "technology": "text",
+        "statefp": "text",
+    },
+    source="fcc_bdc",
+    licence="US public domain",
+    url_template=FCC_DOWNLOAD_PAGE,
+    vintage="fcc-bdc",
+)
+
+#: Our column -> the spellings a BDC mobile-availability file might use for it, best first.
+#:
+#: Aliases rather than one name because the download is published as both Shapefile and
+#: GeoPackage and a Shapefile truncates field names to ten characters (`provider_i`), so the
+#: same dataset has two spellings depending on which format somebody chose. `statefp` is not
+#: here: it comes from the region spec's key, the way `normalise_nhd` takes its `huc4`, because
+#: a per-state download does not have to carry the state it is.
+FCC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "provider": ("provider", "brand_name", "brandname", "provider_name", "holding_company"),
+    "provider_id": ("provider_id", "provider_i", "providerid", "frn"),
+    "technology": ("technology", "tech_code", "technology_code", "tech"),
+}
+
+SOURCES: tuple[NationalSource, ...] = (TIGER, NHD, FCC_BDC)
+
+
+class UnknownSourceColumns(ValueError):
+    """A downloaded file does not carry a column a normaliser needs, under any known name.
+
+    Raised rather than absorbed, and it is the whole reason a loader for an un-downloadable
+    file is worth writing. `_lowercased` materialises every declared column so a missing one
+    reads as NULL instead of raising — which is right for a field that is genuinely optional
+    and wrong for the two that identify a carrier. A `cell_coverage` table whose `provider`
+    is NULL on every row answers "is this point covered" correctly and reports the carrier
+    list as empty, and nothing anywhere says why.
+    """
 
 
 # --- fetching ---------------------------------------------------------------
@@ -472,6 +534,50 @@ def normalise_nhd(frame: GeoDataFrame, huc4: str) -> GeoDataFrame:
     return out
 
 
+def normalise_fcc_bdc(frame: GeoDataFrame, statefp: str) -> GeoDataFrame:
+    """One state's BDC mobile availability to ours, dissolved to one row per carrier service.
+
+    **Dissolved, and that is the decision in this function.** A BDC state file publishes many
+    polygons per provider, and the source gives no stable per-polygon id — so a key
+    synthesised from a row ordinal changes the moment the file is re-downloaded in a different
+    order, and `load_frame`'s upsert would then write a second copy of the state rather than
+    replacing the first. Unioning by `(provider_id, technology)` produces a key that is a
+    *fact about the filing* instead of an accident of row order, and it loses nothing
+    `cell_coverage` asks for: the scorer's two questions are "is this point inside anybody's
+    polygon" and "whose", and both survive the union.
+
+    It is not free. The dissolve is the expensive part of loading a large state, and it is
+    paid once per region build rather than per plan — the same trade `gtfs.py` makes when it
+    precomputes service summaries at build time.
+
+    Raises `UnknownSourceColumns` when a carrier-identifying column is missing under every
+    known spelling, rather than letting `_lowercased` turn it into a column of NULLs.
+    """
+    out = _lowercased(frame, FCC_BDC)
+    for column, aliases in FCC_COLUMN_ALIASES.items():
+        # `notna().any()` and not merely `in out.columns`: `_lowercased` has already
+        # materialised every declared column as all-None, so presence alone would let the
+        # empty one it just created win over the real one the file carries.
+        found = next((a for a in aliases if a in out.columns and out[a].notna().any()), None)
+        if found is None:
+            raise UnknownSourceColumns(
+                f"no column for {column!r} in this FCC file: tried {', '.join(aliases)}, and "
+                f"the file carries {', '.join(sorted(str(c) for c in frame.columns))}. "
+                "Add the real spelling to FCC_COLUMN_ALIASES - it was guessed from the "
+                "published field list, because the download 403s every non-browser request."
+            )
+        if found != column:
+            out[column] = out[found]
+        out[column] = out[column].astype(str)
+
+    out["statefp"] = statefp
+    dissolved = out.dissolve(by=["provider_id", "technology"], as_index=False)
+    dissolved["coverage_id"] = (
+        statefp + ":" + dissolved["provider_id"] + ":" + dissolved["technology"]
+    )
+    return dissolved
+
+
 # --- the two loads --------------------------------------------------------
 
 
@@ -534,9 +640,71 @@ def load_nhd(
     return counts
 
 
+def read_vector(path: Path, layer: str | None = None, **kwargs: Any) -> GeoDataFrame:
+    """A vector file already on disk, zipped or not.
+
+    The FCC publishes the same data as a zipped Shapefile and as a GeoPackage and does not
+    say which one somebody downloaded, so the loader takes either rather than making the
+    choice part of the errand.
+    """
+    import geopandas as gpd
+
+    if path.suffix.lower() == ".zip":
+        return read_zipped_vector(path, layer=layer, **kwargs)
+    return gpd.read_file(path, layer=layer, **kwargs)
+
+
+def load_fcc_bdc(
+    connection: Any,
+    region: str,
+    files: dict[str, Path],
+    *,
+    vintage: str | None = None,
+) -> dict[str, int]:
+    """Load hand-downloaded FCC mobile coverage into `fcc_bdc.cell_coverage`.
+
+    `files` maps a two-digit state FIPS code to a file on disk, the way `load_tiger` takes
+    states and `load_nhd` takes watersheds — except that nothing here downloads anything.
+    The file is an errand:
+
+        1. open https://broadbandmap.fcc.gov/data-download in a browser
+        2. Mobile Broadband -> the state -> Shapefile or GeoPackage
+        3. save it under `data/` and name it in the region spec's `cell_coverage`
+
+    No credential is needed for any of that. What makes it manual is that the CDN answers
+    403 to every non-browser request, `curl` included, so no code here will ever fetch it
+    unattended — which is a smaller and more useful claim than "behind an account", because
+    it says the blocker is an errand rather than a gate.
+
+    `vintage` is the "Data as of" date the download page prints beside the file. Passed in
+    rather than derived: a hand-downloaded file's own name and mtime record when *somebody
+    fetched it*, and scope 6.4 wants the date the carriers filed. Left unset it falls back
+    to the source's constant, which pins nothing and says nothing it does not know.
+    """
+    counts: dict[str, int] = {}
+    for statefp, path in files.items():
+        if not path.exists():
+            raise FileNotFoundError(
+                f"no FCC coverage file for state {statefp} at {path}. It is a manual "
+                f"download from {FCC_DOWNLOAD_PAGE} - see load_fcc_bdc."
+            )
+        counts[statefp] = load_frame(
+            connection,
+            normalise_fcc_bdc(read_vector(path), statefp),
+            FCC_BDC,
+            region=region,
+            vintage=vintage or FCC_BDC.vintage,
+            source_url=FCC_DOWNLOAD_PAGE,
+        )
+    return counts
+
+
 __all__ = [
     "BATCH_ROWS",
     "DEFAULT_DOWNLOAD_DIR",
+    "FCC_BDC",
+    "FCC_COLUMN_ALIASES",
+    "FCC_DOWNLOAD_PAGE",
     "NHD",
     "NHD_CROSSABLE_FTYPES",
     "NHD_FLOWLINE_LAYER",
@@ -545,13 +713,17 @@ __all__ = [
     "TIGER_LEVELS",
     "TIGER_YEAR",
     "NationalSource",
+    "UnknownSourceColumns",
     "create_statements",
     "download",
+    "load_fcc_bdc",
     "load_frame",
     "load_nhd",
     "load_tiger",
+    "normalise_fcc_bdc",
     "normalise_nhd",
     "normalise_tiger",
+    "read_vector",
     "read_zipped_vector",
     "vector_member",
 ]

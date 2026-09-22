@@ -5,12 +5,20 @@ every step is idempotent and every step is recorded: the loaders upsert on the s
 id, the downloads are content-addressed on disk, and a run that dies in step 2 picks up in
 step 2 rather than re-fetching a hundred megabytes of TIGER to get there.
 
-**A step that cannot run is recorded, never skipped silently.** Four of the seven sources
-scope 13 names have loaders today and three do not — PAD-US and HPMS have none written, and
-FCC BDC cannot be fetched unattended. A build that quietly produced a region missing three layers
-would be a build whose output nobody could reason about, so each is a `blocked` step with
-the reason, and step 5's coverage report is where they surface. That is scope 3.6 applied
-to a build instead of a plan.
+**A step that cannot run is recorded, never skipped silently.** Of the seven sources scope 13
+step 2 names, five load per region here — OSM, TIGER, NHD, PAD-US and GTFS. **HPMS** has no
+loader and will not get one: ADR 0012 records that no unauthenticated endpoint serves it.
+**Overture** has a loader and a corridor-shaped one, by ADR 0009, so a region build is the
+wrong unit for it. And `cell_coverage`, which §13 does not list but §7.7 needs, has had a
+loader since M13.4 and no file to feed it: the FCC download needs no credential and its CDN
+403s every non-browser request, so the file is an errand and a region spec names it.
+
+A build that quietly produced a region missing layers would be a build whose output nobody
+could reason about, so each absence is a named line with its own reason, and step 5's
+coverage report is where they surface. That is scope 3.6 applied to a build instead of a
+plan — and the reasons are kept distinct on purpose, because "nobody wrote a loader",
+"nothing serves the data" and "somebody has not run an errand" are three different states
+and only the third is one a reader can act on today.
 
 **Step 1 stops at the graph.** The clip and the LTS tag rewrite are Python
 (`deploy/graphhopper/scripts/`), and ADR 0001's import needs a JVM and a Maven module. The
@@ -42,6 +50,23 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
 WGS84 = 4326
+
+#: Why a region has no cell-coverage layer, in the one place a build says so.
+#:
+#: **M13.4 corrected this text and gave it a test.** It read "bulk download needs an
+#: account", which is false and was the last place in the tree still saying it after five
+#: others were fixed. The page needs no credential; its CDN answers 403 to every non-browser
+#: request. That makes the blocker an errand somebody can run rather than a gate they cannot
+#: pass, which is a smaller claim and a more useful one - and since M13.4 the code the errand
+#: feeds exists, so what is missing here is a file and nothing else.
+#:
+#: A constant rather than a literal because the wrong version of this sentence survived in
+#: one place precisely by being a literal in a list.
+FCC_ERRAND_REASON = (
+    "fcc_bdc (no file named in the spec's `cell_coverage`; the FCC download needs no "
+    "credential and its CDN 403s every non-browser request, so it is a manual step - "
+    "see core.data.national.load_fcc_bdc)"
+)
 
 #: Step names, in the order scope 13 lists them — with one inversion, recorded in ADR 0025.
 #:
@@ -82,6 +107,16 @@ class RegionSpec(BaseModel):
     huc4: list[str] = Field(default_factory=list)
     #: Feed id -> local GTFS zip. Same reasoning: discovery needs a registry with a key.
     gtfs: dict[str, Path] = Field(default_factory=dict)
+    #: Two-digit state FIPS -> hand-downloaded FCC mobile coverage file (M13.4). Declared for
+    #: a third reason, different from the two above: nothing can fetch it. The download page
+    #: needs no credential and its CDN 403s every non-browser request, so the file arrives by
+    #: hand and the spec is where a region records which hand-placed file it means. Empty is
+    #: the normal state, and `cell_coverage` reports that absence rather than a zero.
+    cell_coverage: dict[str, Path] = Field(default_factory=dict)
+    #: The "Data as of" date the FCC download page prints beside the file. Recorded here
+    #: because a manual download has nowhere else to put it: the file's own name and mtime
+    #: say when somebody fetched it, and scope 6.4 wants the date the carriers filed.
+    cell_coverage_vintage: str | None = None
     #: Endpoint pairs `verify_lts_routing.py` routes between, as `{name, from: [lat, lon],
     #: to: [lat, lon]}`. Committed with the region because the question "does the LTS term
     #: move a route *here*" is about the city, not about the script: the four pairs that script
@@ -104,6 +139,9 @@ class RegionSpec(BaseModel):
             if raw.get(key):
                 raw[key] = _resolve(root, raw[key])
         raw["gtfs"] = {k: _resolve(root, v) for k, v in (raw.get("gtfs") or {}).items()}
+        raw["cell_coverage"] = {
+            str(k): _resolve(root, v) for k, v in (raw.get("cell_coverage") or {}).items()
+        }
         return cls.model_validate(raw)
 
     def shape(self) -> Any:
@@ -297,6 +335,20 @@ def step_layers(ctx: BuildContext) -> StepRecord:
         BBox(min_lon=west, min_lat=south, max_lon=east, max_lat=north),
     )
 
+    if ctx.spec.cell_coverage:
+        from longrun.core.data.national import load_fcc_bdc
+
+        counts["fcc_cell_coverage"] = sum(
+            load_fcc_bdc(
+                ctx.connection,
+                ctx.spec.name,
+                ctx.spec.cell_coverage,
+                vintage=ctx.spec.cell_coverage_vintage,
+            ).values()
+        )
+    else:
+        blocked.append(FCC_ERRAND_REASON)
+
     # Named individually rather than as "some layers missing": a region missing HPMS and a
     # region missing cell coverage support different plans, and the coverage report has to
     # say which. `overture` is the odd one - it has a loader, but a corridor one (ADR 0009).
@@ -305,7 +357,6 @@ def step_layers(ctx: BuildContext) -> StepRecord:
             # ADR 0012: no unauthenticated endpoint serves it, so the level every plan
             # reports is tag-only and says so.
             "hpms (no reachable source - ADR 0012)",
-            "fcc_bdc (bulk download needs an account)",
             "overture (loads per corridor, not per region - ADR 0009)",
         ]
     )
@@ -630,6 +681,7 @@ def build_region(
 
 
 __all__ = [
+    "FCC_ERRAND_REASON",
     "STATUSES",
     "STEPS",
     "STEP_FUNCTIONS",
