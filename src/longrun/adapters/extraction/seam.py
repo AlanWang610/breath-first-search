@@ -17,6 +17,13 @@ so a tier-4 record **provably cannot** produce a hard flag under M4.5's `MIN_HAR
 rule. That is the part worth having early: a verification gate that could be tripped by a
 model reading a PDF is worse than no gate, and the model that would do it does not exist
 yet in either sense.
+
+**The search is still not built, and ADR 0035 is why rather than a backlog entry.** Its
+argument is the one M13.5 turned up: until then the registry discarded every record this
+path produced while still counting it, so a search would have fed a consumer that threw
+away what it found. Those bugs are fixed; the crawler is deferred, and the cheaper thing to
+try first is named in the ADR - a region spec that carries the page URLs a region author
+already knows, which needs no discovery step at all.
 """
 
 from __future__ import annotations
