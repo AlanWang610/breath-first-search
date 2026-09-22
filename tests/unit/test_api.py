@@ -261,7 +261,90 @@ def test_a_submission_takes_the_same_fields_the_cli_does(client: Any) -> None:
         "target_km",
         "rounds",
         "avoid_high_stress",
+        # M12.3. Both reached `PlanRequest` for the first time from here, and
+        # `longrun plan` grew `--avoid-name` and `--avoid-polygon` in the same commit -
+        # which is the direction this assertion does *not* check, and why the CLI half
+        # has its own test in `test_cli.py`.
+        "avoid_names",
+        "avoid_polygons",
     }
+
+
+def test_a_submission_can_say_what_to_stay_off(client: Any, runner: Any) -> None:
+    """Scope 6.4's two must-avoid forms. Until M12.3 the UI could not express either, so
+    "avoid El Camino" was a thing a runner could say to the agent and not to the map."""
+    response = client.post(
+        "/api/plans",
+        json={
+            "start": "37.7955,-122.3937",
+            "end": "37.7715,-122.4686",
+            "date": "2026-09-15",
+            "avoid_names": ["El Camino Real"],
+            "rounds": 0,
+        },
+    )
+
+    assert response.status_code == 202
+
+
+def test_a_submitted_polygon_is_rounded_before_it_reaches_a_routing_key(
+    plans: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The submission path needs the same treatment the edit path gets, and for the same
+    reason: an avoid area travels inside `custom_model`, `CachedRouter` hashes that into
+    its key, and sixteen digits of browser float is the worst case for it (M5.13)."""
+    from longrun.api.app import PlanSubmission, _rounded_area
+
+    raw = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [-122.4194123456789, 37.774912345678],
+                [-122.4184123456789, 37.774912345678],
+                [-122.4184123456789, 37.775912345678],
+                [-122.4194123456789, 37.774912345678],
+            ]
+        ],
+    }
+    area, refusal = _rounded_area(raw)
+
+    assert refusal is None and area is not None
+    ring = area["geometry"]["coordinates"][0]
+    assert all(value == round(value, 6) for point in ring for value in point)
+    assert "avoid_polygons" in PlanSubmission.model_fields
+
+
+def test_an_over_cap_polygon_on_a_submission_is_refused_with_its_size(client: Any) -> None:
+    """Refused before the job starts, and by index, because a submission may carry several
+    and "one of them is too big" is not something a runner can act on."""
+    half = 0.03
+    lat, lon = 37.7749, -122.4194
+    response = client.post(
+        "/api/plans",
+        json={
+            "start": "37.7955,-122.3937",
+            "end": "37.7715,-122.4686",
+            "date": "2026-09-15",
+            "avoid_polygons": [
+                {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [lon - half, lat - half],
+                            [lon + half, lat - half],
+                            [lon + half, lat + half],
+                            [lon - half, lat + half],
+                            [lon - half, lat - half],
+                        ]
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "km2" in response.json()["detail"]
+    assert "avoid polygon 0" in response.json()["detail"]
 
 
 # --- the five gestures (scope 10.3, M12.2) -----------------------------------

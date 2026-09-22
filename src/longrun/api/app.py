@@ -66,6 +66,17 @@ class PlanSubmission(BaseModel):
     target_km: float | None = None
     rounds: int = 5
     avoid_high_stress: bool = False
+    #: Scope 6.4's two must-avoid forms, reaching `PlanRequest` for the first time from
+    #: here. They arrived together in M12.3 and `longrun plan` grew `--avoid-name` and
+    #: `--avoid-polygon` in the same commit, which is what the docstring above requires of
+    #: any field added to this model.
+    #:
+    #: A name is resolved by `polygons_for_names` inside the loop, where a geocoder lookup
+    #: is charged to the plan's budget and a name it cannot find becomes a *note* rather
+    #: than an exception. A polygon is rounded and size-checked before the job starts,
+    #: because the refusal has to reach the runner who drew it.
+    avoid_names: list[str] = Field(default_factory=list)
+    avoid_polygons: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ResumeAnswer(BaseModel):
@@ -275,10 +286,26 @@ def create_app(
 
         202 rather than 200: nothing has been planned yet, and a UI that rendered a route
         from this response would be rendering one that does not exist.
+
+        Drawn polygons are rounded and size-checked before the job starts, for the same
+        reason the `avoid` endpoint does it: a refusal has to reach the runner who drew the
+        thing, and a browser cannot round without becoming a second implementation of
+        `AREA_PRECISION`.
         """
+        import anyio
+
+        areas: list[dict[str, Any]] = []
+        for index, drawn in enumerate(submission.avoid_polygons):
+            area, refusal = await anyio.to_thread.run_sync(_rounded_area, drawn)
+            if area is None:
+                raise HTTPException(
+                    status_code=422, detail=f"avoid polygon {index}: {refusal or 'not an area'}"
+                )
+            areas.append(area)
+        rounded = submission.model_copy(update={"avoid_polygons": areas})
 
         def work(report: Any) -> Any:
-            return _run_plan(submission, plans, report)
+            return _run_plan(rounded, plans, report)
 
         job_id = jobs.submit(work)
         return JobView(job_id=job_id, status=jobs.status(job_id))
@@ -556,6 +583,12 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
         start_time=submission.start_time,
         target_distance_km=submission.target_km,
         utc_offset_hours=submission.utc_offset_hours,
+        # Already rounded by the handler. `_policy` is what turns both of these into the
+        # frozen `RoutingPolicy` the whole plan is then drawn under - which is the reason
+        # they belong on the *submission* and not on an edit: an avoid the plan began with
+        # shapes every line it draws, and one added afterwards shapes none of them.
+        avoid_names=list(submission.avoid_names),
+        avoid_polygons=list(submission.avoid_polygons),
     )
 
     snapshot = SnapshotPins()
