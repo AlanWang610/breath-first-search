@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -12,4 +13,10 @@ export default defineConfig({
     },
   },
   build: { outDir: "dist" },
+  // M12.8. `node`, not `jsdom`: everything under test is a function of a plan and returns a
+  // value, and a DOM would invite tests of components that a headless run cannot honestly
+  // check anyway. A MapLibre drag has no coverage here and the PR says so rather than
+  // implying otherwise — mounting a component to assert it rendered would have looked like
+  // it did.
+  test: { environment: "node", include: ["src/**/*.test.ts"] },
 });
