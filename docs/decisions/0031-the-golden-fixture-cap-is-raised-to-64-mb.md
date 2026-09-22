@@ -60,3 +60,43 @@ checked and is wrong (the golden suite went 209.11s → 212.92s when that route 
 four seconds). Until somebody runs `pytest --durations`, both this number and the 30-minute
 timeout are being set without evidence, and the next milestone to arrive here should get the
 evidence first.
+
+---
+
+## Amendment, 2026-09-22 — the measurement was taken, and it was not the fixtures
+
+The ADR asked for `pytest --durations` before anyone touched the timeout again. Run on
+2026-09-21, `pytest -m "not network and not slow" --durations=40`:
+
+| | |
+|---|---|
+| whole hermetic suite | **306 s**, 1643 passed |
+| golden tier | **272 s — 89% of it** |
+| every one of the top 26 durations | a golden route test |
+
+The cause is not bytes and not route count. Four tests each called `harness.run()` per
+route, so six routes cost **24 full CLI pipeline runs** where six would do; the other three
+assertions are read-only properties of the same frozen `GoldenRun`. (This ADR said 36 above,
+from six parametrized tests — two of the six never run a pipeline, so the true figure was
+24. The error did not change the conclusion, and it is corrected here rather than left.)
+
+A session-scoped fixture that runs each route once:
+
+| | before | after |
+|---|---|---|
+| golden tier | 272 s | **64 s** |
+| whole suite | 306 s | **85 s** |
+| outcome | 1643 passed, 7 skipped | unchanged |
+
+**What this does to the decision.** The 64 MB cap stands — it was forward provision for
+M11–M13 and still is. What does not stand is the reasoning: the byte cap was raised in the
+belief that wall clock was the binding constraint and the fixtures were what spent it. Wall
+clock *was* the binding constraint and the fixtures were not what spent it. The two
+consequences listed above — folding the GPX assertion into an existing test, and giving the
+cue sheet no golden — were both taken to avoid "another six pipeline runs". The first is now
+worth about a second and would not need avoiding. **The second stands entirely on its own
+merits**: its argument was never cost, it was that a digest pinning street names from a dated
+extract turns an OSM rename into a false regression. That argument is untouched.
+
+M6's rule — *"look at what got slow, not raise it again"* — was the right rule and it
+returned the right answer the first time it was actually applied.

@@ -7,7 +7,7 @@ step 2 rather than re-fetching a hundred megabytes of TIGER to get there.
 
 **A step that cannot run is recorded, never skipped silently.** Four of the seven sources
 scope 13 names have loaders today and three do not — PAD-US and HPMS have none written, and
-FCC BDC is behind an account. A build that quietly produced a region missing three layers
+FCC BDC cannot be fetched unattended. A build that quietly produced a region missing three layers
 would be a build whose output nobody could reason about, so each is a `blocked` step with
 the reason, and step 5's coverage report is where they surface. That is scope 3.6 applied
 to a build instead of a plan.
