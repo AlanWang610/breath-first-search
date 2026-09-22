@@ -365,11 +365,16 @@ def _run_cell(layers: Any, points: int = 41) -> Any:
 
 def test_cell_coverage_names_the_blocker_rather_than_the_absence() -> None:
     """A source nobody can load and a source nobody has loaded read the same on a sheet
-    unless the reason says which. The FCC bulk download is behind an account."""
+    unless the reason says which.
+
+    The blocker is not a credential: the FCC publishes this openly and serves 403 to every
+    non-browser client, so it is a manual download nobody has made. Corrected 2026-09-22,
+    and this assertion is what had pinned the wrong claim in place."""
     result = _run_cell(_Layers())
     entry = result.coverage[0]
     assert not entry.checked
-    assert "account" in (entry.reason or "")
+    assert "FCC" in (entry.reason or "")
+    assert "no region build has loaded one" in (entry.reason or "")
 
 
 def test_a_route_inside_coverage_reports_no_gap() -> None:

@@ -504,7 +504,7 @@
       "checked": false,
       "jurisdiction": null,
       "kind": "cell_coverage",
-      "reason": "no cell coverage layer: the FCC bulk download needs an account, so no region build has loaded one",
+      "reason": "no cell coverage layer: the FCC mobile coverage download is a manual step and no region build has loaded one",
       "source": "cell_coverage",
       "tier": null,
       "vintage": null

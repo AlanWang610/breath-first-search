@@ -12,12 +12,20 @@ manifest says whose claim it is. A *gap* is the finding worth trusting: a carrie
 incentive to under-report.
 
 **The layer is not loaded, and this scorer says so rather than pretending otherwise.**
-`broadbandmap.fcc.gov`'s bulk endpoints are behind an account, and there is no key in
-`.env.example` because nobody has one — so `cell_coverage` reports `unavailable` on every
-route today, with the reason naming the blocker. That is the same answer scope 3.6 wants
-for any absent source, and it is why the scorer exists now: the plumbing, the layer name
-and the thresholds are settled and tested, and the day a region build loads
-`fcc.cell_coverage` it starts answering with no further code.
+Not for want of a credential, which is what this said until 2026-09-22.
+`broadbandmap.fcc.gov/data-download` publishes mobile broadband coverage by state and by
+provider as Shapefile or GeoPackage; the account and API token generated at `bdc.fcc.gov`
+are for the *API*, which this project has no use for — a coverage polygon set is a
+build-time layer, not a per-plan call. `.env.example` carries no FCC key and needs none.
+
+What blocks automation is the host rather than the licence: every non-browser request,
+`curl` included, comes back 403 from its CDN. So the download is a manual step into
+`data/` whatever credential you hold, in the shape the OSM extracts already use, and no
+loader here will ever fetch it unattended. `cell_coverage` reports `unavailable` until a
+region build loads one — the same answer scope 3.6 wants for any absent source, and why
+the scorer exists now: the plumbing, the layer name and the thresholds are settled and
+tested, and the day a region build loads `fcc_bdc.cell_coverage` it starts answering with
+no further code.
 
 Soft flags in COMFORT (ADR 0011). A dead zone is a logistics fact, and one hill without
 signal must not outrank the heat findings for the whole route.
@@ -79,8 +87,8 @@ def cell_coverage(
     except (LayerNotFound, FileNotFoundError):
         return unavailable(
             name,
-            "no cell coverage layer: the FCC bulk download needs an account, so no region "
-            "build has loaded one",
+            "no cell coverage layer: the FCC mobile coverage download is a manual step "
+            "and no region build has loaded one",
         )
 
     from shapely.geometry import Point
