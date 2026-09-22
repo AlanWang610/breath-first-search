@@ -496,15 +496,57 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+#: Characters a plan id may not contain. `\\` and `/` are separators; `:` is the one
+#: that took M12 to find, because on Windows a drive-relative name like `C:plan` has
+#: neither; `\x00` is what a path API refuses with an exception rather than a `None`.
+_RESERVED = ("/", "\\", ":", "\x00")
+
+
+def _plan_id_dir(plans: Path, plan_id: str) -> Path | None:
+    """`plans / plan_id`, or `None` if `plan_id` is not a plain name that stays inside it.
+
+    **This is the whole of the write surface's addressing**, and it is a resolver rather
+    than a parameter for one reason: the `tools/` layer is file-path-parameterised
+    throughout - `lock_segment`, `gpx_verify` and the rest all take a path - and a POST
+    that took a scratchpad or a GPX path would hand that convention write semantics over
+    an HTTP boundary. A read of the wrong file is a disclosure; a write to one is a
+    deletion. So every write endpoint below takes an id, and every id comes through here
+    (ADR 0034).
+
+    Two checks, because neither is sufficient on its own.
+
+    The character check refuses what a URL can carry - `..`, a separator, a leading dot.
+    The containment check is what catches the case the character check alone missed for
+    M7-M11: on Windows `Path("plans") / "C:plan"` is `WindowsPath("C:plan")`, a
+    *drive-relative* path with no separator and no leading dot that leaves the plans
+    directory entirely. `":"` is now refused outright and the resolved path is checked
+    against the resolved root as well, because the next escape will be one nobody has
+    thought of either.
+    """
+    if not plan_id or plan_id.startswith(".") or any(ch in plan_id for ch in _RESERVED):
+        return None
+    candidate = plans / plan_id
+    try:
+        root = plans.resolve()
+        inside = candidate.resolve()
+    except (OSError, ValueError):  # pragma: no cover - a name the OS refuses to resolve
+        return None
+    if root not in inside.parents:
+        return None
+    return candidate
+
+
 def _plan_path(plans: Path, plan_id: str) -> Path | None:
     """Locate a stored plan, refusing anything that is not a plain name.
 
     `plan_id` arrives from a URL. Without this check `../../etc/passwd` reads a file, which
-    is the one way a read-only local API can still be dangerous.
+    is the one way a read-only local API can still be dangerous - and since M12 it is no
+    longer read-only, so see `_plan_id_dir` for what the check now is.
     """
-    if not plan_id or "/" in plan_id or "\\" in plan_id or plan_id.startswith("."):
+    directory = _plan_id_dir(plans, plan_id)
+    if directory is None:
         return None
-    for candidate in (plans / plan_id / "plan.json", plans / f"{plan_id}.json"):
+    for candidate in (directory / "plan.json", plans / f"{plan_id}.json"):
         if candidate.is_file():
             return candidate
     return None

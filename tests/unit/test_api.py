@@ -141,11 +141,35 @@ def test_a_missing_plan_is_a_404_and_not_a_crash(client: Any) -> None:
     assert client.get("/api/plans/nope").status_code == 404
 
 
-@pytest.mark.parametrize("attempt", ["../secrets", "..%2Fsecrets", "a/b", ".hidden"])
+@pytest.mark.parametrize(
+    "attempt", ["../secrets", "..%2Fsecrets", "a/b", ".hidden", "C:plan", "C:/Windows/win.ini"]
+)
 def test_a_plan_id_that_is_not_a_plain_name_is_refused(client: Any, attempt: str) -> None:
-    """`plan_id` arrives from a URL, and this is the one way a read-only local API can still
-    be dangerous."""
+    """`plan_id` arrives from a URL, and this is the one way a local API is dangerous.
+
+    `C:plan` is the one the original character check let through, and it is why there is a
+    containment check as well: `Path("plans") / "C:plan"` is `WindowsPath("C:plan")` on
+    Windows - drive-relative, no separator, no leading dot, and outside the plans
+    directory. It read a file before M12 and would have written one after it.
+    """
     assert client.get(f"/api/plans/{attempt}").status_code in (404, 422)
+
+
+@pytest.mark.parametrize("attempt", ["", ".", "..", "C:plan", "a/b", "a\\b", "sub/../x"])
+def test_the_resolver_refuses_every_id_that_leaves_the_plans_directory(
+    plans: Path, attempt: str
+) -> None:
+    """The resolver itself, because it is now the *write* surface's whole addressing and a
+    404 from one endpoint does not prove the next one is guarded (ADR 0034)."""
+    from longrun.api.app import _plan_id_dir
+
+    assert _plan_id_dir(plans, attempt) is None
+
+
+def test_the_resolver_accepts_a_plain_name(plans: Path) -> None:
+    from longrun.api.app import _plan_id_dir
+
+    assert _plan_id_dir(plans, "p1") == plans / "p1"
 
 
 # --- a pause is a status, not an error ---------------------------------------
