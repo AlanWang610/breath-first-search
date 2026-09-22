@@ -149,3 +149,66 @@ def test_an_unlocked_range_stops_excluding_its_segments() -> None:
 
     pad.unlock(0.0, route.length_m)
     assert pad.locked_ids() == frozenset()
+
+
+# --- M11.4: a stored request gets an owner ------------------------------------
+
+
+def test_a_via_point_lands_on_the_request_the_loop_actually_reads() -> None:
+    """`agent.loop` builds `[request.start, *request.via, request.end]`, so a via anywhere
+    else is a via the next round will not route through. That is why the owner is the
+    scratchpad's request and not a caller's copy of it."""
+    pad = _pad()
+    pad.route = _straight_route()
+    pad.add_via(LatLon(lat=37.77, lon=-122.4155))
+
+    assert [(p.lat, p.lon) for p in pad.request.via] == [(37.77, -122.4155)]
+
+
+def test_a_via_is_inserted_where_it_falls_along_the_line_not_appended() -> None:
+    """`via` is ordered and the router draws through it in order, so appending a point that
+    belongs at 300 m to a list whose last entry is at 900 m asks for an out-and-back."""
+    pad = _pad()
+    route = _straight_route()
+    pad.route = route
+    far = LatLon(lat=37.77, lon=route.points[9].lon)
+    near = LatLon(lat=37.77, lon=route.points[3].lon)
+
+    pad.add_via(far)
+    index = pad.add_via(near)
+
+    assert index == 0
+    assert [p.lon for p in pad.request.via] == [near.lon, far.lon]
+
+
+def test_a_via_added_before_there_is_a_line_is_appended_in_the_order_given() -> None:
+    """Generate mode: the runner is still naming points, and the order they name them in is
+    the order they meant. There is nothing to project onto and nothing to guess."""
+    pad = _pad()
+    pad.add_via(LatLon(lat=37.79, lon=-122.40))
+    pad.add_via(LatLon(lat=37.78, lon=-122.41))
+
+    assert [p.lat for p in pad.request.via] == [37.79, 37.78]
+
+
+def test_adding_a_via_does_not_quietly_throw_away_the_line() -> None:
+    """A line that no longer passes through every via is exactly what `gpx_verify` is for.
+    Blanking the route here would destroy the geometry the edit is meant to refine, before
+    anything has been drawn to replace it."""
+    pad = _pad()
+    route = _straight_route()
+    pad.route = route
+    pad.add_via(LatLon(lat=37.78, lon=-122.415))
+
+    assert pad.route is route
+
+
+def test_a_via_can_be_placed_at_a_distance_the_caller_names() -> None:
+    """The map gesture gives a position; a CLI gives a kilometre mark. Both are answers."""
+    pad = _pad()
+    route = _straight_route()
+    pad.route = route
+    pad.add_via(LatLon(lat=37.77, lon=route.points[9].lon))
+    index = pad.add_via(LatLon(lat=37.80, lon=-122.30), at_m=50.0)
+
+    assert index == 0, "placed by the distance given, not by where the point itself is"
