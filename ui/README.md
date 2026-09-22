@@ -67,3 +67,12 @@ point, drawing an avoid polygon, selecting a range to lock. Scope 10.3 lists the
 `tools/` layer already has `lock_segment` and the avoid-polygon plumbing behind it; what is
 missing is the endpoints and the map interactions, not the capability. Same for the chat
 pane, which wants the MCP session and the browser talking to one agent.
+
+**That sentence was optimistic when it was written, and M11 is what made it true.** It held
+for lock and mostly for avoid polygons; the rest had no capability behind them. Unlocking a
+range did not exist, a via point had no owner that could edit a stored request, and — the
+one that mattered — *"each action re-runs only the affected scorers"* could not be done
+honestly at all, because `segment_id` is positional and every carried measurement downstream
+of an edit silently re-pointed at different ground (ADR 0032). All five gestures now run
+from `longrun edit`, which is scope 3.9's rule and also how any of this is testable: nothing
+in a headless suite can drag on a MapLibre canvas.

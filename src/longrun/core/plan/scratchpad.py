@@ -82,119 +82,51 @@ class Scratchpad(BaseModel):
         `source` defaults to the runner for the reason `LockedRange.source` gives, so the
         one site that is the loop's own has to say so.
 
-        **Appends, and deliberately does not merge.** Two overlapping locks and their union
-        exclude exactly the same segments - `locked_segment_ids` is a union over ranges - so
-        merging changes nothing the loop can see, and it *does* change something a reader
-        can: the golden expectation records `loop.locked` verbatim, entry by entry, which is
-        how it notices a lock that stopped being applied. Collapsing the list would move
-        that without changing a measurement. `unlock` is where ranges are taken apart, and
-        it handles overlaps because it has to.
+        The rule itself lives in `core.plan.edits.lock_range`, because a lock has two homes
+        - this list and `PlanRequest.locked` - and `agent.loop._with_locks` exists because
+        they drift. A second implementation would drift the same way somewhere nobody is
+        watching.
         """
-        self.locked.append(LockedRange(start_m=start_m, end_m=end_m, reason=reason, source=source))
+        from longrun.core.plan.edits import lock_range
+
+        self.locked = lock_range(self.locked, start_m, end_m, reason, source=source)
 
     def unlock(
         self, start_m: float, end_m: float, *, source: LockSource | None = None
     ) -> list[LockedRange]:
-        """Release a stretch of the line, and say what was holding it.
+        """Release a stretch of the line, and say what was holding it (scope 10.3).
 
-        Scope 10.3's "select a range -> lock/unlock" is one gesture with two halves and
-        only one of them existed: `lock` appended, and nothing in the tree ever removed a
-        `LockedRange` or narrowed one.
-
-        **A partial overlap is trimmed, not dropped.** A runner who unlocks 2-3 km of a
-        lock that spans 0-10 km has said nothing about the other nine, and removing the
-        whole entry would silently reopen them to the next round's reroute - which is the
-        failure scope 8.4's auto-lock exists to prevent, arriving through the undo button.
-        Each surviving piece keeps the original `reason` and `source`, because they are
-        still that lock: a trimmed range the loop wrote is still the loop's.
-
-        `source` selects which author's locks may be taken apart - this is what M11.1's
-        field is for. `None` means any, which is the honest default for a caller that said
-        only "free this range"; the UI's "unlock what I locked" passes `"user"` and leaves
-        the loop's own reroute locks standing.
-
-        Returns the locks it removed or narrowed, **as they were before**, so a caller with
-        a terminal can report what it released rather than reporting a count of nothing.
+        See `core.plan.edits.unlock_range` for the rules: a partial overlap is trimmed
+        rather than dropped, a trimmed lock keeps its author, and `source` is what lets
+        "unlock what I locked" leave the loop's own reroute locks standing.
         """
-        if end_m <= start_m:
-            raise ValueError("unlocked range must have positive length")
+        from longrun.core.plan.edits import unlock_range
 
-        kept: list[LockedRange] = []
-        freed: list[LockedRange] = []
-        for lock in self.locked:
-            selected = source is None or lock.source == source
-            if not selected or lock.end_m <= start_m or lock.start_m >= end_m:
-                kept.append(lock)
-                continue
-            freed.append(lock)
-            # Up to two survivors: the head before the released range and the tail after
-            # it. Both, for a lock the range falls strictly inside.
-            if lock.start_m < start_m:
-                kept.append(lock.model_copy(update={"end_m": start_m}))
-            if lock.end_m > end_m:
-                kept.append(lock.model_copy(update={"start_m": end_m}))
-        self.locked = kept
+        self.locked, freed = unlock_range(self.locked, start_m, end_m, source=source)
         return freed
 
     def add_via(self, point: LatLon, *, at_m: float | None = None) -> int:
         """Scope 7.8's `pin_waypoint`: add a via point to the request (scope 10.3's drag).
 
-        **The scratchpad is where a stored request is edited, and this is the owner
-        `tools/editing.py` said did not exist yet.** Its refusal read "a via point is a
-        property of the request, and editing a stored request in place has no owner yet -
-        the loop takes its waypoints from `PlanRequest`", and that second half is what
-        fixes the location: `agent.loop` builds its router input as
+        **This is the owner `tools/editing.py` said did not exist yet.** Its refusal read
+        "a via point is a property of the request, and editing a stored request in place has
+        no owner yet - the loop takes its waypoints from `PlanRequest`", and that second
+        half fixes the location: `agent.loop` builds its router input as
         `[request.start, *request.via, request.end]`, so a via that is not on
-        `PlanRequest.via` is a via the next round will not route through. Nowhere else
-        will do. A `Plan` is what a pass produced and is not resumed from; a caller's own
-        copy of the request is one the loop never sees.
+        `PlanRequest.via` is a via the next round will not route through.
 
-        **Inserted in route order, not appended.** `via` is an ordered list between start
-        and end, and the router draws through it in that order - so appending a point that
-        belongs at 3 km to a list whose last entry is at 30 km asks for a route that runs
-        out and back. The position is taken from where the point falls along the *current*
-        line, which is what a map drag means.
+        The route is deliberately **not** cleared. A line that no longer passes through
+        every via is exactly what `gpx_verify` is for, and blanking it here would destroy
+        the geometry an edit is meant to refine before anything has been drawn to replace
+        it.
 
-        With no route yet there is nothing to order against, so it appends: that is the
-        generate-mode case where the runner is still naming points, and the order they
-        name them in is the order they meant.
-
-        Returns the index it went in at. The route is deliberately **not** cleared: a line
-        that no longer passes through every via is exactly what `gpx_verify` is for, and
-        blanking it here would destroy the geometry an edit is meant to refine before
-        anything has been drawn to replace it.
+        Returns the index it went in at; the ordering rule is `edits.insert_via`'s.
         """
-        where = self._along(point) if at_m is None else at_m
-        via = list(self.request.via)
-        if self.route is None or where is None:
-            via.append(point)
-            index = len(via) - 1
-        else:
-            existing = [self._along(each) or 0.0 for each in via]
-            index = sum(1 for distance in existing if distance <= where)
-            via.insert(index, point)
+        from longrun.core.plan.edits import insert_via
+
+        via, index = insert_via(self.request.via, point, self.route, at_m)
         self.request = self.request.model_copy(update={"via": via})
         return index
-
-    def _along(self, point: LatLon) -> float | None:
-        """Where a point sits along the current line, to the nearest sampled point.
-
-        The same rule `start_time_optimizer._eta_at` uses, and for the same reason: the
-        question is which kilometre mark a place is at, and the spacing between route
-        points is far finer than the answer needs to be. `None` when there is no line to
-        ask about, which is not zero - zero is the start.
-        """
-        if self.route is None:
-            return None
-        from longrun.core.geo.gpx import haversine_m
-
-        best: float | None = None
-        at = 0.0
-        for candidate in self.route.points:
-            gap = haversine_m(point.lat, point.lon, candidate.lat, candidate.lon)
-            if best is None or gap < best:
-                best, at = gap, candidate.cum_dist_m
-        return at
 
     def locked_ids(self) -> frozenset[str]:
         from longrun.core.geo.segments import locked_segment_ids
