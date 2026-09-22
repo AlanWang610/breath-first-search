@@ -39,7 +39,7 @@ from longrun.core.geo.gpx import gpx_write
 from longrun.core.models.context import Budget
 from longrun.core.models.geometry import LatLon
 from longrun.core.models.plan import SnapshotPins
-from longrun.core.models.request import PlanRequest
+from longrun.core.models.request import PlanRequest, TimeWindow
 from longrun.core.preferences.store import load_profile
 from longrun.core.routing.base import NoRouteError, RouterUnavailable
 from longrun.core.routing.cached import CachedRouter
@@ -65,6 +65,11 @@ def plan(
     via: list[str] = typer.Option([], "--via", help="Intermediate point, repeatable."),
     date: datetime | None = typer.Option(None, "--date", formats=["%Y-%m-%d"], help="Run date."),
     start: str = typer.Option("07:00", "--start", help="Start time, HH:MM."),
+    start_window: str | None = typer.Option(
+        None,
+        "--start-window",
+        help="Acceptable start times as HH:MM-HH:MM, swept by start_time_optimizer.",
+    ),
     target_km: float | None = typer.Option(None, "--target-km", help="Target distance."),
     avoid_high_stress: bool = typer.Option(
         False, "--avoid-high-stress", help="Down-weight LTS 3 and 4 ways in the router."
@@ -107,6 +112,7 @@ def plan(
         start = asked.get("start", start) if start == "07:00" else start
         target_km = target_km if target_km is not None else asked.get("target_km")
         utc_offset = utc_offset if utc_offset is not None else asked.get("utc_offset_hours")
+        start_window = start_window or asked.get("start_window")
 
     if not start_point:
         typer.echo("error: give --from, or a request file with a `from` key", err=True)
@@ -127,12 +133,24 @@ def plan(
         typer.echo("error: give --to, or --via points to loop through", err=True)
         raise typer.Exit(code=2)
 
+    window = _window(start_window)
     try:
         hour, _, minute = start.partition(":")
         start_at = datetime.combine(date.date(), time_type(int(hour), int(minute or 0)))
     except ValueError as exc:
         typer.echo(f"error: could not read --start {start!r}; expected HH:MM", err=True)
         raise typer.Exit(code=2) from exc
+    if window is not None:
+        # `PlanRequest` refuses a start time and a window together (scope 6.1 offers one or
+        # the other), so the window's own earliest stands in as the hour this plan is paced
+        # and scored at. Earliest rather than the midpoint, and said out loud rather than
+        # picked quietly: it is a time the runner named, and the sweep is what reports what
+        # the later ones look like.
+        start_at = datetime.combine(date.date(), window.earliest)
+        typer.echo(
+            f"start window {window.earliest:%H:%M}-{window.latest:%H:%M}; "
+            f"scoring at {window.earliest:%H:%M} and sweeping the rest"
+        )
 
     # Either door turns no-miss mode on, as `repair` has always done and this had not:
     # golden and contract runs export the variable rather than passing the flag.
@@ -201,7 +219,10 @@ def plan(
             end=waypoints[-1],
             via=list(waypoints[1:-1]),
             loop=waypoints[0] == waypoints[-1],
-            start_time=start_at.time(),
+            # One or the other, never both - and the window is the stronger statement:
+            # a runner who gave one said they have not fixed an hour yet.
+            start_time=None if window is not None else start_at.time(),
+            start_window=window,
             target_distance_km=target_km,
             utc_offset_hours=utc_offset,
         )
@@ -312,6 +333,7 @@ def _iterate(
         utc_offset=shared["utc_offset"],
         cache=shared["cache"],
         budget=shared["budget"],
+        start_window=request.start_window,
     ) as ctx:
         outcome = plan_route(
             request,
@@ -367,6 +389,26 @@ def _iterate(
         typer.echo(f"wrote {out / 'sheet.md'}, {out / 'plan.json'} and {out / 'course.gpx'}")
     else:
         typer.echo(sheet)
+
+
+def _window(text: str | None) -> TimeWindow | None:
+    """`HH:MM-HH:MM` as scope 6.1's start window, or None when nobody gave one.
+
+    None rather than a whole-day default: "I have not fixed an hour" and "any hour" are
+    different requests, and a scorer that could not tell them apart would sweep forty-eight
+    candidates for a runner who simply named a time.
+    """
+    if not text:
+        return None
+    earliest, _, latest = str(text).partition("-")
+    try:
+        return TimeWindow(
+            earliest=time_type.fromisoformat(earliest.strip()),
+            latest=time_type.fromisoformat(latest.strip()),
+        )
+    except ValueError as exc:
+        typer.echo(f"error: could not read --start-window {text!r}; expected HH:MM-HH:MM", err=True)
+        raise typer.Exit(code=2) from exc
 
 
 def _snapshot(path: Path | None) -> SnapshotPins:

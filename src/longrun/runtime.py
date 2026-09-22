@@ -28,6 +28,7 @@ from longrun.core.models.context import Budget, FrozenClock, ScorerContext
 from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.plan import SnapshotPins
 from longrun.core.models.profile import PreferenceProfile
+from longrun.core.models.request import TimeWindow
 
 #: Scope 6.4: "target end-to-end latency <= ~3 min". Enforced from M5.2 rather than only
 #: measured by two `slow` tests - scope 8.1 runs up to five rounds of rerouting and
@@ -47,6 +48,7 @@ def open_context(
     cache_path: Path | None = None,
     remote_rasters: bool = False,
     utc_offset: float | None = None,
+    start_window: TimeWindow | None = None,
     latency_budget_s: float | None = PLAN_LATENCY_BUDGET_S,
     cache: SqliteCache | None = None,
     budget: Budget | None = None,
@@ -97,6 +99,7 @@ def open_context(
             snapshot=snapshot.layer_vintages,
             features=AdapterRegistry(cache, budget, offline=offline),
             utc_offset_hours=utc_offset,
+            start_window=start_window,
         )
 
 

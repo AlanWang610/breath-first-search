@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from longrun.core.models.geometry import LatLon, Route, RoutePoint
-from longrun.core.models.request import LockedRange, PlanRequest
+from longrun.core.models.request import LockedRange, PlanRequest, TimeWindow
 from longrun.core.plan.scratchpad import Scratchpad
 
 
@@ -212,3 +212,53 @@ def test_a_via_can_be_placed_at_a_distance_the_caller_names() -> None:
     index = pad.add_via(LatLon(lat=37.80, lon=-122.30), at_m=50.0)
 
     assert index == 0, "placed by the distance given, not by where the point itself is"
+
+
+# --- M11.6: the start window reaches the sweep --------------------------------
+
+
+def test_a_start_window_is_read_off_the_command_line() -> None:
+    from datetime import time
+
+    from longrun.cli.plan import _window
+
+    assert _window("05:30-09:00") == TimeWindow(earliest=time(5, 30), latest=time(9))
+
+
+def test_no_start_window_is_not_an_all_day_one() -> None:
+    """ "I have not fixed an hour" and "any hour" are different requests, and a scorer that
+    could not tell them apart would sweep forty-eight candidates for a runner who simply
+    named a time."""
+    from longrun.cli.plan import _window
+
+    assert _window(None) is None
+    assert _window("") is None
+
+
+def test_an_unreadable_start_window_exits_rather_than_being_ignored() -> None:
+    """The failure of ignoring it is silent: the plan is scored at the default hour and the
+    sweep answers a question about a window nobody gave."""
+    import typer
+
+    from longrun.cli.plan import _window
+
+    with pytest.raises(typer.Exit):
+        _window("half past five until nine")
+    with pytest.raises(typer.Exit):
+        _window("09:00-05:00")
+
+
+def test_a_request_may_not_carry_a_start_time_and_a_window_at_once() -> None:
+    """Scope 6.1 offers one or the other. `PlanRequest` has refused both since M1, which is
+    why `longrun plan` drops the start time when a window is given rather than keeping the
+    default 07:00 and quietly contradicting it."""
+    from datetime import time
+
+    with pytest.raises(ValidationError, match="not both"):
+        PlanRequest(
+            date=date(2026, 3, 15),
+            start=LatLon(lat=37.77, lon=-122.42),
+            end=LatLon(lat=37.79, lon=-122.40),
+            start_time=time(7),
+            start_window=TimeWindow(earliest=time(5), latest=time(9)),
+        )
