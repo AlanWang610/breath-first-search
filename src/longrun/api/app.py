@@ -843,7 +843,19 @@ def _finish(outcome: Any, plans: Path, report: Any) -> Any:
     """
     pad = outcome.scratchpad
     if outcome.plan is not None:
-        directory = plans / pad.job_id if getattr(pad, "job_id", None) else plans / outcome.plan.id
+        # **Named by the plan, not by the job**, and that is a fix rather than a preference.
+        #
+        # `_job_view` reports `pad.plan_id` and the browser opens `/api/plans/{that}`. The
+        # directory used to be `pad.job_id`, which at this moment is neither the runner's
+        # job id nor the plan id: `jobs.submit` assigns the runner's id *after* `work`
+        # returns, so what was read here was the one `agent.loop._fresh` minted for the
+        # scratchpad. The finished plan therefore landed under a name nothing in the API
+        # ever reported, and the poll that completes a plan 404'd on the plan it had just
+        # written. It was reachable only by clicking it in the list.
+        #
+        # `Plan.id` is `pad.plan_id` (`loop._finish` passes it), so this is stable across a
+        # resume for the same reason the old name was meant to be.
+        directory = plans / outcome.plan.id
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "plan.json").write_text(
             outcome.plan.model_dump_json(indent=2), encoding="utf-8"

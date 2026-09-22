@@ -347,6 +347,35 @@ def test_an_over_cap_polygon_on_a_submission_is_refused_with_its_size(client: An
     assert "avoid polygon 0" in response.json()["detail"]
 
 
+def test_a_finished_plan_lands_where_the_job_says_it_did(plans: Path) -> None:
+    """The round trip a browser makes when a plan completes: the poll reports `plan_id` and
+    the client opens `/api/plans/{that}`.
+
+    It 404'd. `_finish` named the directory `pad.job_id`, which at that moment is neither
+    the runner's job id - `jobs.submit` assigns that *after* `work` returns - nor the plan
+    id: it is the one `agent.loop._fresh` minted for the scratchpad. So every plan the API
+    produced landed under a name the API never reported again, and was reachable only by
+    clicking it in the list.
+    """
+    from types import SimpleNamespace
+
+    from longrun.api.app import _finish, _job_view, _plan_path
+
+    plan = Plan(
+        id="plan-abc", request=PlanRequest(mode="repair", date=date(2026, 9, 15)), route=ROUTE
+    )
+    pad = Scratchpad(plan_id="plan-abc", job_id="a-different-id", request=plan.request, route=ROUTE)
+    outcome = SimpleNamespace(scratchpad=pad, plan=plan, needs_input=False)
+
+    _finish(outcome, plans, lambda *args, **kwargs: None)
+
+    store = JobStore(plans / "jobs")
+    store.save(pad.model_copy(update={"status": "complete"}))
+    reported = _job_view(JobRunner(store), "a-different-id", "complete").plan_id
+    assert reported == "plan-abc"
+    assert _plan_path(plans, reported or "") is not None, "the id the job reports must resolve"
+
+
 # --- the five gestures (scope 10.3, M12.2) -----------------------------------
 #
 # Driven through the runner and waited on, because every write is a `jobs.submit` and a
