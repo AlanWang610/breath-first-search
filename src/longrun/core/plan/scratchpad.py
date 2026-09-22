@@ -23,7 +23,7 @@ from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Manifest, PendingQuestion, TradeOff
 from longrun.core.models.profile import PreferenceProfile
-from longrun.core.models.request import LockedRange, PlanRequest
+from longrun.core.models.request import LockedRange, LockSource, PlanRequest
 from longrun.core.models.routing import RoutingPolicy
 
 JobStatus = Literal["running", "needs_input", "complete", "failed"]
@@ -66,13 +66,31 @@ class Scratchpad(BaseModel):
     #: across exactly the boundary it is meant to survive.
     questions_asked: int = 0
 
-    def lock(self, start_m: float, end_m: float, reason: str | None = None) -> None:
+    def lock(
+        self,
+        start_m: float,
+        end_m: float,
+        reason: str | None = None,
+        *,
+        source: LockSource = "user",
+    ) -> None:
         """Exclude a range from rerouting (scope 6.4).
 
         Called explicitly, and automatically when the user resolves a trade-off: a choice
         already made should not be silently reopened on the next iteration.
+
+        `source` defaults to the runner for the reason `LockedRange.source` gives, so the
+        one site that is the loop's own has to say so.
+
+        **Appends, and deliberately does not merge.** Two overlapping locks and their union
+        exclude exactly the same segments - `locked_segment_ids` is a union over ranges - so
+        merging changes nothing the loop can see, and it *does* change something a reader
+        can: the golden expectation records `loop.locked` verbatim, entry by entry, which is
+        how it notices a lock that stopped being applied. Collapsing the list would move
+        that without changing a measurement. `unlock` is where ranges are taken apart, and
+        it handles overlaps because it has to.
         """
-        self.locked.append(LockedRange(start_m=start_m, end_m=end_m, reason=reason))
+        self.locked.append(LockedRange(start_m=start_m, end_m=end_m, reason=reason, source=source))
 
     def locked_ids(self) -> frozenset[str]:
         from longrun.core.geo.segments import locked_segment_ids
