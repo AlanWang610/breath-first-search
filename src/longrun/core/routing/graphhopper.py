@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from longrun.core.data.cache import CacheMiss
 from longrun.core.geo.gpx import DEFAULT_DEDUPE_M, cumulative_after_normalize
-from longrun.core.models.geometry import LatLon, Route
+from longrun.core.models.geometry import LatLon, Route, RouteSource
 from longrun.core.models.routing import NOT_REQUESTED, NOT_RETURNED, Cue, CueSheet
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
 from longrun.core.routing.detour import detour_area, detour_waypoints
@@ -123,7 +123,7 @@ def route_body(
     return body
 
 
-def path_to_route(path: dict[str, Any], route_id: str) -> Route:
+def path_to_route(path: dict[str, Any], route_id: str, source: RouteSource = "generated") -> Route:
     """One GraphHopper path as a `Route`, with cumulative distance recomputed.
 
     Recomputed rather than interpolated from `path["distance"]`: `Route` is the unit every
@@ -153,7 +153,7 @@ def path_to_route(path: dict[str, Any], route_id: str) -> Route:
             LatLon(lat=float(coordinates[-1][1]), lon=float(coordinates[-1][0])),
             detail="the router returned a path with no length",
         )
-    return Route(id=route_id, points=points)
+    return Route(id=route_id, points=points, source=source)
 
 
 class GraphHopperRouter:
@@ -303,7 +303,10 @@ class GraphHopperRouter:
         if not paths:
             return track, [None] * len(track.points)
 
-        matched = path_to_route(paths[0], route_id=track.id)
+        # The track's own provenance, not this decoder's default: a match is a *reading*
+        # of the line it was given, snapped to the graph, and calling a matched user GPX
+        # "generated" would file the runner's own route under the router's name.
+        matched = path_to_route(paths[0], route_id=track.id, source=track.source)
         return matched, _way_ids_per_point(paths[0], len(matched.points))
 
     # --- transport ------------------------------------------------------
