@@ -214,6 +214,14 @@ def test_every_recorded_source_has_a_licence(name: str, golden_run: harness.Gold
     neither incident showed up as a diff. This reads the sheet.
     """
     run = golden_run(name)
+
+    # The positive control, and it is not ceremony. The assertion below is a bare `not in`,
+    # so it passes on an empty string - found by sabotage on 2026-09-22: blanking
+    # `GoldenRun.sheet` failed the other sheet-reading test on all six routes and this one
+    # on none. A negative assertion with nothing establishing that there was anything to
+    # search is a test that can only ever fail for the right reason by luck.
+    assert "## Attribution" in run.sheet, "the sheet carries no attribution section at all"
+
     assert "LICENCE NOT RECORDED" not in run.sheet, (
         "a source reached the plan sheet with no scope 14 licence row; add it to "
         "attribution.LICENCES or map it in DERIVED_SOURCES"
