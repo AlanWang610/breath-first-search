@@ -1,4 +1,4 @@
-"""Re-score a stored plan against a new date (scope 7.8).
+"""Re-score a stored plan: against a new date, or across an edit to its line (scope 7.8).
 
 `longrun refresh plan.json` has been advertised in `cli/__init__.py` since the first commit
 and did not exist. What did exist was the `refresh_plan` MCP tool, which re-ran all
@@ -8,6 +8,14 @@ A refresh answers *"is this still true today"*. It does not re-route: re-drawing
 would answer a different question, and the user would get a route they were never shown. So
 the geometry is identical by construction, which is why what changed is reported over flags
 (`result_diff`) rather than over geometry.
+
+**An edit is the other question, and M11.7 is where it arrives.** Scope 10.3's direct
+manipulation changes the line and then "re-runs only the affected scorers", which is the same
+partial pass with one thing different: the segmentation moved underneath the results being
+carried. Nothing here routes even then - the edited line is *supplied*, by
+`core.plan.edits` or by the caller - so the rule that this module never draws a route still
+holds. What changes is that a geometry diff of an edit is no longer vacuous, so the delta
+carries one, and that carried results are re-keyed onto the new ground (ADR 0032).
 
 Pure of environment and filesystem - the context is passed in - so the CLI command and the
 MCP tool are two callers of one function rather than two implementations of one idea.
@@ -21,11 +29,12 @@ from datetime import datetime, time
 
 from longrun.core.models.context import ScorerContext
 from longrun.core.models.coverage import CoverageManifest
+from longrun.core.models.geometry import Route
 from longrun.core.models.plan import Manifest, Plan
-from longrun.core.plan.diff import ResultDiff, result_diff
+from longrun.core.plan.diff import ResultDiff, RouteDiff, result_diff, route_diff
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.scorers.freshness import rescore_set
-from longrun.core.scorers.registry import closure
+from longrun.core.scorers.registry import SCORERS, closure
 
 
 @dataclass(frozen=True)
@@ -53,6 +62,17 @@ class RefreshDelta:
     #: report that a *carried* scorer may be stale for a reason the date cannot express: a
     #: rebuilt OSM extract moves `legality` even though legality is time-independent.
     pins_changed: tuple[str, ...] = ()
+    #: Where the line moved, when this pass was given an edited one. `None` on a refresh,
+    #: and that is the point: ADR 0030 argues a route diff of a refresh is provably vacuous
+    #: and worse than useless, because "same line" next to a plan whose trail has just
+    #: closed reads as "nothing changed". Across an edit it is the first thing a reader
+    #: wants, so it is present exactly when it means something.
+    geometry: RouteDiff | None = None
+    #: Carried scorers that lost measurements to the edit, as `(scorer, what it lost)`.
+    #:
+    #: Empty is a real answer and so is absent-from-the-list: a scorer that carried across a
+    #: moved segmentation and kept everything is not the same as one nobody carried.
+    regrounded: tuple[tuple[str, str], ...] = ()
 
     @property
     def new_hard_flags(self) -> tuple[str, ...]:
@@ -86,6 +106,10 @@ class RefreshDelta:
                 f"snapshot moved ({', '.join(self.pins_changed)}), so a carried scorer may "
                 f"be stale for a reason the date does not express"
             )
+        if self.geometry is not None:
+            out.append(f"line: {self.geometry.summary()}")
+        for scorer, lost in self.regrounded:
+            out.append(f"{scorer}: {lost}")
         return out
 
 
@@ -117,17 +141,35 @@ def rescore_plan(
     ctx: ScorerContext,
     *,
     start_at: datetime,
+    route: Route | None = None,
     only: Collection[str] | None = None,
     manifest: Manifest | None = None,
     resample_elevation: bool = False,
 ) -> Refreshed:
-    """Re-score the date-sensitive scorers; carry the rest, and say which was which.
+    """Re-score the scorers that need it; carry the rest, and say which was which.
 
-    `only=None` means `freshness.rescore_set()`. A caller wanting to report the widening
-    should call `closure()` itself first - `run_scorers` refuses an unclosed set rather than
-    expanding one quietly.
+    `only=None` means the default set **for the question being asked**, and the two questions
+    have different defaults. A refresh asks "is this still true today", so its default is
+    `freshness.rescore_set()` - the fourteen time-dependent scorers, and carrying `legality`
+    is right because legality did not change overnight. An edit asks "what is this line now",
+    and *every* scorer is about the line, so its default is all of them: carrying
+    `segment_hostility` across a reroute would report the old street's traffic stress.
+    A caller wanting fewer says so, and gets a partial pass across the edit (M11.7).
+
+    A caller wanting to report the widening should call `closure()` itself first -
+    `run_scorers` refuses an unclosed set rather than expanding one quietly.
+
+    **`route` makes this an edit rather than a refresh.** It is the line as some scope 10.3
+    gesture left it, supplied by `core.plan.edits` or by whoever drew it; nothing here
+    routes, in either mode. The stored line and its stored segmentation go to `score_once`
+    as the grounding for everything carried, so a carried measurement lands on the same
+    ground it was taken on or is dropped and reported (ADR 0032).
     """
-    wanted = closure(rescore_set() if only is None else only)
+    edited = route is not None
+    line = route if route is not None else stored.route
+    if only is None:
+        only = set(SCORERS) if edited else rescore_set()
+    wanted = closure(only)
     as_of = _measured_at(stored)
     request = stored.request.model_copy(
         update={"date": start_at.date(), "start_time": start_at.time()}
@@ -142,7 +184,7 @@ def rescore_plan(
     manifest = manifest or Manifest(snapshot=stored.manifest.snapshot.model_copy(deep=True))
 
     scored = score_once(
-        stored.route,
+        line,
         request,
         ctx,
         start_at=start_at,
@@ -152,13 +194,19 @@ def rescore_plan(
         carried_as_of=as_of,
         # The stored plan's own line and its own cut of it. A refresh re-derives both from
         # the same route, so `map_segments` finds them unchanged and every carried result
-        # keeps every measurement it had - which is what keeps this function's output what
-        # it was before M11.3.
+        # keeps every measurement it had - which is what keeps a refresh what it was before
+        # M11.3. An edit moves them, and that is the case the map exists for.
         carried_route=stored.route,
         carried_segments=stored.segments,
         # Terrain does not change between Tuesday and Friday, and reading a DEM this machine
         # may not have would overwrite the stored profile with nulls. See M10.4.
-        elevations=None if resample_elevation else [point.ele_m for point in stored.route.points],
+        #
+        # Read off `line` rather than `stored.route`, which matters only in edit mode and
+        # matters a lot there: the two have different point counts, and `edits.splice` keeps
+        # the elevations of the ground it did not touch and leaves the new stretch `None`.
+        # So an edit preserves the profile of the untouched two-thirds of a route and reports
+        # the spliced stretch as unmeasured, which is what it is until something samples it.
+        elevations=None if resample_elevation else [point.ele_m for point in line.points],
     )
 
     plan = build_plan(
@@ -197,6 +245,15 @@ def rescore_plan(
         started_answering=tuple(sorted(now - was)),
         pins_changed=tuple(
             sorted(key for key in pins_before if pins_before[key] != pins_after.get(key))
+        ),
+        # Only across an edit. ADR 0030: a refresh passes no router, so a route diff of one
+        # returns "same line; +0 m" every time - and a reader who sees "same line" beside a
+        # plan whose trail has just closed may conclude nothing changed.
+        geometry=route_diff(stored.route, plan.route) if edited else None,
+        regrounded=tuple(
+            (result.name, result.regrounded.describe())
+            for result in plan.results
+            if result.regrounded is not None and result.regrounded.lost_anything
         ),
     )
     return Refreshed(plan=plan, delta=delta)
