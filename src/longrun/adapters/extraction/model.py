@@ -52,6 +52,25 @@ class ExtractedClosure(BaseModel):
     ends: str | None = Field(None, description="ISO date, only if the page gives one.")
     confidence: float = Field(0.3, ge=0.0, le=MAX_CONFIDENCE)
     ambiguity: str | None = Field(None, description="What the page left unclear.")
+    #: **The link promotion was missing** (M13.5). §7.10 ends with "successful tier-4
+    #: extractions can be promoted to a drafted adapter for human review", and
+    #: `promote.draft_adapter(jurisdiction, kind, source_url)` takes a URL as a required
+    #: argument - which nothing in the tree produced, because an extraction had no field to
+    #: put one in. So the promotion path could be tested with a hand-written URL and could
+    #: never be reached from a real extraction.
+    #:
+    #: A URL the *page* states, never one the model composes: the whole value of the field
+    #: is that a reviewer can open it. That it is a model's claim about a page is precisely
+    #: why `promote.DRAFT_TIER` is 4 and why a drafted `fetch` raises `NotImplementedError`
+    #: instead of guessing a parser - a model's guess about an endpoint must not become a
+    #: source of record.
+    source_url: str | None = Field(
+        None,
+        description=(
+            "The URL this page gives for the notice, copied exactly and only if the text "
+            "states one. Never construct or guess a URL."
+        ),
+    )
 
 
 class Extraction(BaseModel):
@@ -101,6 +120,10 @@ class ModelExtractor:
         return AdapterResult(
             features=[self._feature(c, request) for c in answer.closures],
             reason=None,
+            # The first URL any record gave. `AdapterResult.source_url` is one string for
+            # one answer and a page that cites two endpoints is not a reason to drop both;
+            # the per-record URL is on the `Feature`, which is what `promote` reads.
+            source_url=next((c.source_url for c in answer.closures if c.source_url), None),
         )
 
     def _feature(self, closure: ExtractedClosure, request: ExtractionRequest) -> Any:
@@ -118,6 +141,10 @@ class ModelExtractor:
             jurisdiction=request.jurisdiction.id,
             start=_when(closure.starts),
             end=_when(closure.ends),
+            # What makes a record promotable: `draft_adapter` needs a URL and this is the
+            # only place one can come from. `None` when the page named none, which is the
+            # honest state and the one a promotion refuses rather than filling in.
+            source_url=closure.source_url,
             detail=_describe(closure),
         )
 
@@ -128,6 +155,13 @@ def _geometry(polygon: Any) -> dict[str, Any]:
     A tier-4 record has no geometry of its own - a page says "the north trail is closed"
     and means somewhere the reader is expected to know. The jurisdiction's own shape is
     the honest extent, and confidence at 0.5 or below is what says so.
+
+    **The fallback is a last resort and must stay rare.** An empty `GeometryCollection`
+    makes `runs_along` return `inf`, and `closures` then drops the record while
+    `JurisdictionAnswer.count` still counts it - "tier 4 answered, 3 records" with no flag
+    anywhere. Until M13.5 the registry passed `polygon=None` on every call, so that was the
+    *only* outcome a live extractor could have produced. It now passes the corridor polygon
+    it was asked about, and what is left here catches a shape that will not map.
     """
     if isinstance(polygon, dict):
         return polygon
