@@ -7,9 +7,29 @@ and bailouts decide success.
 
 Full scope: [docs/long-run-planner-scope.md](docs/long-run-planner-scope.md).
 
-**Status: scaffold.** Directories and package boundaries only — no implementation yet.
-Dependencies in `pyproject.toml` are the intended set from the scope and have not been
-resolved or installed.
+**Status: implemented and running locally, as of 2026-09-22.** This line said "scaffold —
+directories and package boundaries only, no implementation yet" for thirteen milestones
+after it stopped being true, which made it the most-read wrong sentence in the repository.
+
+What is actually here: all **21 scorers** of scope §7, all **10 `gpx_verify` checks**, the
+§8.1 planning loop, the MCP tool surface, a Typer CLI, a FastAPI job runner and a React
+map client. Seven golden routes run the whole pipeline end to end through the CLI with no
+model in the loop, and five regions are buildable — Bay Area, Boston, Phoenix, Kansas City
+and the Ozarks — each with a GraphHopper graph carrying LTS as an encoded value.
+
+What is **not** here, stated because a status line that only lists successes is the same
+failure in a new costume:
+
+- **No human has labelled anything.** Every eval label is `by: claude` and every preference
+  pair is synthetic, so the shipped custom model is neutral and says so (ADR 0021, 0022).
+  The suite prints the count of human labels on every run. It is 0 of 5.
+- **Three sources are absent for three different reasons**: HPMS has no reachable endpoint
+  (ADR 0012), FCC mobile coverage is a manual download nobody has made (`deploy/README.md`),
+  and Overture buildings load per corridor rather than per region (ADR 0009).
+- **`ui/` has no automated tests**, only `tsc --noEmit`, and CI does not enter the directory.
+- **Tier-4 extraction is not wired up.** The seam, the schema and the bounds are tested; no
+  page fetcher exists, and every uncovered jurisdiction reports that rather than "no
+  closures".
 
 ## Layout
 

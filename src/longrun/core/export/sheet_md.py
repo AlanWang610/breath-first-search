@@ -474,7 +474,7 @@ def _start_time_section(plan: Plan) -> list[str]:
     Gated on the **scorer's candidates**, not on `PlanRequest.start_window`. That field has
     two references in the whole tree - its own declaration and its own validator - so no CLI
     sets it and `start_time_optimizer` ignores it entirely. A section gated on it would
-    render on zero plans, including all six goldens.
+    render on zero plans, including all seven goldens.
 
     So the window here is the sweep the optimizer ran, **not** a constraint the user gave.
     Those are different claims and the sheet must not conflate them.
@@ -531,7 +531,7 @@ def _logistics_section(plan: Plan) -> list[str]:
 
     Bailouts render **without** a time in their measurement, and none is added to it: the
     renderer already has `plan.etas` and `plan.segments`, and putting an ETA into
-    `SegmentMeasurement.values` would move `measurements_sha256` on six routes for a value
+    `SegmentMeasurement.values` would move `measurements_sha256` on seven routes for a value
     that is derivable right here.
     """
     from longrun.core.scorers.crew_points import MEET_PREFIX

@@ -51,18 +51,28 @@ def test_the_golden_suite_is_not_empty() -> None:
 #: that discovered it, and M9 finally made the cap a test - at which point the suite was already
 #: at 48.50 MB of 50, with 1.50 MB of headroom and no room for a seventh route.
 #:
-#: **Raised to 64 MB in M10, deliberately and by decision rather than by pressure** (ADR 0032).
+#: **Raised to 64 MB in M10, deliberately and by decision rather than by pressure** (ADR 0031).
+#:
+#: This cited **0032** until M13.6, off by one against a directory that ended at 0031. That was
+#: a dangling reference for three milestones and has just become a worse thing than that: M11
+#: landed 0032, about carried measurements finding their segment by ground, which has nothing
+#: to do with a fixture cap. A citation that resolves to the wrong document reads as correct,
+#: and the only thing that would have caught it is somebody following it.
+
 #: Three things about that are worth stating where somebody will read them:
 #:
 #: * M10 spends almost none of it. Waypoints added ~2 kB across six `expected.json` files, and
 #:   the cue sheet records no fixture at all. The raise is provision for M11-M13, not a need of
-#:   the milestone that made it.
+#:   the milestone that made it. M13 spent 4.7 MB of it on `ozarks-thin`, taking the suite to
+#:   53.2 MB with 10.8 MB free.
 #: * 64 rather than a round 75 because `boston-winter` at 8.0 MB is the model for a dense new
 #:   route, so this leaves room for about two more - and past that the CI job binds first.
-#: * **Disk is not the constraint that bites; CI wall clock is.** The Windows job ran 26m2s
-#:   against a 30-minute per-job timeout after M9, and every golden test reads these
-#:   GeoPackages. Raising the byte cap does nothing about that, and a future milestone that
-#:   finds itself here again should look at the clock before it looks at this number.
+#: * **Disk is not the constraint that bites; CI wall clock is** - but the number that used to
+#:   stand here was stale. It said the Windows job ran 26m2s against a 30-minute cap, which was
+#:   measured after M9 and *before* ADR 0031's amendment made the golden tier 272 s -> 64 s by
+#:   running each route once instead of four times. Locally the whole hermetic suite is ~90 s
+#:   with seven routes. Nobody has re-measured the Windows job since, so the honest statement is
+#:   that there is no current figure and the next main-branch run is the one to read.
 MAX_FIXTURE_BYTES = 64 * 1024 * 1024
 
 
@@ -133,9 +143,11 @@ def test_the_route_matches_its_expectation(
         "If this change is intended, rerun with --update-golden and review the diff."
     )
 
-    # Folded in here rather than given its own parametrized test. There are already six
-    # route-parametrized tests over six routes, so each new one is another six full pipeline
-    # runs - and the Windows CI job was at 26m2s of a 30-minute cap after M9.
+    # Folded in here rather than given its own parametrized test, and the reason has since
+    # stopped applying: ADR 0031's amendment made the golden tier session-scoped, so each
+    # route runs one pipeline however many tests read it, and another parametrized test is
+    # now worth about a second rather than six full runs. Left folded because the assertion
+    # belongs beside the expectation it complements, not because it has to be.
     #
     # The GPX is invisible to `digest`, which reads `plan.json` alone. So this is the only
     # thing standing between a plan that carries waypoints and a GPX that drops them, which

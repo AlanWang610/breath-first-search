@@ -23,9 +23,18 @@ jobs:
     # mid-`pytest` at 14m17s of testing, having grown from 11m5s before the fifth golden.
     # M0 set 15 with the note that keeping CI short "is itself the enforcement mechanism
     # for small fixtures", which was right and is now doing the wrong job - the fixtures
-    # are inside their 50 MB cap and it is the test count that grew, from 502 to 1,246.
+    # are inside their cap and it is the test count that grew, from 502 to 1,246.
     # 30 restores headroom without removing the pressure; the day this is hit again the
     # answer is to look at what got slow, not to raise it again.
+    #
+    # **That rule was applied in M10 and it worked.** ADR 0031's amendment ran
+    # `pytest --durations` rather than raising anything: the golden tier was 272 s of a
+    # 306 s suite because four tests each ran a full pipeline per route, and a
+    # session-scoped fixture took the whole suite to 85 s. So the 26m2s figure this comment
+    # used to quote is from before that and is not current - and M13 has not replaced it,
+    # because a Windows wall clock can only be measured by a Windows run. Locally the
+    # hermetic suite is ~90 s with seven golden routes. Read the next main-branch run for
+    # the real number; do not trust one written here.
     timeout-minutes: 30
 
     steps:

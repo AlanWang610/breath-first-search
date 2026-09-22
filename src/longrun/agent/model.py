@@ -49,8 +49,13 @@ class ModelSettings:
 
     @property
     def missing_reason(self) -> str:
+        # Five, not four. Scope §4.1 fixes the call sites and there are five of them:
+        # `intent`, `tradeoffs`, `questions`, `profile_updates`, and tier-4 `extraction` -
+        # which `adapters/extraction/model.py` names as "the fifth call site" in its own
+        # first paragraph. The count was written before extraction existed and printed on
+        # every plan produced without a key since.
         return (
-            f"{KEY_ENV_VAR} is not set; the four LLM call sites degrade to their "
+            f"{KEY_ENV_VAR} is not set; the five LLM call sites degrade to their "
             "deterministic paths (ADR 0015)"
         )
 
