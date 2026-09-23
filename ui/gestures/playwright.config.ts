@@ -24,6 +24,9 @@
 import { defineConfig, devices } from "@playwright/test";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /**
  * Everything the suite writes, outside the repository.
@@ -40,15 +43,71 @@ export const PLANS_DIR = path.join(WORK_DIR, "plans");
 export const PORT = 8123;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 
+/** The golden route the seeded plan is scored from; `seed.ts` says why this one. */
+const GOLDEN = path.join(REPO_ROOT, "tests", "golden", "routes", "synthetic-hazards");
+
 export default defineConfig({
   testDir: ".",
+  // **One worker, no parallelism, and that is about the server rather than about speed.**
+  // There is one `longrun api` process with one plans directory, and every gesture writes
+  // to it. Tests take their own plan id so they cannot collide over a plan — but the job
+  // runner is a shared thread pool, and two writes racing through it would make a poll
+  // tick mean something different in each test. Sequential is what the suite asserts
+  // about.
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
   reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  timeout: 90_000,
+  expect: { timeout: 20_000 },
+  globalSetup: "./seed.ts",
+
+  /**
+   * One server, serving the API and the built pages from the same origin.
+   *
+   * That is `longrun api --ui ui/dist`, which is what `ui/README.md` tells a reviewer to
+   * run and what the gestures were exercised by hand against. The alternative — vite's dev
+   * server with its `/api` proxy — would test a two-origin arrangement that only exists
+   * during development.
+   *
+   * Four environment variables, each load-bearing:
+   *
+   *   `LONGRUN_TILE_PROVIDER=none` because the default is `usgs-imagery` and the map would
+   *   reach the National Map for basemap tiles on every run. That is a network dependency
+   *   in a suite that must not have one, and a slow one. ADR 0023's design is what makes
+   *   this safe: the basemap is a *layer*, so switching it off leaves the dark ground with
+   *   the route still drawn on it, which is precisely the state the gestures need.
+   *
+   *   `LONGRUN_OFFLINE=1`, `LONGRUN_FIXTURES` and `LONGRUN_CACHE_DIR` because
+   *   `_choose_alternative` re-scores through `ToolSettings.from_env()`. Without them a
+   *   `choose` would score against `data/` — which does not exist — and any scorer that
+   *   reached for a forecast would reach the network. With them it reads the golden's own
+   *   fixtures and a *copy* of its cassette, which is why `seed.ts` copies rather than
+   *   points. The other four gestures are request edits and need none of this; it is set
+   *   for all of them anyway, because a server configured differently from the one a test
+   *   reasons about is a bug waiting for the next milestone.
+   *
+   * `reuseExistingServer: false` everywhere, not only in CI. A server left over from an
+   * earlier run has a different plans directory and a different environment, and a suite
+   * that quietly attached to it would be testing something nobody could name.
+   */
+  webServer: {
+    command: `uv run longrun api --host 127.0.0.1 --port ${PORT} --plans "${PLANS_DIR}" --ui ui/dist`,
+    cwd: REPO_ROOT,
+    url: `${BASE_URL}/api/health`,
+    reuseExistingServer: false,
+    timeout: 180_000,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      LONGRUN_TILE_PROVIDER: "none",
+      LONGRUN_OFFLINE: "1",
+      LONGRUN_FIXTURES: path.join(GOLDEN, "fixtures"),
+      LONGRUN_CACHE_DIR: WORK_DIR,
+    },
+  },
+
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",
