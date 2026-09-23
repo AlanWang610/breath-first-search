@@ -10,11 +10,16 @@ uv run longrun api                  # http://127.0.0.1:8000
 
 cd ui && npm install
 npm run dev                         # http://localhost:5173, proxying /api
-npm run typecheck                   # tsc --noEmit
+npm run typecheck                   # tsc --noEmit, over src/ and gestures/
 npm test                            # vitest run — the pure functions in src/lib
+npm run test:gestures               # playwright — the gestures, in a real browser (M15)
 npm run build                       # -> ui/dist
 uv run longrun api --ui ui/dist     # one server, API and pages
 ```
+
+`npm run test:gestures` needs a browser once: `npx playwright install chromium`. It builds
+`ui/dist`, starts its own `longrun api` on port 8123 and scores its own plan from a golden,
+so it needs no server running and leaves nothing behind in the tree.
 
 ## What it is for
 
@@ -91,17 +96,50 @@ that work can be quietly thrown away.
 
 ## What is verified, and what is not
 
-`npm test` covers the functions in `src/lib/plan.ts` — everything that is a function of a
-plan and returns a value: flag ordering, tier colour, segment→`(start_m, end_m)`, the
-elevation runs that keep an unmeasured stretch from being drawn as flat ground, and the
-shape of a drawn polygon. That is the first automated check this directory has ever had.
+Two suites, and they are deliberately separate (ADR 0040).
 
-**Nothing verifies a gesture.** A click that selects a segment, a click that places a
-polygon corner, a drag on the MapLibre canvas, the popup on hover, the camera staying put
-across a write — none of those have automated coverage, here or anywhere, and a headless
-run cannot give them any. They were exercised by hand against a stored plan with
-`uv run longrun api --ui ui/dist`. Mounting a component to assert that it rendered would
-have raised the number without changing that sentence, so there is none.
+**`npm test` — the node tier (M12.8).** The functions in `src/lib/plan.ts`: everything that
+is a function of a plan and returns a value. Flag ordering, tier colour, segment→`(start_m,
+end_m)`, the elevation runs that keep an unmeasured stretch from being drawn as flat ground,
+and the shape of a drawn polygon. `environment: "node"` and `include: ["src/**/*.test.ts"]`
+are unchanged from M12, so a component still cannot reach this tier and masquerade as
+gesture coverage.
+
+**`npm run test:gestures` — the browser tier (M15).** Playwright and headless Chromium
+against a real page, a real `longrun api` and a real MapLibre canvas, driving the plan it
+scores for itself from `tests/golden/routes/` (ADR 0041 — nothing is committed under
+`plans/` or here). It covers:
+
+| gesture | what is checked |
+|---|---|
+| **click to select** | `queryRenderedFeatures` resolves the click, and the panel shows the stretch **in metres** — the range a write will carry, not just the id |
+| **hover** | the popup names the scorer, kind and tier in words with a detail after them; bare ground shows nothing |
+| **lock** | the clicked segment's own start and end reach `request.locked`, with `source: "user"` |
+| **unlock mine** | the lock the map set is released, and the server's sentence about which one appears |
+| **via** | one click, one via, inserted in route order, with the frozen-policy note |
+| **avoid** | corners counted as they are placed; the polygon stored and numbered by the server; an over-cap area refused **in the server's own words with its size** |
+| **choose** | a drawn line spliced in, auto-locked as the runner's, re-scored offline against the golden's fixtures, and the unmeasured middle drawn as a break rather than as flat ground |
+| **timeline scrub** | the distance named, the cursor drawn, the map marker walking the route, and all of it cleared on leaving the strip |
+| **the camera across a write** | a pan survives a lock, its poll and its re-render; `Fit to route` brings it back; a different plan still refits |
+
+The last row is the one M12 flagged as the reason M12.4 exists and nothing checked.
+
+**What is still hand-driven only.** `POST /api/plans` — the submit form. It needs a
+GraphHopper server, which the hermetic suite does not have and must not reach, and driving
+it against whatever a developer happens to have running is the difference between a test and
+a coincidence. The map's own MapLibre controls (zoom buttons, scroll zoom, double-click
+zoom) are also uncovered: they are the library's behaviour rather than this project's, and
+the one thing that depends on them — that a camera the user moved stays moved — is covered
+above by dragging the canvas.
+
+**A finding worth keeping.** The first browser test that opened a real plan found that the
+map drew nothing at all: `BLANK_STYLE` carried `glyphs: undefined`, MapLibre's style
+validator rejected the key, `Style._load` returned early, and `load` never fired — so no
+route, no basemap note, and every click and hover a silent no-op. `tsc` could not see it
+(the property is optional) and the node tier could not either (nothing there constructs a
+map). The second found that `Flag.tier` and `Flag.kind` are `IntEnum`s on the wire while
+this client compared them to strings, so every segment on every map was painted comfort
+blue. Both are fixed; neither was reachable without a browser.
 
 ## Not built
 
