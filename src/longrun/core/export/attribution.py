@@ -83,6 +83,104 @@ LICENCES: dict[str, SourceLicence] = {
         licence="CC0 1.0",
         attribution="Work zone data: Maricopa County DOT",
     ),
+    # M14's feeds. Every row's licence is what the feed itself declares in
+    # `feed_info.license`, read on 2026-09-23 - which ADR 0038 makes the only thing this
+    # project will act on. The generic `wzdx` row above would already answer for all of
+    # them by prefix, so these exist for the attribution line rather than for the licence:
+    # a sheet that says "Work zone data via the USDOT WZDx feed registry" for a Wisconsin
+    # route names a registry that publishes nothing and not the agency that published the
+    # data.
+    #
+    # The ten that declare CC0 1.0. CC0 asks for no attribution; the agency is named
+    # anyway, because a reader of a plan is owed the chance to check a closure at source.
+    "wzdx_nddot": SourceLicence(
+        source="wzdx_nddot",
+        licence="CC0 1.0",
+        attribution="Work zone data: North Dakota DOT",
+    ),
+    "wzdx_deldot": SourceLicence(
+        source="wzdx_deldot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Delaware DOT, published by HaulHub Technologies",
+    ),
+    "wzdx_indot": SourceLicence(
+        source="wzdx_indot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Indiana DOT",
+    ),
+    "wzdx_kytc": SourceLicence(
+        source="wzdx_kytc",
+        licence="CC0 1.0",
+        attribution="Work zone data: Kentucky Transportation Cabinet",
+    ),
+    "wzdx_ladotd": SourceLicence(
+        source="wzdx_ladotd",
+        licence="CC0 1.0",
+        attribution=(
+            "Work zone data: Louisiana Department of Transportation and Development, "
+            "published by HaulHub Technologies"
+        ),
+    ),
+    "wzdx_mdotsha": SourceLicence(
+        source="wzdx_mdotsha",
+        licence="CC0 1.0",
+        attribution="Work zone data: Maryland DOT State Highway Administration, via RITIS",
+    ),
+    "wzdx_msdot": SourceLicence(
+        source="wzdx_msdot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Mississippi Department of Transportation",
+    ),
+    "wzdx_njdot": SourceLicence(
+        source="wzdx_njdot",
+        licence="CC0 1.0",
+        attribution="Work zone data: New Jersey Institute of Technology / TRANSCOM",
+    ),
+    "wzdx_wisdot": SourceLicence(
+        source="wzdx_wisdot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Wisconsin DOT",
+    ),
+    "wzdx_austin": SourceLicence(
+        source="wzdx_austin",
+        licence="CC0 1.0",
+        attribution="Work zone data: City of Austin",
+    ),
+    # The six that declare nothing. The licence text says so rather than guessing, and it
+    # is the same wording `wzdx_azdot` uses - a terms-of-use page is a permission to read,
+    # which is not a permission to redistribute, which is why none of these has a cassette.
+    "wzdx_necdot": SourceLicence(
+        source="wzdx_necdot",
+        licence="no licence declared by the feed; New England Compass terms of use",
+        attribution="Work zone data: Maine DOT, NHDOT and VTrans via New England Compass",
+    ),
+    "wzdx_iddot": SourceLicence(
+        source="wzdx_iddot",
+        licence="no licence declared by the feed; 511 Idaho terms of use",
+        attribution="Work zone data: Idaho Transportation Department",
+    ),
+    "wzdx_iowadot": SourceLicence(
+        source="wzdx_iowadot",
+        licence="no licence declared by the feed; Iowa DOT terms of use",
+        attribution="Work zone data: Iowa DOT",
+    ),
+    # The one feed whose terms prohibit redistribution outright rather than being silent.
+    # Stated here and not only in the adapter, because this is the line a sheet prints.
+    "wzdx_nysdot": SourceLicence(
+        source="wzdx_nysdot",
+        licence="511NY terms of use; redistribution prohibited without NYSDOT consent",
+        attribution="Work zone data: New York State DOT / 511NY",
+    ),
+    "wzdx_ncdot": SourceLicence(
+        source="wzdx_ncdot",
+        licence="no licence declared by the feed; DriveNC terms of use",
+        attribution="Work zone data: North Carolina DOT",
+    ),
+    "wzdx_wsdot": SourceLicence(
+        source="wzdx_wsdot",
+        licence="no licence declared by the feed; WSDOT terms of use",
+        attribution="Work zone data: Washington State DOT",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",

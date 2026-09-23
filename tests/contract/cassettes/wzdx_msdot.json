@@ -1,0 +1,209 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -91.412728,
+      31.552712
+     ],
+     [
+      -91.425928,
+      31.565354
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "564203-133383",
+   "properties": {
+    "beginning_cross_street": "S Canal St",
+    "core_details": {
+     "data_source_id": "MDOTtraffic.com",
+     "description": "Road Work : US 84 W between S Canal St and Louisiana Ave - Right lane closed. No Wide Loads over 12 Feet. Roadwork will occur daily from 8:00 AM - 4:00 PM. Adams County",
+     "direction": "westbound",
+     "event_type": "work-zone",
+     "name": "US 84 between S Canal St and Louisiana Ave",
+     "road_names": [
+      "US 84"
+     ],
+     "update_date": "2026-09-14T18:23:38.9500000Z"
+    },
+    "end_date": "2026-09-23T21:00:00.0000000Z",
+    "ending_cross_street": "Louisiana Ave",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-09-21T13:00:00.0000000Z",
+    "types_of_work": [
+     {
+      "is_architectural_change": false,
+      "type_name": "below-road-work"
+     }
+    ],
+    "vehicle_impact": "unknown",
+    "work_zone_type": "static"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -91.411496,
+      31.551562
+     ],
+     [
+      -91.42588,
+      31.565386
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "564205-133385",
+   "properties": {
+    "beginning_cross_street": "S Canal St",
+    "core_details": {
+     "data_source_id": "MDOTtraffic.com",
+     "description": "Road Work : US 84 W between S Canal St and Louisiana Ave - Left lane closed. No Wide Loads over 12 Feet. Roadwork will occur daily from 8:00 AM - 4:00 PM. Adams County",
+     "direction": "westbound",
+     "event_type": "work-zone",
+     "name": "US 84 between S Canal St and Louisiana Ave",
+     "road_names": [
+      "US 84"
+     ],
+     "update_date": "2026-09-14T18:33:41.5770000Z"
+    },
+    "end_date": "2026-09-25T21:00:00.0000000Z",
+    "ending_cross_street": "Louisiana Ave",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-09-24T13:00:00.0000000Z",
+    "types_of_work": [
+     {
+      "is_architectural_change": false,
+      "type_name": "below-road-work"
+     }
+    ],
+    "vehicle_impact": "unknown",
+    "work_zone_type": "static"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -91.427456,
+      31.56628
+     ],
+     [
+      -91.414432,
+      31.5538
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "564207-133387",
+   "properties": {
+    "beginning_cross_street": "Magnolia St",
+    "core_details": {
+     "data_source_id": "MDOTtraffic.com",
+     "description": "Road Work : US 84 E between Magnolia St and Grand Soleil Blvd - Right lane closed. No Wide Loads over 14 Feet. Roadwork will occur daily from 8:00 AM - 4:00 PM. Adams County",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "name": "US 84 between Magnolia St and Grand Soleil Blvd",
+     "road_names": [
+      "US 84"
+     ],
+     "update_date": "2026-09-14T18:35:42.6730000Z"
+    },
+    "end_date": "2026-09-28T21:00:00.0000000Z",
+    "ending_cross_street": "Grand Soleil Blvd",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-09-26T13:00:00.0000000Z",
+    "types_of_work": [
+     {
+      "is_architectural_change": false,
+      "type_name": "below-road-work"
+     }
+    ],
+    "vehicle_impact": "unknown",
+    "work_zone_type": "static"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -91.427696,
+      31.566682
+     ],
+     [
+      -91.414184,
+      31.553602
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "564212-133391",
+   "properties": {
+    "beginning_cross_street": "LA 131 / Magnolia St",
+    "core_details": {
+     "data_source_id": "MDOTtraffic.com",
+     "description": "Road Work : US 84 E between LA 131 / Magnolia St and Grand Soleil Blvd - Left lane closed. No wide loads over 14 feet. Roadwork will occur daily from 8:00 AM - 4:00 PM. Adams County",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "name": "US 84 between LA 131 / Magnolia St and Grand Soleil Blvd",
+     "road_names": [
+      "US 84"
+     ],
+     "update_date": "2026-09-14T18:34:42.2800000Z"
+    },
+    "end_date": "2026-09-30T21:00:00.0000000Z",
+    "ending_cross_street": "Grand Soleil Blvd",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-09-29T13:00:00.0000000Z",
+    "types_of_work": [
+     {
+      "is_architectural_change": false,
+      "type_name": "below-road-work"
+     }
+    ],
+    "vehicle_impact": "unknown",
+    "work_zone_type": "static"
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "data_sources": [
+   {
+    "contact_email": "MDOTtraffic@mdot.ms.gov",
+    "contact_name": "MDOTtraffic Support",
+    "data_source_id": "MDOTtraffic.com",
+    "organization_name": "Mississippi Department of Transportation",
+    "update_date": "2026-09-23T04:24:59.5876400Z",
+    "update_frequency": 120
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "Mississippi Department of Transportation",
+  "update_date": "2026-09-23T04:24:59.5876400Z",
+  "version": "4.2"
+ },
+ "type": "FeatureCollection"
+}

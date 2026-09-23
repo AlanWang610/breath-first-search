@@ -1,0 +1,200 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -75.04803466796875,
+      39.87523651123047
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "ORC300598532",
+   "properties": {
+    "beginning_cross_street": "not known",
+    "beginning_milepost": 30,
+    "core_details": {
+     "creation_date": "2026-09-22T05:10:35-04:00",
+     "data_source_id": "TRANSCOM",
+     "description": "NJDOT - TOC South: Roadwork on I-295 Southbound between South of Exit 29 - US 30 (Barrington) and South of Exit 25 - NJ 47/Delsea Dr (Westville), Thursday September 24, 2026 07:00 AM thru 03:00 PM, right shoulder closed",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "South of Exit 29 - US 30",
+      "South of Exit 25 - NJ 47/Delsea Dr"
+     ],
+     "update_date": "2026-09-22T05:10:35-04:00"
+    },
+    "end_date": "2026-09-24T15:00:00-04:00",
+    "ending_milepost": 25,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [],
+    "location_method": "sign-method",
+    "start_date": "2026-09-22T05:10:35-04:00",
+    "types_of_work": [
+     {
+      "type_name": "surface-work"
+     }
+    ],
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -74.7235107421875,
+      40.183963775634766
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "ORC300598447",
+   "properties": {
+    "beginning_cross_street": "not known",
+    "beginning_milepost": 0,
+    "core_details": {
+     "creation_date": "2026-09-22T05:08:48-04:00",
+     "data_source_id": "TRANSCOM",
+     "description": "NJDOT - TOC South: Roadwork on I-195 Eastbound between I-295 (Hamilton Twp) and East of Exit 2 - CR 524 (Hamilton Twp), Wednesday September 23, 2026 08:00 PM thru Thursday September 24, 2026 06:00 AM, right shoulder closed",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "I-295",
+      "East of Exit 2 - CR 524"
+     ],
+     "update_date": "2026-09-22T05:08:48-04:00"
+    },
+    "end_date": "2026-09-24T06:00:00-04:00",
+    "ending_milepost": 2,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [],
+    "location_method": "sign-method",
+    "start_date": "2026-09-22T05:08:48-04:00",
+    "types_of_work": [
+     {
+      "type_name": "surface-work"
+     }
+    ],
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -74.69259643554688,
+      40.87418365478515
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "ORC300597562",
+   "properties": {
+    "beginning_cross_street": "not known",
+    "beginning_milepost": 94,
+    "core_details": {
+     "creation_date": "2026-09-18T08:38:27-04:00",
+     "data_source_id": "TRANSCOM",
+     "description": "NJDOT - STMC: Roadwork on US 206  between North of CR 613/Drakesdale Rd (Roxbury Twp) and South of CR 613/Drakesdale Rd (Mount Olive Twp), Thursday September 24, 2026 08:00 AM thru 03:00 PM, right shoulder closed",
+     "direction": "northbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "North of CR 613/Drakesdale Rd",
+      "South of CR 613/Drakesdale Rd"
+     ],
+     "update_date": "2026-09-18T08:38:27-04:00"
+    },
+    "end_date": "2026-09-24T15:00:00-04:00",
+    "ending_milepost": 93,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [],
+    "location_method": "sign-method",
+    "start_date": "2026-09-18T08:38:27-04:00",
+    "types_of_work": [
+     {
+      "type_name": "surface-work"
+     }
+    ],
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -74.29782104492188,
+      40.52781295776367
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "ORI1238451128",
+   "properties": {
+    "beginning_cross_street": "not known",
+    "beginning_milepost": 133.5,
+    "core_details": {
+     "creation_date": "2026-09-22T23:00:09-04:00",
+     "data_source_id": "TRANSCOM",
+     "description": "NJDOT - STMC: Roadwork on US 9 Southbound between North of CR 616/New Brunswick Ave (Woodbridge Twp) and North of Edison Bridge (Woodbridge Twp), Tuesday September 22, 2026 09:00 PM thru Wednesday September 23, 2026 06:00 AM, at least one lane closed, (2nd lane closed from 11:00 PM to 05:00 AM)",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "North of CR 616/New Brunswick Ave",
+      "North of Edison Bridge"
+     ],
+     "update_date": "2026-09-22T23:00:09-04:00"
+    },
+    "end_date": "2026-09-23T05:00:09-04:00",
+    "ending_milepost": 132.5,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [],
+    "location_method": "sign-method",
+    "start_date": "2026-09-22T23:00:09-04:00",
+    "types_of_work": [
+     {
+      "type_name": "surface-work"
+     }
+    ],
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "contact_email": "Vandana.Mathur@dot.nj.gov",
+  "contact_name": "Vandana Mathur",
+  "data_sources": [
+   {
+    "contact_email": "Vandana.Mathur@dot.nj.gov",
+    "contact_name": "Vandana Mathur",
+    "data_source_id": "TRANSCOM",
+    "organization_name": "TRANSCOM",
+    "update_date": "2026-09-23T00:22:12.0737238-04:00",
+    "update_frequency": 120
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "NJIT",
+  "update_date": "2026-09-23T00:22:12.073727-04:00",
+  "update_frequency": 120,
+  "version": "4.1"
+ },
+ "type": "FeatureCollection"
+}

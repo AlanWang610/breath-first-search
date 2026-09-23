@@ -1,0 +1,320 @@
+{
+ "features": [
+  {
+   "bbox": [
+    -77.073026,
+    38.608299,
+    -77.072767,
+    38.627134
+   ],
+   "geometry": {
+    "bbox": [
+     -77.073026,
+     38.608299,
+     -77.072767,
+     38.627134
+    ],
+    "coordinates": [
+     [
+      -77.073026,
+      38.627134
+     ],
+     [
+      -77.072767,
+      38.608299
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "0301e7eb666001b2006ad32ec4235c0a_E",
+   "properties": {
+    "beginning_cross_street": "MD224",
+    "core_details": {
+     "creation_date": "2026-09-22T11:05:33Z",
+     "data_source_id": "11a5b4354-1926-4aee-b121-e27fc9f3c37e",
+     "description": "Active Closure @ MD 227 EAST BETWEEN LIVINGSTON RD AND INDIAN HEAD HWY",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "MD227",
+      "LIVINGSTON RD"
+     ],
+     "update_date": "2026-09-22T11:39:35Z"
+    },
+    "end_date": "2027-03-16T04:00:00Z",
+    "ending_cross_street": "MD210",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": true,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 2,
+      "status": "closed",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "other",
+    "start_date": "2026-09-22T11:05:33Z",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -76.548137,
+      38.978475
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "0c0028c3e5f5018e006ad32ec4235c0a_E",
+   "properties": {
+    "beginning_cross_street": "RP665",
+    "core_details": {
+     "creation_date": "2026-08-26T14:18:49Z",
+     "data_source_id": "11a5b4354-1926-4aee-b121-e27fc9f3c37e",
+     "description": "Active Closure @ MD 665 EAST FROM RAMP 7 FR MD 665 WB TO RIVA RD SB TO RAMP 7 FR MD 665 WB TO RIVA RD SB",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "MD665",
+      "ARIS T ALLEN BLVD"
+     ],
+     "update_date": "2026-09-17T14:21:07Z"
+    },
+    "end_date": "2026-12-31T05:00:00Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": true,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "shoulder"
+     },
+     {
+      "order": 2,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 3,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 4,
+      "status": "closed",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "other",
+    "start_date": "2026-08-26T14:18:49Z",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "bbox": [
+    -75.089146,
+    38.326461,
+    -75.088826,
+    38.328424
+   ],
+   "geometry": {
+    "bbox": [
+     -75.089146,
+     38.326461,
+     -75.088826,
+     38.328424
+    ],
+    "coordinates": [
+     [
+      -75.089146,
+      38.328424
+     ],
+     [
+      -75.088826,
+      38.326461
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "1100980775b70985006ad32ec4235c0a_SNoAdditionalInformation",
+   "properties": {
+    "beginning_cross_street": "MU1020",
+    "core_details": {
+     "creation_date": "2026-08-19T14:01:48Z",
+     "data_source_id": "11a5b4354-1926-4aee-b121-e27fc9f3c37e",
+     "description": "Active Closure @ MD 528 SOUTH BETWEEN WORCESTER ST AND S 1ST ST",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "MD528",
+      "COASTAL HWY"
+     ],
+     "update_date": "2026-09-23T02:13:23Z"
+    },
+    "end_date": "2026-12-31T05:00:00Z",
+    "ending_cross_street": "MU9015",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": true,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "shoulder"
+     },
+     {
+      "order": 2,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 3,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 4,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 5,
+      "status": "closed",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "other",
+    "start_date": "2026-08-19T14:01:48Z",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "bbox": [
+    -77.809589,
+    39.606587,
+    -77.754197,
+    39.630147
+   ],
+   "geometry": {
+    "bbox": [
+     -77.809589,
+     39.606587,
+     -77.754197,
+     39.630147
+    ],
+    "coordinates": [
+     [
+      -77.754197,
+      39.606587
+     ],
+     [
+      -77.809589,
+      39.630147
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "1bffa4c9b7a20499006ad32ec4235c0a_W",
+   "properties": {
+    "beginning_cross_street": "MD632",
+    "core_details": {
+     "creation_date": "2026-09-03T16:39:41Z",
+     "data_source_id": "11a5b4354-1926-4aee-b121-e27fc9f3c37e",
+     "description": "Active Closure @ I-70 WEST FROM DOWNSVILLE PIKE TO GREENCASTLE PIKE (MM 28.0-24.0)",
+     "direction": "westbound",
+     "event_type": "work-zone",
+     "road_names": [
+      "I70",
+      "EISENHOWER MEMORIAL HWY"
+     ],
+     "update_date": "2026-09-18T22:25:08Z"
+    },
+    "end_date": "2027-12-31T05:00:00Z",
+    "ending_cross_street": "MD63",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": true,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "median"
+     },
+     {
+      "order": 2,
+      "status": "open",
+      "type": "shoulder"
+     },
+     {
+      "order": 3,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 4,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 5,
+      "status": "closed",
+      "type": "shoulder"
+     },
+     {
+      "order": 6,
+      "status": "open",
+      "type": "entrance-ramp"
+     },
+     {
+      "order": 7,
+      "status": "open",
+      "type": "exit-ramp"
+     },
+     {
+      "order": 8,
+      "status": "open",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "other",
+    "start_date": "2026-09-03T16:39:41Z",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "contact_email": "support@ritis.org",
+  "contact_name": "RITIS Support",
+  "data_sources": [
+   {
+    "contact_email": "CDelion@mdot.maryland.gov",
+    "contact_name": "Carole Delion",
+    "data_source_id": "1a5b4354-1926-4aee-b121-e27fc9f3c37e",
+    "organization_name": "Maryland DOT SHA"
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "Maryland DOT SHA",
+  "update_date": "2026-09-23T04:24:59Z",
+  "update_frequency": 60,
+  "version": "4.1"
+ },
+ "type": "FeatureCollection"
+}

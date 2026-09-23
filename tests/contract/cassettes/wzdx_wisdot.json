@@ -1,0 +1,295 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -87.95753291888276,
+      43.061861967228026
+     ],
+     [
+      -87.95753291888276,
+      43.06063132393945
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "ce6de471-1083-ba57-9071-9f649264e457",
+   "properties": {
+    "beginning_cross_street": "450' N of North Avenue",
+    "core_details": {
+     "creation_date": "2026-09-02T19:32:34.967+00:00",
+     "data_source_id": "ATMS-ExtEvent",
+     "description": "Local Road 2 Right Lanes Closed on N 35th Street SB from 450' N of North Avenue to North Avenue",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "name": "WisLCS-276750-1",
+     "road_names": [
+      "N 35th Street SB"
+     ],
+     "update_date": "2026-09-02T19:32:34.967+00:00"
+    },
+    "end_date": "2026-10-03T04:59:59+00:00",
+    "ending_cross_street": "North Avenue",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 2,
+      "status": "closed",
+      "type": "general"
+     },
+     {
+      "order": 3,
+      "status": "closed",
+      "type": "general"
+     }
+    ],
+    "location_method": "sign-method",
+    "restrictions": [],
+    "start_date": "2026-08-24T05:00:00+00:00",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -91.562508,
+      45.205691
+     ],
+     [
+      -91.562508,
+      45.205691
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "cb218cf1-d4dd-f257-9c8a-5104594999b2",
+   "properties": {
+    "beginning_milepost": 0,
+    "core_details": {
+     "creation_date": "2026-09-17T14:36:43+00:00",
+     "data_source_id": "ATMS-ERM",
+     "direction": "undefined",
+     "event_type": "work-zone",
+     "name": "ERM-917000350",
+     "road_names": [
+      "County SS"
+     ],
+     "update_date": "2026-09-23T02:56:44.6911791+00:00"
+    },
+    "end_date": "2026-09-24T21:00:00+00:00",
+    "ending_milepost": 0,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "general"
+     }
+    ],
+    "location_method": "sign-method",
+    "restrictions": [],
+    "start_date": "2026-09-21T13:00:00+00:00",
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -88.0513064529188,
+      42.606932396886
+     ],
+     [
+      -88.0512371337128,
+      42.6046543600496
+     ],
+     [
+      -88.0510597435779,
+      42.5975996264174
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "dde8c4ff-bdc9-5d5d-8704-ef4b1ad67566",
+   "properties": {
+    "beginning_cross_street": "38TH ST",
+    "core_details": {
+     "creation_date": "2026-08-31T12:52:30.48+00:00",
+     "data_source_id": "ATMS-ExtEvent",
+     "description": "Mainline Right Lane Closed on US 45 SB from 38TH ST to 45TH ST. Daily from 09/07/2026 to 09/30/2026, 07:00 AM - 05:30 PM, M, T, W, Th, F (excluding Sun, Sat)",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "name": "WisLCS-276658-1",
+     "related_road_events": [
+      {
+       "id": "b6762615-6e13-1050-90b5-976ecb39fb34",
+       "type": "next-occurrence"
+      }
+     ],
+     "road_names": [
+      "US 45 SB"
+     ],
+     "update_date": "2026-08-31T12:52:30.48+00:00"
+    },
+    "end_date": "2026-09-23T22:30:00+00:00",
+    "ending_cross_street": "45TH ST",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "shoulder"
+     },
+     {
+      "order": 2,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 3,
+      "status": "closed",
+      "type": "general"
+     },
+     {
+      "order": 4,
+      "status": "closed",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "sign-method",
+    "restrictions": [
+     {
+      "type": "reduced-width",
+      "unit": "inches",
+      "value": 192
+     }
+    ],
+    "start_date": "2026-09-23T12:00:00+00:00",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -88.0513064529188,
+      42.606932396886
+     ],
+     [
+      -88.0512371337128,
+      42.6046543600496
+     ],
+     [
+      -88.0510597435779,
+      42.5975996264174
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "b6762615-6e13-1050-90b5-976ecb39fb34",
+   "properties": {
+    "beginning_cross_street": "38TH ST",
+    "core_details": {
+     "creation_date": "2026-08-31T12:52:30.48+00:00",
+     "data_source_id": "ATMS-ExtEvent",
+     "description": "Mainline Right Lane Closed on US 45 SB from 38TH ST to 45TH ST. Daily from 09/07/2026 to 09/30/2026, 07:00 AM - 05:30 PM, M, T, W, Th, F (excluding Sun, Sat)",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "name": "WisLCS-276658-1",
+     "related_road_events": [
+      {
+       "id": "dde8c4ff-bdc9-5d5d-8704-ef4b1ad67566",
+       "type": "first-occurrence"
+      },
+      {
+       "id": "4d85db5e-9a7f-fd55-8ac1-6b6ca5d72230",
+       "type": "next-occurrence"
+      }
+     ],
+     "road_names": [
+      "US 45 SB"
+     ],
+     "update_date": "2026-08-31T12:52:30.48+00:00"
+    },
+    "end_date": "2026-09-24T22:30:00+00:00",
+    "ending_cross_street": "45TH ST",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "open",
+      "type": "shoulder"
+     },
+     {
+      "order": 2,
+      "status": "open",
+      "type": "general"
+     },
+     {
+      "order": 3,
+      "status": "closed",
+      "type": "general"
+     },
+     {
+      "order": 4,
+      "status": "closed",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "sign-method",
+    "restrictions": [
+     {
+      "type": "reduced-width",
+      "unit": "inches",
+      "value": 192
+     }
+    ],
+    "start_date": "2026-09-24T12:00:00+00:00",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "contact_email": "",
+  "contact_name": "",
+  "data_sources": [
+   {
+    "data_source_id": "ATMS-ExtEvent",
+    "organization_name": ""
+   },
+   {
+    "data_source_id": "ATMS-ERM",
+    "organization_name": ""
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "Work Zone Manager",
+  "update_date": "2026-09-23T04:23:10.7231345+00:00",
+  "update_frequency": 60,
+  "version": "4.2"
+ },
+ "type": "FeatureCollection"
+}
