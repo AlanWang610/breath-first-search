@@ -40,13 +40,15 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Plan } from "../api";
-import { api } from "../api";
+import { api, FLAG_KIND } from "../api";
 import {
   elevationRuns,
   flagsBySegment,
+  kindName,
   pointAtDistance,
   segmentRange,
   tierColour,
+  tierName,
   type Vertex,
 } from "../lib/plan";
 
@@ -103,11 +105,11 @@ function segmentFeatures(plan: Plan) {
         end_m: endM,
         flagged: worst ? 1 : 0,
         colour: worst ? tierColour(worst.tier) : "#7f8c96",
-        width: worst ? (worst.kind === "hard" ? 7 : 5) : 3,
+        width: worst ? (worst.kind === FLAG_KIND.HARD ? 7 : 5) : 3,
         // Prose, because the hover is where somebody finds out *why* a segment is
         // coloured. A reason code alone tells a developer something and a runner nothing.
         reason: worst
-          ? `${segment.id}: ${worst.scorer} ${worst.kind} (${worst.tier}) — ${
+          ? `${segment.id}: ${worst.scorer} ${kindName(worst.kind)} (${tierName(worst.tier)}) — ${
               worst.detail ?? worst.reason_code
             }`
           : `${segment.id}: nothing flagged`,

@@ -30,11 +30,36 @@ export interface RoutePoint {
   cum_dist_m: number;
 }
 
+/**
+ * Arbitration tiers and flag kinds, **as numbers, because that is what the wire carries**.
+ *
+ * `core.models.measurement.Tier` and `FlagKind` are `IntEnum`, so pydantic dumps `0`, `1`,
+ * `2` and not `"safety"`, `"physiological"`, `"comfort"`. This file declared them as
+ * strings from M7 until M15 and every consumer compared against one: `tierColour("safety")`
+ * against a `0`, `worst.kind === "hard"` against a `1`. Both are false for every flag any
+ * server has ever sent.
+ *
+ * That is the `TradeOff.options` bug again, in the same file, for the same reason — these
+ * types are hand-written and `tsc` checks them against each other rather than against the
+ * schema. `plan.test.ts` did not catch it because it builds its own flags from these very
+ * types, so it was checking the mistake against itself, which is the failure mode the
+ * `TradeOff` docstring below names. What caught it was M15's first hover test reading the
+ * popup out of a real plan and finding `hazards 0 (2)` where prose should have been.
+ *
+ * The names are constants rather than a union of literals so that a tier this file has not
+ * met is still a number the UI can carry and decline to colour, which is the behaviour
+ * `tierColour` has always documented.
+ */
+export const TIER = { SAFETY: 0, PHYSIOLOGICAL: 1, COMFORT: 2 } as const;
+export const FLAG_KIND = { SOFT: 0, HARD: 1 } as const;
+
 export interface Flag {
   scorer: string;
   segment_id: string;
-  kind: "soft" | "hard";
-  tier: string;
+  /** `FLAG_KIND.SOFT` or `FLAG_KIND.HARD`. */
+  kind: number;
+  /** A `TIER` value. Lower is more important — scope 8.4's ordering, not a score. */
+  tier: number;
   severity: number;
   reason_code: string;
   detail?: string | null;
