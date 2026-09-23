@@ -456,7 +456,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "d46768ec50985cd75c20f83f959b1da3017854f4396f56c55c80c8071255e756",
+  "measurements_sha256": "4e044bdd0fe33fb79f5df9cd2d03c182c77e5c15f50468c655d27ebfc4ff4803",
   "pacing": {
     "duration_s": 3979.4,
     "finish": "2026-09-26T08:36:19"
@@ -613,8 +613,8 @@
       "mean_confidence": 1.0,
       "measured_segments": 55,
       "summary": {
-        "max_us_aqi": 36.0,
-        "mean_us_aqi": 34.87,
+        "max_us_aqi": 30.0,
+        "mean_us_aqi": 29.519,
         "sites": 3,
         "sites_answered": 3,
         "source": "open-meteo (CAMS model)"
@@ -765,8 +765,8 @@
       "summary": {
         "formula": "ACSM/BoM approximation: temperature and humidity only",
         "hard_floor_c": 30.0,
-        "max_wbgt_c": 19.471,
-        "mean_wbgt_c": 19.357,
+        "max_wbgt_c": 20.345,
+        "mean_wbgt_c": 19.832,
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
@@ -818,12 +818,14 @@
       "mean_confidence": 1.0,
       "measured_segments": 55,
       "summary": {
-        "max_temp_c": 17.25,
-        "min_temp_c": 16.69,
+        "max_temp_c": 18.342,
+        "min_temp_c": 17.1,
         "providers": "open-meteo:4",
         "sites": 4,
         "sites_answered": 4,
-        "spacing_m": 5000.0
+        "spacing_m": 5000.0,
+        "utc_offset_hours": -5.0,
+        "utc_offset_source": "stated"
       },
       "waypoints": {},
       "worst": []
@@ -844,7 +846,7 @@
         "suggested_carry_ml": 663.233,
         "water_hard_threshold_min": 150.0,
         "water_soft_threshold_min": 90.0,
-        "wbgt_used_c": 19.471
+        "wbgt_used_c": 20.345
       },
       "waypoints": {
         "food": 2,
@@ -916,7 +918,7 @@
       "measured_segments": 14,
       "summary": {
         "candidates": 13,
-        "coolest_start": "10:00",
+        "coolest_start": "05:00",
         "requested_start": "07:30",
         "shadiest_start": "04:30",
         "step_minutes": 30.0,

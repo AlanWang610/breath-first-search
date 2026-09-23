@@ -96,6 +96,15 @@
       "vintage": null
     },
     {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "forecast",
+      "reason": "hours were fetched but none covers this plan: the request asks for one local calendar day of UTC hours, which at UTC-7 reaches local 2026-09-11 17:00 to 16:00. Widening it would change the cache key and orphan every committed cassette, and air quality for a past date can never be re-fetched (ADR 0045)",
+      "source": "open_meteo",
+      "tier": null,
+      "vintage": null
+    },
+    {
       "checked": true,
       "jurisdiction": null,
       "kind": "surface_model",
@@ -132,10 +141,28 @@
       "vintage": null
     },
     {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "cloud_cover",
+      "reason": "no cloud cover at this plan's hours: irradiance reported as clear-sky, an upper bound",
+      "source": "forecast",
+      "tier": null,
+      "vintage": null
+    },
+    {
       "checked": true,
       "jurisdiction": null,
       "kind": "forecast",
       "reason": "2 of 2 sites along the route",
+      "source": "open_meteo",
+      "tier": null,
+      "vintage": null
+    },
+    {
+      "checked": false,
+      "jurisdiction": null,
+      "kind": "forecast",
+      "reason": "hours were fetched but none covers this plan: the request asks for one local calendar day of UTC hours, which at UTC-7 reaches local 2026-09-11 17:00 to 16:00. Widening it would change the cache key and orphan every committed cassette, and air quality for a past date can never be re-fetched (ADR 0045)",
       "source": "open_meteo",
       "tier": null,
       "vintage": null
@@ -528,7 +555,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "ff56fb7586a9102abc2b72953f6d45fdbc75afb0f8cd419d8cc4f709f1ff84f4",
+  "measurements_sha256": "ef5d608440c566251599059813628b2f5c717c0aaf1e6807541f5085b05f8d01",
   "pacing": {
     "duration_s": 765.6,
     "finish": "2026-09-12T17:42:45"
@@ -1021,13 +1048,13 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 0.615,
+      "mean_confidence": 0.019,
       "measured_segments": 52,
       "summary": {
         "formula": "ACSM/BoM approximation: temperature and humidity only",
         "hard_floor_c": 30.0,
-        "max_wbgt_c": 19.16,
-        "mean_wbgt_c": 19.13,
+        "max_wbgt_c": null,
+        "mean_wbgt_c": null,
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
@@ -1112,15 +1139,17 @@
         "hard": 0,
         "soft": 0
       },
-      "mean_confidence": 1.0,
+      "mean_confidence": 0.019,
       "measured_segments": 52,
       "summary": {
-        "max_temp_c": 17.827,
-        "min_temp_c": 17.7,
+        "max_temp_c": null,
+        "min_temp_c": null,
         "providers": "open-meteo:2",
         "sites": 2,
         "sites_answered": 2,
-        "spacing_m": 5000.0
+        "spacing_m": 5000.0,
+        "utc_offset_hours": -7.0,
+        "utc_offset_source": "zone America/Los_Angeles"
       },
       "waypoints": {},
       "worst": []
@@ -1141,7 +1170,7 @@
         "suggested_carry_ml": 42.599,
         "water_hard_threshold_min": 150.0,
         "water_soft_threshold_min": 90.0,
-        "wbgt_used_c": 19.16
+        "wbgt_used_c": null
       },
       "waypoints": {
         "food": 34,
@@ -1222,7 +1251,7 @@
       "measured_segments": 14,
       "summary": {
         "candidates": 13,
-        "coolest_start": "14:30",
+        "coolest_start": "16:00",
         "requested_start": "17:30",
         "shadiest_start": "19:30",
         "step_minutes": 30.0,
@@ -1293,7 +1322,7 @@
       "measured_segments": 52,
       "summary": {
         "mean_sky_view_factor": 0.921,
-        "peak_irradiance_w_m2": 279.007,
+        "peak_irradiance_w_m2": 292.949,
         "raycast_rung": "full",
         "shaded_fraction": 0.135,
         "surface": "shade measured from buildings and dem; canopy unavailable",
