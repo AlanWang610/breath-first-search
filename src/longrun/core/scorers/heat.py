@@ -204,7 +204,7 @@ def heat_stress(
     result.coverage.extend(forecast.coverage())
     # `forecast.answered` above is about whether a *site* spoke; this is about whether any
     # of the hours it spoke about is the hour this plan runs in. The two were the same
-    # question until M15 gave the ETA its true instant, and a route that now falls off the
+    # question until ADR 0045 gave the ETA its true instant, and a route that now falls off the
     # end of the fetched window has to say which of the two it is (ADR 0045).
     gap = window_gap_entry(forecast, readings)
     if gap is not None:

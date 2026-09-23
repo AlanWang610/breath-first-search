@@ -11,7 +11,7 @@ measured and Open-Meteo publishes a model, and a reader deciding whether to run 
 day should know which they are looking at.
 
 The ETAs below are naive local and `RouteAirQuality.at_distance` converts them to the naive
-UTC instants the series is stored on (ADR 0045). It did not until M15, so every plan read
+UTC instants the series is stored on (ADR 0045). It did not until ADR 0045, so every plan read
 the AQI of the wrong hour — the same bug as `microclimate`'s, from the same `timezone=UTC`
 request, and fixed in the same one place rather than twice.
 """

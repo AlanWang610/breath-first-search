@@ -20,7 +20,7 @@ that finishes at noon.
 
 **Same clock convention as `core.data.forecast`, and for the same reason** (ADR 0045).
 `AirHour.time` is a naive **UTC** instant; an ETA is a naive **local** wall clock; and
-`RouteAirQuality.at_distance` is the one place the two meet. Until M15 they met without
+`RouteAirQuality.at_distance` is the one place the two meet. Until ADR 0045 they met without
 converting: `air_args` asks for `timezone=UTC` exactly as `open_meteo_args` does, so a
 17:30 local ETA read the 17:30 UTC row and every plan reported air quality from the wrong
 hour. Weather and air quality resolve their offset through the same

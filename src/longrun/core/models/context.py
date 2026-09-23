@@ -151,7 +151,7 @@ class ScorerContext:
     features: FeatureSource | None = None
     #: Hours **from** UTC, in `datetime.utcoffset`'s sense: -7 for Pacific Daylight Time.
     #: Subtracted from a naive plan time to reach UTC, never added - this said "hours to
-    #: add ... to get UTC" until M15, which is the opposite sign from every reader of it
+    #: add ... to get UTC" until ADR 0045, which is the opposite sign from every reader of it
     #: (`solar._index`, `forecast.to_utc`), and a sign error here is a fourteen-hour one.
     #:
     #: `None` means nobody *stated* one, which is the common case and not a failure: a

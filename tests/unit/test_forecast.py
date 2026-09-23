@@ -274,7 +274,7 @@ def test_the_nearest_site_is_measured_along_the_route() -> None:
 
 
 class TestTheTwoClocks:
-    """The bug M15 fixed: a naive local ETA read against naive UTC hours.
+    """The bug ADR 0045 fixed: a naive local ETA read against naive UTC hours.
 
     Nothing in this suite fed NWS-parsed points into `at()` before — `_site_forecast` above
     labels itself `provider="nws"` but builds its `HourlyPoint`s by hand, so the stamps NWS
@@ -434,7 +434,7 @@ def test_a_recorded_cassette_serves_the_forecast_offline(
 
     The ETA is **local**, the cassette is **UTC**, and the route is in California, so the
     row this selects is seven hours along from the one whose wall-clock number matches. It
-    read 12:00 UTC for a 12:00 local ETA until M15 (ADR 0045).
+    read 12:00 UTC for a 12:00 local ETA until ADR 0045.
     """
     monkeypatch.delenv(USER_AGENT_ENV_VAR, raising=False)
     route = _route(points=6, step_m=500.0)

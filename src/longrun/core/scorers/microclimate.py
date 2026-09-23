@@ -16,7 +16,7 @@ partly answered: eighteen sites of twenty-one is a real result, and the segments
 the three that failed carry lower confidence rather than the whole route being discarded.
 
 **The ETAs handed to `for_segments` are naive local and are converted there, not here**
-(ADR 0045). Until M15 they were not converted at all: Open-Meteo is requested with
+(ADR 0045). Until ADR 0045 they were not converted at all: Open-Meteo is requested with
 `timezone=UTC`, so a 17:30 local arrival was matched against the 17:30 UTC row — 10:30 in
 San Francisco — and every plan this project produced read the wrong hour. The conversion
 sits behind `RouteForecast` rather than in this function because five scorers ask the same
@@ -109,7 +109,7 @@ def microclimate(
                 "providers": ", ".join(f"{k}:{v}" for k, v in sorted(forecast.providers.items())),
                 # Which hour was read, and on whose authority. The same three-state report
                 # `sun_exposure` and `lighting` already carry (ADR 0008), extended here
-                # because the hour is precisely what M15 found wrong: a reader comparing
+                # because the hour is precisely what ADR 0045 found wrong: a reader comparing
                 # this figure against a weather site needs to know which clock it is on.
                 "utc_offset_hours": forecast.utc_offset_hours,
                 "utc_offset_source": forecast.utc_offset_source,

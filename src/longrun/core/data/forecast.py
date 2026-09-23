@@ -29,7 +29,7 @@ reviewable diff rather than a silent change of source.
 
 ## The one time convention (ADR 0045)
 
-Two clocks meet in this module and until M15 they met without being converted:
+Two clocks meet in this module and until ADR 0045 they met without being converted:
 
 * **An hour in the series is a naive UTC instant.** `HourlyPoint.time` is always naive and
   always UTC — for both providers, enforced at parse time, never a local wall clock and
@@ -733,7 +733,7 @@ def window_gap_entry(
     hours, which at a negative offset ends before the evening it was asked about
     (ADR 0045).
 
-    Silent before M15, and silently *wrong* rather than absent: the ETA was matched against
+    Silent before ADR 0045, and silently *wrong* rather than absent: the ETA was matched against
     the UTC row of the same wall-clock number, so a 17:30 local run in San Francisco
     reported the weather at 10:30 and nothing said so.
     """

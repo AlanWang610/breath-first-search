@@ -248,7 +248,7 @@ def test_air_quality_reads_a_local_eta_at_the_utc_hour_it_names() -> None:
 
     `air_args` asks Open-Meteo for UTC hours and an ETA is a naive local wall clock, so a
     12:00 arrival in San Francisco has to select 19:00 UTC. It selected 12:00 UTC — 05:00
-    Pacific, the small hours — on every plan until M15.
+    Pacific, the small hours — on every plan until ADR 0045.
     """
     hours = parse_air(
         {
