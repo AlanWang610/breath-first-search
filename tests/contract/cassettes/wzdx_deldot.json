@@ -1,0 +1,273 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -75.363922737114,
+      38.69544531410926
+     ],
+     [
+      -75.36255635352006,
+      38.69590558920126
+     ],
+     [
+      -75.36047886143528,
+      38.69658830081741
+     ],
+     [
+      -75.35622783258509,
+      38.69796944917633
+     ],
+     [
+      -75.34380232536583,
+      38.70194792491344
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "4cf4a876-f066-48f8-904a-a2b16f051306",
+   "properties": {
+    "core_details": {
+     "data_source_id": "510caade-eb29-42f3-82eb-3b13324e7dc6",
+     "direction": "undefined",
+     "event_type": "work-zone",
+     "road_names": [
+      "Airport Road to Park Avenue"
+     ]
+    },
+    "end_date": "2026-09-23T04:45:41Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": true,
+    "is_start_date_verified": true,
+    "is_start_position_verified": true,
+    "location_method": "unknown",
+    "start_date": "2026-09-23T02:45:41Z",
+    "vehicle_impact": "unknown",
+    "worker_presence": {
+     "are_workers_present": true,
+     "confidence": "high",
+     "worker_presence_last_confirmed_date": "2026-09-23T02:45:41Z"
+    }
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -75.34332794042157,
+      38.70197521752544
+     ],
+     [
+      -75.33827243337802,
+      38.7036291565293
+     ],
+     [
+      -75.3334920049115,
+      38.70512610840629
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "1c15b283-1605-4ec8-b90b-3d5a75fd8b4e",
+   "properties": {
+    "core_details": {
+     "data_source_id": "510caade-eb29-42f3-82eb-3b13324e7dc6",
+     "direction": "undefined",
+     "event_type": "work-zone",
+     "road_names": [
+      "Park Avenue to Stiener Road"
+     ]
+    },
+    "end_date": "2026-09-23T04:45:41Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": true,
+    "is_start_date_verified": true,
+    "is_start_position_verified": true,
+    "location_method": "unknown",
+    "start_date": "2026-09-23T02:45:41Z",
+    "vehicle_impact": "unknown",
+    "worker_presence": {
+     "are_workers_present": true,
+     "confidence": "high",
+     "worker_presence_last_confirmed_date": "2026-09-23T02:45:41Z"
+    }
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -75.33328645617053,
+      38.70517094145103
+     ],
+     [
+      -75.32457708974391,
+      38.70798454410183
+     ],
+     [
+      -75.32031128134305,
+      38.70930710332419
+     ],
+     [
+      -75.32000286990699,
+      38.70928670950508
+     ],
+     [
+      -75.31600671067439,
+      38.71052069267938
+     ],
+     [
+      -75.31587510020492,
+      38.71068506131613
+     ],
+     [
+      -75.3151124999149,
+      38.71092946363169
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "88504c31-d2b9-47c1-ab1a-16fb97d7bbd7",
+   "properties": {
+    "core_details": {
+     "data_source_id": "510caade-eb29-42f3-82eb-3b13324e7dc6",
+     "direction": "undefined",
+     "event_type": "work-zone",
+     "road_names": [
+      "Stiener Road to Gravel Hill Road (SR30)"
+     ]
+    },
+    "end_date": "2026-09-23T04:45:41Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": true,
+    "is_start_date_verified": true,
+    "is_start_position_verified": true,
+    "location_method": "unknown",
+    "start_date": "2026-09-23T02:45:41Z",
+    "vehicle_impact": "unknown",
+    "worker_presence": {
+     "are_workers_present": true,
+     "confidence": "high",
+     "worker_presence_last_confirmed_date": "2026-09-23T02:45:41Z"
+    }
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -75.3148995241845,
+      38.71103387133215
+     ],
+     [
+      -75.31095730758291,
+      38.71229906453107
+     ],
+     [
+      -75.31102486260654,
+      38.71240177739685
+     ],
+     [
+      -75.31034739996927,
+      38.712622724007275
+     ],
+     [
+      -75.30827131163288,
+      38.713282454030974
+     ],
+     [
+      -75.30342078508146,
+      38.714827662009725
+     ],
+     [
+      -75.30145463699098,
+      38.715469886392015
+     ],
+     [
+      -75.29874045269311,
+      38.71630838310935
+     ],
+     [
+      -75.29634148030776,
+      38.717086500526335
+     ],
+     [
+      -75.29321794536241,
+      38.718079944590954
+     ],
+     [
+      -75.29017014620165,
+      38.71902634897472
+     ],
+     [
+      -75.29009200369316,
+      38.71884456969565
+     ],
+     [
+      -75.28916225170484,
+      38.719136900712016
+     ],
+     [
+      -75.28790986189894,
+      38.71955103427172
+     ],
+     [
+      -75.28657271000591,
+      38.71995588248461
+     ],
+     [
+      -75.28603349936053,
+      38.72021795632074
+     ],
+     [
+      -75.28479778974574,
+      38.72060666832704
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "c743a5f0-5339-4d6a-8c07-19fb4568f09e",
+   "properties": {
+    "core_details": {
+     "data_source_id": "510caade-eb29-42f3-82eb-3b13324e7dc6",
+     "direction": "undefined",
+     "event_type": "work-zone",
+     "road_names": [
+      "Gravel Hill Road (SR30) to Harbeson Road"
+     ]
+    },
+    "end_date": "2026-09-23T04:45:41Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": true,
+    "is_start_date_verified": true,
+    "is_start_position_verified": true,
+    "location_method": "unknown",
+    "start_date": "2026-09-23T02:45:41Z",
+    "vehicle_impact": "unknown",
+    "worker_presence": {
+     "are_workers_present": true,
+     "confidence": "high",
+     "worker_presence_last_confirmed_date": "2026-09-23T02:45:41Z"
+    }
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "data_sources": [
+   {
+    "data_source_id": "510caade-eb29-42f3-82eb-3b13324e7dc6",
+    "organization_name": "Delaware Department of Transportation"
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "HaulHub Technologies",
+  "update_date": "2026-09-23T04:21:26Z",
+  "version": "4.1"
+ },
+ "type": "FeatureCollection"
+}

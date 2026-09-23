@@ -1,0 +1,264 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -97.76927432158102,
+      30.246558780416898
+     ],
+     [
+      -97.76996101457708,
+      30.248416476170338
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "3b3fb173-f60f-5675-b8bf-039a9ea1bd45",
+   "properties": {
+    "core_details": {
+     "data_source_id": "7424752a-50db-5bbf-87fa-72172ff3b7c9",
+     "description": "Temporary use of Right of Way Permit has been issued for this location. \n Details: ***PER COORDINATION WITH  2026-095207 RW, THIS PROJECT HAS CLEARED THE ROW. CONFLICT CHECK REQUIRED FOR EXTENSION*** \n\n***PER COORDINATION WITH  2025-032743 RW, THIS PROJECT HAS CLEARED THE ROW. CONFLICT CHECK REQUIRED FOR EXTENSION*** \nEXTENDED PER RYAN MOONEY\n\nWR 197389 - 1571-1547 W Oltorf (S Lamar) - AEU/Mastec/Primoris - Replace wiring from P7 to P8, Work area 12x70 ft, Vehicles required: Underground truck 12x24, crew truck 12x22 and wire trailer 12x28. Work will be behind the curb.\n\nCOA Arterial Management Division has been added as a sub contractor per request on 11/13/23.",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "name": "AE/Mastec/Primoris - W OLTORF ST 1400 BLK - Replace Wiring ",
+     "road_names": [
+      "W OLTORF ST"
+     ]
+    },
+    "end_date": "2027-03-03T06:00:00Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-03-04T06:00:00Z",
+    "vehicle_impact": "some-lanes-closed",
+    "work_zone_type": "static",
+    "worker_presence": {
+     "are_workers_present": false,
+     "confidence": "medium",
+     "definition": [
+      "workers-in-work-zone-working"
+     ],
+     "method": "check-in-app"
+    }
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -97.7404908314511,
+      30.27825628448241
+     ],
+     [
+      -97.74083813638187,
+      30.277301818498874
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "22bd58e3-36c3-5b91-a538-cfd7c14f5f17",
+   "properties": {
+    "core_details": {
+     "data_source_id": "7424752a-50db-5bbf-87fa-72172ff3b7c9",
+     "description": "Temporary use of Right of Way Permit has been issued for this location. \n Details: 174 extension from Jul 05, 2026 to Dec 25, 2026\n180 extension from Jan 06, 2026 to Jul 04, 2026\n180 extension from Jan 11, 2025 to Jul 09, 2025\n171 extension from Jul 24, 2024 to Jan 10, 2025\n180 extension from Jan 27, 2024 to Jul 24, 2024\n\n**CHECK PERMITS 23-037811 RW AND 23 081408 RW, BEFORE INVOICING THIS ONE** \n\n**2023-156127 EX will work behind this Long-term closure. **\n\nThe Contractor overseeing the work will be JE Dunn Construction. This right-of-way closure will facilitate the work being completed for the Texas Facilities Commission Capitol Complex Expansion Project (Phase 2). \n\nThis closure will require 2 Colorado St. Traffic Lanes (lane 1) 10 X 301 and (lane 2) 10 X 301. \n\nThis closure does not interfere with any city-owned metered parking. JE Dunn Construction will be the CMR managing all work being done within this closure. All work within this closure is being completed on The State of Texas property. See attached engineered traffic control plan.",
+     "direction": "northbound",
+     "event_type": "work-zone",
+     "name": "JE Dunn Construction - Colorado St Lane Closures- CapComp Phase 2 ",
+     "road_names": [
+      "COLORADO ST"
+     ]
+    },
+    "end_date": "2026-12-25T06:00:00Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-07-05T05:00:00Z",
+    "vehicle_impact": "all-lanes-closed",
+    "work_zone_type": "static",
+    "worker_presence": {
+     "are_workers_present": false,
+     "confidence": "medium",
+     "definition": [
+      "workers-in-work-zone-working"
+     ],
+     "method": "check-in-app"
+    }
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -97.74085021998636,
+      30.277305130708825
+     ],
+     [
+      -97.74050291516312,
+      30.278259596725338
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "eac7c88e-a7ff-5352-8d2c-b299145e2a58",
+   "properties": {
+    "core_details": {
+     "data_source_id": "7424752a-50db-5bbf-87fa-72172ff3b7c9",
+     "description": "Temporary use of Right of Way Permit has been issued for this location. \n Details: 174 extension from Jul 05, 2026 to Dec 25, 2026\n180 extension from Jan 06, 2026 to Jul 04, 2026\n180 extension from Jan 11, 2025 to Jul 09, 2025\n171 extension from Jul 24, 2024 to Jan 10, 2025\n180 extension from Jan 27, 2024 to Jul 24, 2024\n\n**CHECK PERMITS 23-037811 RW AND 23 081408 RW, BEFORE INVOICING THIS ONE** \n\n**2023-156127 EX will work behind this Long-term closure. **\n\nThe Contractor overseeing the work will be JE Dunn Construction. This right-of-way closure will facilitate the work being completed for the Texas Facilities Commission Capitol Complex Expansion Project (Phase 2). \n\nThis closure will require 2 Colorado St. Traffic Lanes (lane 1) 10 X 301 and (lane 2) 10 X 301. \n\nThis closure does not interfere with any city-owned metered parking. JE Dunn Construction will be the CMR managing all work being done within this closure. All work within this closure is being completed on The State of Texas property. See attached engineered traffic control plan.",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "name": "JE Dunn Construction - Colorado St Lane Closures- CapComp Phase 2 ",
+     "road_names": [
+      "COLORADO ST"
+     ]
+    },
+    "end_date": "2026-12-25T06:00:00Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-07-05T05:00:00Z",
+    "vehicle_impact": "all-lanes-closed",
+    "work_zone_type": "static",
+    "worker_presence": {
+     "are_workers_present": false,
+     "confidence": "medium",
+     "definition": [
+      "workers-in-work-zone-working"
+     ],
+     "method": "check-in-app"
+    }
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -97.7408428182044,
+      30.277298103583398
+     ],
+     [
+      -97.7409916922755,
+      30.277269706643047
+     ],
+     [
+      -97.74099235752965,
+      30.277269611625286
+     ],
+     [
+      -97.74099303065015,
+      30.277269578498817
+     ],
+     [
+      -97.7409937040154,
+      30.27726960763877
+     ],
+     [
+      -97.7409943700009,
+      30.277269698715152
+     ],
+     [
+      -97.74099502106584,
+      30.27726985069676
+     ],
+     [
+      -97.7418171550151,
+      30.27750312394998
+     ],
+     [
+      -97.74181770173652,
+      30.27750330370509
+     ],
+     [
+      -97.7418182270406,
+      30.27750352643331
+     ],
+     [
+      -97.74181872645478,
+      30.277503790238306
+     ],
+     [
+      -97.74181919572693,
+      30.277504092873937
+     ],
+     [
+      -97.74181963086157,
+      30.277504431763564
+     ],
+     [
+      -97.74193833881543,
+      30.277605844586432
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "c8357324-8323-5389-8455-7816a2b0e518",
+   "properties": {
+    "core_details": {
+     "data_source_id": "7424752a-50db-5bbf-87fa-72172ff3b7c9",
+     "description": "Temporary use of Right of Way Permit has been issued for this location. \n Details: 174 extension from Jul 05, 2026 to Dec 25, 2026\n180 extension from Jan 06, 2026 to Jul 04, 2026\n180 extension from Jan 11, 2025 to Jul 09, 2025\n171 extension from Jul 24, 2024 to Jan 10, 2025\n180 extension from Jan 27, 2024 to Jul 24, 2024\n\n**CHECK PERMITS 23-037811 RW AND 23 081408 RW, BEFORE INVOICING THIS ONE** \n\n**2023-156127 EX will work behind this Long-term closure. **\n\nThe Contractor overseeing the work will be JE Dunn Construction. This right-of-way closure will facilitate the work being completed for the Texas Facilities Commission Capitol Complex Expansion Project (Phase 2). \n\nThis closure will require 2 Colorado St. Traffic Lanes (lane 1) 10 X 301 and (lane 2) 10 X 301. \n\nThis closure does not interfere with any city-owned metered parking. JE Dunn Construction will be the CMR managing all work being done within this closure. All work within this closure is being completed on The State of Texas property. See attached engineered traffic control plan.",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "name": "JE Dunn Construction - Colorado St Lane Closures- CapComp Phase 2 ",
+     "road_names": [
+      "W 15TH ST"
+     ]
+    },
+    "end_date": "2026-12-25T06:00:00Z",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "other",
+    "start_date": "2026-07-05T05:00:00Z",
+    "vehicle_impact": "some-lanes-closed",
+    "work_zone_type": "static",
+    "worker_presence": {
+     "are_workers_present": false,
+     "confidence": "medium",
+     "definition": [
+      "workers-in-work-zone-working"
+     ],
+     "method": "check-in-app"
+    }
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "contact_email": "transportation.data@austintexas.gov",
+  "contact_name": "Transportation and Public Works Department",
+  "data_sources": [
+   {
+    "contact_email": "transportation.data@austintexas.gov",
+    "contact_name": "Transportation and Public Works Department",
+    "data_source_id": "7424752a-50db-5bbf-87fa-72172ff3b7c9",
+    "organization_name": "City of Austin: AMANDA Right of Way Permits",
+    "update_date": "2026-09-23T04:01:52Z",
+    "update_frequency": 3600
+   },
+   {
+    "contact_email": "transportation.data@austintexas.gov",
+    "contact_name": "Transportation and Public Works Department",
+    "data_source_id": "94f42b9d-2c02-506a-a0eb-d9d3c1e50edb",
+    "organization_name": "City of Austin: AMANDA Excavation Permits",
+    "update_date": "2026-09-23T04:01:52Z",
+    "update_frequency": 3600
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "City of Austin",
+  "update_date": "2026-09-23T04:01:52Z",
+  "update_frequency": 3600,
+  "version": "4.2"
+ },
+ "type": "FeatureCollection"
+}
