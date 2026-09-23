@@ -94,6 +94,15 @@ wzdx-msdot = "longrun.adapters.wzdx.msdot:CLOSURES"
 wzdx-njdot = "longrun.adapters.wzdx.njdot:CLOSURES"
 wzdx-wisdot = "longrun.adapters.wzdx.wisdot:CLOSURES"
 wzdx-austin = "longrun.adapters.wzdx.austin:CLOSURES"
+# Also M14, also keyless and live - but these six declare no licence, so ADR 0038 forbids a
+# cassette and they have no recorded parse path. 511NY publishes an outright prohibition on
+# redistribution; the other five are silent. Same position as `wzdx-azdot`.
+wzdx-necdot = "longrun.adapters.wzdx.necdot:CLOSURES"
+wzdx-iddot = "longrun.adapters.wzdx.iddot:CLOSURES"
+wzdx-iowadot = "longrun.adapters.wzdx.iowadot:CLOSURES"
+wzdx-nysdot = "longrun.adapters.wzdx.nysdot:CLOSURES"
+wzdx-ncdot = "longrun.adapters.wzdx.ncdot:CLOSURES"
+wzdx-wsdot = "longrun.adapters.wzdx.wsdot:CLOSURES"
 # Tier 3: agency portals. Keyed on a PAD-US agency rather than a census boundary.
 portal-nps = "longrun.adapters.portals.nps:TRAIL_STATUS"
 

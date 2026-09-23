@@ -146,6 +146,41 @@ LICENCES: dict[str, SourceLicence] = {
         licence="CC0 1.0",
         attribution="Work zone data: City of Austin",
     ),
+    # The six that declare nothing. The licence text says so rather than guessing, and it
+    # is the same wording `wzdx_azdot` uses - a terms-of-use page is a permission to read,
+    # which is not a permission to redistribute, which is why none of these has a cassette.
+    "wzdx_necdot": SourceLicence(
+        source="wzdx_necdot",
+        licence="no licence declared by the feed; New England Compass terms of use",
+        attribution="Work zone data: Maine DOT, NHDOT and VTrans via New England Compass",
+    ),
+    "wzdx_iddot": SourceLicence(
+        source="wzdx_iddot",
+        licence="no licence declared by the feed; 511 Idaho terms of use",
+        attribution="Work zone data: Idaho Transportation Department",
+    ),
+    "wzdx_iowadot": SourceLicence(
+        source="wzdx_iowadot",
+        licence="no licence declared by the feed; Iowa DOT terms of use",
+        attribution="Work zone data: Iowa DOT",
+    ),
+    # The one feed whose terms prohibit redistribution outright rather than being silent.
+    # Stated here and not only in the adapter, because this is the line a sheet prints.
+    "wzdx_nysdot": SourceLicence(
+        source="wzdx_nysdot",
+        licence="511NY terms of use; redistribution prohibited without NYSDOT consent",
+        attribution="Work zone data: New York State DOT / 511NY",
+    ),
+    "wzdx_ncdot": SourceLicence(
+        source="wzdx_ncdot",
+        licence="no licence declared by the feed; DriveNC terms of use",
+        attribution="Work zone data: North Carolina DOT",
+    ),
+    "wzdx_wsdot": SourceLicence(
+        source="wzdx_wsdot",
+        licence="no licence declared by the feed; WSDOT terms of use",
+        attribution="Work zone data: Washington State DOT",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",
