@@ -111,10 +111,23 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",
-    // Large enough that `fitBounds` puts the whole 4 km route on screen with room to
-    // click a segment away from the endpoints, and fixed so a click at a projected pixel
-    // means the same thing on every machine.
-    viewport: { width: 1280, height: 900 },
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        // **After the device spread, not before it.** `devices["Desktop Chrome"]` carries a
+        // viewport of its own, so a `viewport` set on the top-level `use` is overridden by
+        // the project and silently has no effect — which is how a config can document a
+        // window size it does not have. Set here, it is the one that applies.
+        //
+        // The size matters because `.map` is `55vh` with a `320px` floor: at 720 the map is
+        // pinned to the floor, and a taller window gives `fitBounds` more canvas and every
+        // gesture more room between the route and the edge. Fixed rather than inherited so
+        // that a projected pixel means the same thing on every machine.
+        viewport: { width: 1280, height: 900 },
+      },
+    },
+  ],
 });
