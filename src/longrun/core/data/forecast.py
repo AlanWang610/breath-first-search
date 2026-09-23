@@ -58,10 +58,11 @@ half of the very same function.
 
 ## The window this cannot cover (ADR 0045)
 
-`open_meteo_args` asks for one calendar day of **UTC** hours, so a route west of Greenwich
-gets forecast for local `[24 + offset):00` on the previous day to `(24 + offset):00` — at
-UTC−7, local 17:00 yesterday to 17:00 today. **An evening ETA falls off the end and reads
-as absent**, which is what `bay-urban` now reports.
+`open_meteo_args` asks for one calendar day of **UTC** hours — 00:00 to 23:00 — so a route
+west of Greenwich gets forecast from local `24 + offset` o'clock on the *previous* day to
+`23 + offset` o'clock on this one. At UTC−7 that is local 17:00 yesterday to 16:00 today.
+**An evening ETA falls off the end and reads as absent**, which is what `bay-urban` now
+reports: it starts at 17:30.
 
 That is a known gap and it is not fixed here, because the fix is a wider request and a
 wider request is a different cache key. A new key orphans every committed cassette, and for

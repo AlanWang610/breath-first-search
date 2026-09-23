@@ -106,10 +106,10 @@ temperature against a weather site needs to know which clock it is on.
 ## The half this does **not** fix, and why
 
 **`open_meteo_args` and `air_args` are unchanged, deliberately.** They ask for one *local
-calendar day* of *UTC* hours. At UTC−7 that covers local 17:00 on the previous day to 17:00
-today. **An evening ETA falls off the end**, and `bay-urban` — a 17:30 start chosen
-precisely because late-afternoon sun casts real shadows — now has no forecast at all: its
-microclimate and WBGT readings are `None` and its confidence is 0.019.
+calendar day* of *UTC* hours — 00:00 to 23:00. At UTC−7 that covers local 17:00 on the
+previous day to 16:00 today. **An evening ETA falls off the end**, and `bay-urban` — a
+17:30 start chosen precisely because late-afternoon sun casts real shadows — now has no
+forecast at all: its microclimate and WBGT readings are `None` and its confidence is 0.019.
 
 That is a **known coverage gap**, recorded here rather than papered over, and the reason it
 is not closed is that the fix is unavailable:
