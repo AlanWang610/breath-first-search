@@ -25,6 +25,36 @@ when something needs it — not smuggled in as a table nothing can read.
 feeds", and discovery needs a registry (the Mobility Database, transit.land) with its own
 key and its own licence. `load_gtfs` takes the feeds a region declares, the same way
 `load_tiger` takes the states it crosses.
+
+**`calendar_dates.txt` is read, and until M16 it was not — which was a silent correctness
+bug, not a missing feature.** GTFS lets a feed define service in either of two files, and
+`calendar.txt` is the *optional* one: a feed may carry no `calendar.txt` at all and
+enumerate every service day in `calendar_dates.txt` instead. Those feeds exist in the wild
+and small agencies publish them routinely. Against such a feed the old code built an empty
+`services` map, so every `observe()` was handed an empty day-type set, every stop's `span`
+stayed empty, `served` was False for all of them, and `summarise_feed` returned **zero
+rows**. The feed then vanished: `transit` and `bailouts` reported *"no stop within reach"*
+for a station with a train every twenty minutes, which is the one thing `in_service`'s
+tri-state exists to prevent — and it happened a layer below it, where the tri-state cannot
+see, because a dropped stop is not an unknown stop.
+
+**What an exception may and may not do to a day-type summary** is the decision inside that
+fix, and it is deliberately asymmetric:
+
+*A service with no `calendar.txt` row takes its day types from its added dates.* There is no
+recurring pattern to contradict, and the added dates are the whole service calendar.
+
+*A service that has a `calendar.txt` row keeps it.* Additions do not widen it: a
+weekday-only service with one added Saturday for a street fair would otherwise report
+`saturday_departures` in the hundreds, and a runner finishing on an ordinary Saturday would
+be told the stop is served. Removals do not narrow it either: a summary keyed on *day type*
+cannot say "not this one Tuesday", and dropping "weekday" because one Tuesday is cancelled
+would under-claim the other 260. Both directions lose information the schema has no room
+for, and losing it loudly here is better than encoding it wrongly.
+
+Neither this nor `calendar.txt`'s own `start_date`/`end_date` is tested for validity, so a
+feed whose service ended last year still summarises as served. That is pre-existing and
+unchanged; the vintage on `meta.layer_vintage` is what a reader has to go on.
 """
 
 from __future__ import annotations
@@ -34,6 +64,7 @@ import io
 import zipfile
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from longrun.core.data.national import NationalSource
@@ -57,8 +88,8 @@ GTFS_STOPS = NationalSource(
         "routes": "text",
         "modes": "text",
         # Departures per day type. Zero and NULL are different answers: zero means the
-        # timetable was read and this stop has no Sunday service, NULL means the feed
-        # carried no calendar to read.
+        # timetable was read and this stop has no Sunday service, NULL means neither
+        # `calendar.txt` nor `calendar_dates.txt` gave this service a day to run on.
         "weekday_departures": "integer",
         "saturday_departures": "integer",
         "sunday_departures": "integer",
@@ -136,10 +167,15 @@ class StopSummary:
     def served(self) -> bool:
         """Whether any timetable was found for this stop at all.
 
-        A stop with rows in `stop_times.txt` but no matching `calendar.txt` entry has an
-        unreadable service pattern, not an empty one, and a summary of it would be a
-        confident zero. Dropping it means `bailouts` reports the *stop* as absent rather
-        than reporting it as never served.
+        A stop with rows in `stop_times.txt` and no service calendar anywhere - neither a
+        `calendar.txt` row nor an added date in `calendar_dates.txt` - has an unreadable
+        service pattern, not an empty one, and a summary of it would be a confident zero.
+        Dropping it means `bailouts` reports the *stop* as absent rather than reporting it
+        as never served.
+
+        That is a real cost and it is why reading `calendar_dates.txt` mattered: on a
+        calendar-dates-only feed this was False for every stop, so an agency with a train
+        every twenty minutes summarised to nothing at all.
         """
         return bool(self.span)
 
@@ -175,6 +211,76 @@ def day_types(row: dict[str, str]) -> set[str]:
     if row.get("sunday") == "1":
         found.add("sunday")
     return found
+
+
+def parse_service_date(value: str) -> date | None:
+    """A GTFS `YYYYMMDD` service date, or None when it is not one.
+
+    None rather than an exception: one malformed row in `calendar_dates.txt` must not take
+    a whole feed's service calendar down with it, which is the same rule `parse_time` and
+    the stop reader already follow.
+    """
+    text = value.strip()
+    if len(text) != 8 or not text.isdigit():
+        return None
+    try:
+        return date(int(text[:4]), int(text[4:6]), int(text[6:]))
+    except ValueError:
+        return None
+
+
+def day_types_for(day: date) -> set[str]:
+    """Which day type a calendar date falls on.
+
+    The inverse of `day_types`, and the join between the two files: `calendar.txt` names
+    day types directly and `calendar_dates.txt` names dates, so an added date has to be
+    resolved to the same three buckets the schema stores.
+
+    Derived from `CALENDAR_DAYS` rather than from a second weekday tuple. `transit.py`
+    carries its own `DAY_TYPES` for the read side and may not be imported from here — a
+    data module reaching into `core/scorers` is the arrow `test_layering.py` forbids — so
+    the constant stays single-sourced on this side at least.
+    """
+    named = CALENDAR_DAYS[day.weekday()]
+    return {named if named in ("saturday", "sunday") else "weekday"}
+
+
+def added_service_days(rows: Any) -> dict[str, set[date]]:
+    """Dates each service is **added** on, from `calendar_dates.txt`.
+
+    `exception_type` 2 - a removal - is read and dropped on purpose. A summary keyed on day
+    type cannot express "not this one Tuesday", and removing the whole day type because one
+    Tuesday is cancelled would under-claim every other Tuesday of the year. See the module
+    docstring: both directions lose information the schema has no room for.
+    """
+    added: dict[str, set[date]] = {}
+    for row in rows:
+        if (row.get("exception_type") or "").strip() != "1":
+            continue
+        when = parse_service_date(row.get("date") or "")
+        if when is None:
+            continue
+        added.setdefault(row.get("service_id") or "", set()).add(when)
+    return added
+
+
+def merge_service_days(
+    calendar: dict[str, set[str]], added: dict[str, set[date]]
+) -> dict[str, set[str]]:
+    """Day types per service, from `calendar.txt` widened only where it says nothing.
+
+    A service `calendar.txt` describes keeps its row: an added Saturday for a street fair
+    must not make a weekday-only line report hundreds of Saturday departures, because a
+    runner finishing on an ordinary Saturday would then be told the stop is served. A
+    service `calendar.txt` never mentions has no pattern to contradict, so its added dates
+    *are* its calendar - which is the whole of a calendar-dates-only feed.
+    """
+    merged = dict(calendar)
+    for service_id, dates in added.items():
+        if service_id in merged:
+            continue
+        merged[service_id] = {kind for day in dates for kind in day_types_for(day)}
+    return merged
 
 
 def _read_csv(archive: zipfile.ZipFile, member: str) -> Any:
@@ -214,9 +320,15 @@ def summarise_feed(path: Path, feed: str) -> list[StopSummary]:
             mode = ROUTE_MODES.get((row.get("route_type") or "").strip(), "other")
             routes[row.get("route_id") or ""] = (label, mode)
 
-        services: dict[str, set[str]] = {}
+        # Both files, because either may be absent and `calendar.txt` is the optional one.
+        # `_read_csv` already treats a missing member as an empty table, so a feed with
+        # only one of them reads as it should rather than raising.
+        calendar: dict[str, set[str]] = {}
         for row in _read_csv(archive, "calendar.txt"):
-            services[row.get("service_id") or ""] = day_types(row)
+            calendar[row.get("service_id") or ""] = day_types(row)
+        services = merge_service_days(
+            calendar, added_service_days(_read_csv(archive, "calendar_dates.txt"))
+        )
 
         trips: dict[str, tuple[str, str]] = {}
         for row in _read_csv(archive, "trips.txt"):
@@ -313,8 +425,12 @@ __all__ = [
     "GTFS_STOPS",
     "ROUTE_MODES",
     "StopSummary",
+    "added_service_days",
     "day_types",
+    "day_types_for",
     "load_gtfs",
+    "merge_service_days",
+    "parse_service_date",
     "parse_time",
     "summaries_to_frame",
     "summarise_feed",

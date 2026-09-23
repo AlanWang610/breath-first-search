@@ -18,7 +18,7 @@ no `ingest` extra: GTFS is CSV in a zip and the standard library reads both.
 from __future__ import annotations
 
 import zipfile
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -113,6 +113,112 @@ def test_a_stop_with_no_readable_calendar_is_dropped(tmp_path: Path) -> None:
     than an absent stop, because `bailouts` would count it as a checked non-exit."""
     path = _feed(tmp_path, **{"calendar.txt": "service_id,monday\n"})
     assert summarise_feed(path, "t") == []
+
+
+# --- calendar_dates.txt (M16.4) ---------------------------------------------
+
+
+def _dates_only_feed(tmp_path: Path, exceptions: str) -> Path:
+    """A feed with **no `calendar.txt` at all**, which GTFS permits and the wild contains."""
+    path = tmp_path / "dates-only.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("stops.txt", f"stop_id,stop_name,stop_lat,stop_lon\nS1,Stop,{LAT},{LON}\n")
+        archive.writestr("routes.txt", "route_id,route_short_name,route_type\nR1,Line 1,3\n")
+        archive.writestr("trips.txt", "trip_id,route_id,service_id\nT1,R1,HOL\n")
+        archive.writestr("calendar_dates.txt", exceptions)
+        archive.writestr(
+            "stop_times.txt",
+            "trip_id,stop_id,arrival_time,departure_time,stop_sequence\n"
+            "T1,S1,06:00:00,06:00:00,1\n",
+        )
+    return path
+
+
+def test_a_calendar_dates_only_feed_is_summarised_rather_than_dropped(tmp_path: Path) -> None:
+    """The bug M16.4 fixed, and it was silent two layers below where it showed.
+
+    `calendar.txt` is the optional file. Against a feed that enumerates its service days in
+    `calendar_dates.txt` the old reader built an empty service map, so every stop's span
+    stayed empty, `served` was False for all of them, and `summarise_feed` returned nothing
+    at all - and `bailouts` then reported "no stop within reach" for a station with a bus.
+    `in_service`'s tri-state cannot catch that, because a dropped stop is not an unknown one.
+    """
+    feed = _dates_only_feed(
+        tmp_path,
+        "service_id,date,exception_type\nHOL,20260914,1\nHOL,20260915,1\n",  # two weekdays
+    )
+    summaries = {s.stop_id: s for s in summarise_feed(feed, "t")}
+
+    assert set(summaries) == {"S1"}, "the whole feed used to vanish here"
+    assert summaries["S1"].departures["weekday"] == 1
+    assert summaries["S1"].span["weekday"] == (6 * 3600, 6 * 3600)
+
+
+def test_a_saturday_added_by_exception_is_a_saturday(tmp_path: Path) -> None:
+    """The dates are resolved to the same three buckets `calendar.txt` names directly."""
+    feed = _dates_only_feed(tmp_path, "service_id,date,exception_type\nHOL,20260912,1\n")
+    summaries = {s.stop_id: s for s in summarise_feed(feed, "t")}
+    assert summaries["S1"].departures["saturday"] == 1
+    assert summaries["S1"].departures.get("weekday", 0) == 0
+
+
+def test_a_removal_defines_no_service_on_its_own(tmp_path: Path) -> None:
+    """`exception_type=2` is read and dropped. A feed of nothing but removals adds nothing,
+    so the stop stays unreadable rather than becoming a confident zero."""
+    feed = _dates_only_feed(tmp_path, "service_id,date,exception_type\nHOL,20260914,2\n")
+    assert summarise_feed(feed, "t") == []
+
+
+def test_an_added_date_does_not_widen_a_service_the_calendar_describes(tmp_path: Path) -> None:
+    """The asymmetry, and the over-claim it prevents.
+
+    One added Saturday for a street fair must not make a weekday-only line report hundreds
+    of Saturday departures - a runner finishing on an ordinary Saturday would be told the
+    stop is served, which is the exact failure the per-day-type schema exists to avoid.
+    """
+    path = _feed(
+        tmp_path,
+        **{"calendar_dates.txt": "service_id,date,exception_type\nWEEK,20260912,1\n"},
+    )
+    summaries = {s.stop_id: s for s in summarise_feed(path, "t")}
+    assert summaries["S1"].departures["weekday"] == 2
+    assert summaries["S1"].departures.get("saturday", 0) == 0
+
+
+def test_a_removal_does_not_narrow_a_day_type(tmp_path: Path) -> None:
+    """The other direction of the same asymmetry. A summary keyed on day type cannot say
+    "not this one Tuesday", and dropping weekday for it would under-claim the other 260."""
+    path = _feed(
+        tmp_path,
+        **{"calendar_dates.txt": "service_id,date,exception_type\nWEEK,20260914,2\n"},
+    )
+    summaries = {s.stop_id: s for s in summarise_feed(path, "t")}
+    assert summaries["S1"].departures["weekday"] == 2
+
+
+def test_a_malformed_exception_row_is_skipped_rather_than_fatal(tmp_path: Path) -> None:
+    """One bad row must not take a feed's whole service calendar down - `parse_time`'s rule."""
+    from longrun.core.data.gtfs import added_service_days, parse_service_date
+
+    assert parse_service_date("2026-09-14") is None
+    assert parse_service_date("20261332") is None
+    added = added_service_days(
+        iter(
+            [
+                {"service_id": "A", "date": "not-a-date", "exception_type": "1"},
+                {"service_id": "A", "date": "20260914", "exception_type": "1"},
+            ]
+        )
+    )
+    assert added == {"A": {date(2026, 9, 14)}}
+
+
+def test_a_date_resolves_to_the_bucket_the_schema_stores() -> None:
+    from longrun.core.data.gtfs import day_types_for
+
+    assert day_types_for(date(2026, 9, 14)) == {"weekday"}
+    assert day_types_for(date(2026, 9, 12)) == {"saturday"}
+    assert day_types_for(date(2026, 9, 13)) == {"sunday"}
 
 
 def test_a_byte_order_mark_does_not_hide_the_first_column(tmp_path: Path) -> None:
