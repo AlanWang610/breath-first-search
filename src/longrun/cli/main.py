@@ -12,6 +12,7 @@ import typer
 from longrun import __version__
 from longrun.cli import (
     api,
+    edit,
     export,
     freeze,
     history,
@@ -58,6 +59,7 @@ freeze.register(app)
 export.register(app)
 region.register(app)
 plan.register(app)
+edit.register(app)
 jobs.register(app)
 serve.register(app)
 history.register(app)

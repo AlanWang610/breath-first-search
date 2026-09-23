@@ -75,6 +75,56 @@ class SegmentMeasurement(BaseModel):
     confidence: Annotated[float, Field(ge=0.0, le=1.0)] = 1.0
 
 
+class Regrounded(BaseModel):
+    """What re-keying a carried result onto a changed segmentation kept and lost.
+
+    Scope 3.6's rule in a new place. A partial re-score across a geometry edit carries the
+    scorers it did not re-run, and a carried measurement is keyed on a `segment_id` that
+    was an index into the segmentation the *old* line had. Some of those ids still name the
+    same ground and some do not, and a result that cannot say which is a plan sheet
+    reporting a measurement of a street the runner will not be on (ADR 0032).
+
+    Three counts rather than two, because the reasons differ and a reader needs to tell
+    them apart. A measurement dropped because its segment is gone describes ground the edit
+    removed. A route total dropped - `ROUTE_SUMMARY_ID`, a `start@07:00` sweep row, a
+    `meet#0` crew point - describes the whole route, and the whole route is what changed;
+    nothing is wrong with that ground, the number is simply about a different line.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    measurements_kept: int = 0
+    measurements_dropped: int = 0
+    #: Measurements whose id never named a segment at all.
+    route_totals_dropped: int = 0
+    flags_kept: int = 0
+    flags_dropped: int = 0
+    waypoints_kept: int = 0
+    waypoints_dropped: int = 0
+
+    @property
+    def lost_anything(self) -> bool:
+        return bool(
+            self.measurements_dropped
+            or self.route_totals_dropped
+            or self.flags_dropped
+            or self.waypoints_dropped
+        )
+
+    def describe(self) -> str:
+        """One line for a terminal or a sheet, in the terms a reader asks in."""
+        parts = [f"{self.measurements_kept} measurement(s) kept"]
+        if self.measurements_dropped:
+            parts.append(f"{self.measurements_dropped} on ground that is no longer on the route")
+        if self.route_totals_dropped:
+            parts.append(f"{self.route_totals_dropped} route total(s) about the old line")
+        if self.flags_dropped:
+            parts.append(f"{self.flags_dropped} flag(s) dropped")
+        if self.waypoints_dropped:
+            parts.append(f"{self.waypoints_dropped} waypoint(s) dropped")
+        return ", ".join(parts)
+
+
 class ScorerResult(BaseModel):
     """One scorer's output over a whole route (scope 3.4).
 
@@ -112,6 +162,15 @@ class ScorerResult(BaseModel):
     #: A `datetime` rather than a `bool` because `lighting` at 05:00 and at 19:00 are
     #: different answers, and a reader needs to know how stale rather than merely that it is.
     carried_from: datetime | None = None
+    #: Set when this result was carried across a segmentation that **moved**, and says what
+    #: survived the move. See `core.geo.segments.map_segments` and ADR 0032.
+    #:
+    #: `None` is not "nothing was dropped". It means the question did not arise: either this
+    #: pass measured the result itself, or it carried it across a line that did not change -
+    #: which is every refresh, because a refresh passes no router (ADR 0030). `carried_from`
+    #: is what distinguishes those two, and a `Regrounded` with every `dropped` at zero is a
+    #: third thing again: an edit happened and this scorer lost nothing to it.
+    regrounded: Regrounded | None = None
 
     @property
     def carried(self) -> bool:

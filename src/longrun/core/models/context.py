@@ -21,6 +21,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.data.base import Cache, FeatureSource, LayerStore, RasterStore
     from longrun.core.models.coverage import CoverageManifest
     from longrun.core.models.profile import PreferenceProfile
+    from longrun.core.models.request import TimeWindow
 
 
 @runtime_checkable
@@ -153,3 +154,16 @@ class ScorerContext:
     #: guessed - an hour of error is fifteen degrees of solar azimuth, which moves a
     #: shadow across the street, so this is not a detail that may be assumed silently.
     utc_offset_hours: float | None = None
+    #: Scope 6.1's start-time window, for the one scorer whose question it is (ADR 0033).
+    #:
+    #: Here for exactly the reason `utc_offset_hours` is here: it is a fact about the
+    #: *request*, a scorer is handed `(route, segments, ctx, etas)` and never a
+    #: `PlanRequest`, and the alternative - widening the scorer contract - would hand all
+    #: twenty-one scorers the request so that one of them could read one field.
+    #:
+    #: `None` means the runner named a start time rather than a window, which is a different
+    #: answer from an empty window and from a window that happens to be an hour wide.
+    #: `start_time_optimizer` then sweeps its own fixed span either side of the requested
+    #: start, which is the question "would earlier be better" rather than "when, within
+    #: these hours" - and those are different questions with different answers.
+    start_window: TimeWindow | None = None

@@ -18,4 +18,7 @@ Planned modules:
                      it: a refresh does not re-route, so a geometry diff of one is vacuous
     refresh.py       re-score the date-sensitive scorers against a new date and carry the
                      rest, reporting which was which (scope 7.8)
+    edits.py         the two scope 10.3 gestures that change the *line* rather than the
+                     request - splice an alternative into a flagged stretch, redraw through
+                     the request's current waypoints. Both mark the result `source="edited"`
 """

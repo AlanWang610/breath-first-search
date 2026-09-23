@@ -221,7 +221,9 @@ def plan_route(
             break
 
         pad.round += 1
-        pad.lock(*span, reason=f"round {pad.round}: rerouted")
+        # The one lock in this tree that is the loop's own rather than the runner's:
+        # nobody asked for it, and "unlock what I locked" must not take it back.
+        pad.lock(*span, reason=f"round {pad.round}: rerouted", source="loop")
 
     pad.status = "complete"
     plan = _finish(pad, request, scored, manifest)

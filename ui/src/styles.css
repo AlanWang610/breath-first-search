@@ -44,6 +44,22 @@ body {
   position: absolute; inset: 0; display: grid; place-items: center;
   color: var(--muted); pointer-events: none;
 }
+/* Stacked above `.map-note`, which may hold two lines — the basemap's reason and the
+   elevation gap an edit left. Both sit at the bottom-left; the newest wraps. */
+.map .map-note + .map-note { bottom: 2.2rem; }
+/* M12.4: the camera is no longer refitted on every plan change, because a write
+   round-trips and would throw away the pan the runner made the edit from. This is how
+   they ask for a refit, which is the half that used to be free. */
+.map-fit {
+  position: absolute; left: 0.5rem; top: 0.5rem; z-index: 1;
+  font-size: 0.78rem; padding: 0.2rem 0.5rem;
+}
+.map-mode {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 0.5rem;
+  padding: 0.3rem 0.7rem; border-radius: 4px; border: 1px solid var(--safety);
+  background: rgba(13, 17, 23, 0.9); font-size: 0.82rem; pointer-events: none;
+}
+.timeline svg { cursor: crosshair; }
 
 .panel {
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;

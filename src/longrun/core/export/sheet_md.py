@@ -471,13 +471,26 @@ def _sun_heat_section(plan: Plan) -> list[str]:
 def _start_time_section(plan: Plan) -> list[str]:
     """Scope 9's start-time table.
 
-    Gated on the **scorer's candidates**, not on `PlanRequest.start_window`. That field has
-    two references in the whole tree - its own declaration and its own validator - so no CLI
-    sets it and `start_time_optimizer` ignores it entirely. A section gated on it would
-    render on zero plans, including all seven goldens.
+    Gated on the **scorer's candidates**, not on `PlanRequest.start_window`.
 
-    So the window here is the sweep the optimizer ran, **not** a constraint the user gave.
-    Those are different claims and the sheet must not conflate them.
+    That gate is unchanged since M10 and the reason for it is not. M10 wrote that the field
+    "has two references in the whole tree - its own declaration and its own validator", so a
+    section gated on it would render on zero plans. **M11.6 made that false**: `longrun plan
+    --start-window` sets it, it reaches the scorers as `ScorerContext.start_window`, and
+    `start_time_optimizer` sweeps within it rather than around the requested start. This
+    paragraph survived the merge of M11 and M13 saying otherwise, because M11 never touched
+    this file and M13 only corrected a golden count inside it - which is the merge hazard
+    M13.6 wrote about, arriving in the file that described it.
+
+    The gate still belongs on the candidates, for a better reason than the old one: a plan
+    with **no** window still gets a sweep, so candidates render the section on every plan
+    that ran the scorer, and a gate on the window would hide it from the majority that
+    never set one.
+
+    So the hours here are the sweep the optimizer ran. Where the runner gave a window the
+    sweep is bounded by it, and where they did not it is the optimizer's own fixed span
+    either side of the requested start - "when, within these hours" against "would earlier
+    be better". The sheet must not present the second as though the runner had asked it.
     """
     from longrun.core.scorers.start_time_optimizer import CANDIDATE_PREFIX
 

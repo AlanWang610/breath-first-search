@@ -68,9 +68,20 @@ export interface Metrics {
   reasons: string[];
 }
 
+/**
+ * A same-tier conflict the loop refused to resolve (scope 8.4, ADR 0019).
+ *
+ * `option_a` / `option_b`, which is what `core/models/plan.py` has always dumped. This
+ * declared `options: string[]` from M7 until M12 and nothing noticed, because these types
+ * are hand-written and `tsc` checks them against each other rather than against the schema
+ * — so `trade.options.map(...)` type-checked and threw `Cannot read properties of
+ * undefined` the moment a plan with a trade-off was opened, taking the panel and every
+ * sibling down with it. Vitest is what would have caught it, and M12.8 is why there is any.
+ */
 export interface TradeOff {
   segment_id: string;
-  options: string[];
+  option_a: string;
+  option_b: string;
   comparison: string;
 }
 
@@ -176,39 +187,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ choice }),
     }),
+  /**
+   * The five gestures (scope 10.3), each one a POST to a plan **id**.
+   *
+   * No path, ever: `tools/` is file-path-parameterised throughout and the same convention
+   * with write semantics over HTTP is a different thing entirely (ADR 0036). So `choose`
+   * sends the alternative as points and not as a GPX filename, and there is nothing on
+   * this object that names a file.
+   *
+   * Each returns a `JobView`, because each is a job. A lock is instantaneous and a choose
+   * is a full re-score and they poll identically, which is the whole reason they are the
+   * same shape.
+   */
+  edit: {
+    lock: (id: string, body: { start_m: number; end_m: number; reason?: string }) =>
+      write(id, "lock", body),
+    unlock: (id: string, body: { start_m: number; end_m: number; mine?: boolean }) =>
+      write(id, "unlock", body),
+    via: (id: string, body: { at: string; at_m?: number }) => write(id, "via", body),
+    avoid: (id: string, body: { polygon: unknown }) => write(id, "avoid", body),
+    choose: (
+      id: string,
+      body: { start_m: number; end_m: number; alternative: string[]; only?: string[] },
+    ) => write(id, "choose", body),
+  },
 };
 
-/** Flags by segment id, worst first — what the map colours a segment by. */
-export function flagsBySegment(plan: Plan): Map<string, Flag[]> {
-  const out = new Map<string, Flag[]>();
-  for (const result of plan.results) {
-    for (const flag of result.flags) {
-      const list = out.get(flag.segment_id) ?? [];
-      list.push(flag);
-      out.set(flag.segment_id, list);
-    }
-  }
-  for (const list of out.values()) {
-    list.sort((a, b) => (a.kind === b.kind ? b.severity - a.severity : a.kind === "hard" ? -1 : 1));
-  }
-  return out;
+function write(planId: string, gesture: string, body: unknown): Promise<JobView> {
+  return call<JobView>(`/api/plans/${encodeURIComponent(planId)}/${gesture}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
-/**
- * The colour a tier gets on the map.
- *
- * Tier, not severity: scope 8.4 makes the tiers lexicographic — a safety flag outranks any
- * amount of discomfort — and a gradient over severity would put a 0.9 comfort flag and a
- * 0.9 safety flag in the same colour, which is exactly the comparison arbitration refuses
- * to make.
- */
-export function tierColour(tier: string): string {
-  switch (tier) {
-    case "safety":
-      return "#d1495b";
-    case "physiological":
-      return "#e8a33d";
-    default:
-      return "#4a8fc2";
-  }
-}
+// `flagsBySegment` and `tierColour` moved to `lib/plan.ts` in M12.8, with the rest of the
+// functions a headless run can check. This file is the client and the types it returns;
+// anything that is a function of a `Plan` and nothing else belongs where the tests are.

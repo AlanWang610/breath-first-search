@@ -15,7 +15,7 @@ hour later. `test_the_sweep_builds_the_horizons_once` is what holds that.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 
 import geopandas as gpd
@@ -29,6 +29,7 @@ from longrun.core.models.context import Budget, FrozenClock, ScorerContext
 from longrun.core.models.coverage import CoverageManifest
 from longrun.core.models.geometry import Route, RoutePoint
 from longrun.core.models.profile import PreferenceProfile
+from longrun.core.models.request import TimeWindow
 from longrun.core.scorers import crew_points as crew
 from longrun.core.scorers import start_time_optimizer as sweep
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID
@@ -104,7 +105,7 @@ class _Rasters:
         return None
 
 
-def _ctx(layers: Any) -> ScorerContext:
+def _ctx(layers: Any, start_window: TimeWindow | None = None) -> ScorerContext:
     return ScorerContext(
         layers=layers,
         rasters=_Rasters(),
@@ -114,6 +115,7 @@ def _ctx(layers: Any) -> ScorerContext:
         profile=PreferenceProfile(),
         budget=Budget(),
         utc_offset_hours=-7.0,
+        start_window=start_window,
     )
 
 
@@ -227,6 +229,27 @@ def test_a_route_with_no_parking_is_not_flagged() -> None:
 # --- the start-time sweep ---------------------------------------------------
 
 
+def _fake_horizons() -> Any:
+    """A stand-in skyline, so a sweep test measures the sweep and not the ray-caster."""
+
+    class _Coverage:
+        answered = True
+
+        @staticmethod
+        def entries() -> list[Any]:
+            return []
+
+    class _Horizons:
+        horizons = np.zeros((21, 8))
+        svf = np.ones(21)
+        coverage = _Coverage()
+
+    def build(route: Any, ctx: Any) -> Any:
+        return _Horizons()
+
+    return build
+
+
 def test_the_window_stays_on_the_calendar_day() -> None:
     """A forecast is fetched per day; a candidate that crossed midnight would compare one
     day's weather against another's without saying so."""
@@ -245,6 +268,79 @@ def test_the_window_is_symmetric_around_the_request_when_the_day_allows() -> Non
 
 def test_a_zero_window_is_the_requested_start_alone() -> None:
     assert sweep.candidate_starts(START, window_hours=0.0) == [START]
+
+
+# --- M11.6: the request's own window, when it gave one -----------------------
+
+
+def test_a_supplied_window_is_swept_end_to_end_and_never_outside_itself() -> None:
+    """A recommendation to start at 05:30 is worth nothing to somebody who said they
+    cannot leave before seven, so the sweep must not reach outside what it was given."""
+    window = TimeWindow(earliest=time(7), latest=time(10))
+    starts = sweep.candidate_starts(START, window=window)
+
+    assert starts[0].time() == time(7)
+    assert starts[-1].time() == time(10)
+    assert all(window.earliest <= s.time() <= window.latest for s in starts)
+    assert len(starts) == 7, "three hours at half-hour steps, both ends included"
+
+
+def test_the_latest_time_a_runner_named_is_always_a_candidate() -> None:
+    """Even when it does not land on a step. It is a time they said they could leave, and
+    a sweep that quietly stopped twenty minutes short of it would answer a question nobody
+    asked."""
+    starts = sweep.candidate_starts(START, window=TimeWindow(earliest=time(7), latest=time(8, 10)))
+    assert starts[-1].time() == time(8, 10)
+
+
+def test_a_supplied_window_replaces_the_default_span_rather_than_adding_to_it() -> None:
+    """The two are different questions. Without a window the sweep asks "would earlier be
+    better"; with one it asks "when, within the hours I can actually leave"."""
+    default = sweep.candidate_starts(START)
+    windowed = sweep.candidate_starts(START, window=TimeWindow(earliest=time(16), latest=time(18)))
+
+    assert START in default and START not in windowed, "the requested hour is not added back"
+    assert windowed[-1].time() == time(18) and windowed[-1] not in default, (
+        "and the window reaches well past where the default span stops"
+    )
+
+
+def test_the_sheet_is_told_which_window_was_actually_swept(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A summary printing `window_hours: 3.0` beside a 09:00-11:00 request would be
+    describing a sweep nobody ran."""
+    monkeypatch.setattr(sweep, "corridor_horizons", _fake_horizons())
+    route = _route()
+    window = TimeWindow(earliest=time(9), latest=time(11))
+    result = sweep.start_time_optimizer(
+        route, _segments(route), _ctx(_Layers(), start_window=window), _etas(route)
+    )
+
+    summary = _summary(result)
+    assert summary["window_from"] == "request"
+    assert summary["window_earliest"] == "09:00"
+    assert summary["window_latest"] == "11:00"
+    assert "window_hours" not in summary, "the default span was not what was swept"
+
+
+def test_with_no_window_the_summary_is_exactly_the_keys_it_always_had(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A key added unconditionally moves `measurements_sha256` on every golden route.
+
+    M11.6 added three of them, `null` on a plan with no window, and the golden suite failed
+    all six routes on a milestone that measured nothing new. The window keys are conditional
+    for that reason, following the rule `expectation._summary` already states for waypoint
+    kinds: "no key" and "zero" should read differently.
+    """
+    monkeypatch.setattr(sweep, "corridor_horizons", _fake_horizons())
+    route = _route()
+    result = sweep.start_time_optimizer(route, _segments(route), _ctx(_Layers()), _etas(route))
+
+    summary = _summary(result)
+    assert summary["window_hours"] == sweep.WINDOW_HOURS
+    assert "window_from" not in summary
+    assert "window_earliest" not in summary
+    assert "window_latest" not in summary
 
 
 def test_the_sweep_is_unavailable_without_a_surface_model() -> None:

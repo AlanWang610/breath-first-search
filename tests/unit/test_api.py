@@ -141,11 +141,42 @@ def test_a_missing_plan_is_a_404_and_not_a_crash(client: Any) -> None:
     assert client.get("/api/plans/nope").status_code == 404
 
 
-@pytest.mark.parametrize("attempt", ["../secrets", "..%2Fsecrets", "a/b", ".hidden"])
+@pytest.mark.parametrize(
+    "attempt", ["../secrets", "..%2Fsecrets", "a/b", ".hidden", "C:plan", "C:/Windows/win.ini"]
+)
 def test_a_plan_id_that_is_not_a_plain_name_is_refused(client: Any, attempt: str) -> None:
-    """`plan_id` arrives from a URL, and this is the one way a read-only local API can still
-    be dangerous."""
+    """`plan_id` arrives from a URL, and this is the one way a local API is dangerous.
+
+    `C:plan` is the one the original character check let through, and it is why there is a
+    containment check as well: `Path("plans") / "C:plan"` is `WindowsPath("C:plan")` on
+    Windows - drive-relative, no separator, no leading dot, and outside the plans
+    directory. It read a file before M12 and would have written one after it.
+    """
     assert client.get(f"/api/plans/{attempt}").status_code in (404, 422)
+
+
+@pytest.mark.parametrize("attempt", ["", ".", "..", "C:plan", "a/b", "a\\b", "sub/../x"])
+def test_the_resolver_refuses_every_id_that_leaves_the_plans_directory(
+    plans: Path, attempt: str
+) -> None:
+    """The resolver itself, because it is now the *write* surface's whole addressing and a
+    404 from one endpoint does not prove the next one is guarded (ADR 0036).
+
+    Cited 0034 until this merge. On M12's branch that number resolved to nothing, which is
+    a dangling reference; on `main` it resolves to "the contract tier runs on one CI leg",
+    which is a CI decision standing in for the reason a path-traversal guard exists. The
+    second is worse than the first and nothing would have caught it, because a citation that
+    resolves reads as correct.
+    """
+    from longrun.api.app import _plan_id_dir
+
+    assert _plan_id_dir(plans, attempt) is None
+
+
+def test_the_resolver_accepts_a_plain_name(plans: Path) -> None:
+    from longrun.api.app import _plan_id_dir
+
+    assert _plan_id_dir(plans, "p1") == plans / "p1"
 
 
 # --- a pause is a status, not an error ---------------------------------------
@@ -237,7 +268,435 @@ def test_a_submission_takes_the_same_fields_the_cli_does(client: Any) -> None:
         "target_km",
         "rounds",
         "avoid_high_stress",
+        # M12.3. Both reached `PlanRequest` for the first time from here, and
+        # `longrun plan` grew `--avoid-name` and `--avoid-polygon` in the same commit -
+        # which is the direction this assertion does *not* check, and why the CLI half
+        # has its own test in `test_cli.py`.
+        "avoid_names",
+        "avoid_polygons",
     }
+
+
+def test_a_submission_can_say_what_to_stay_off(client: Any, runner: Any) -> None:
+    """Scope 6.4's two must-avoid forms. Until M12.3 the UI could not express either, so
+    "avoid El Camino" was a thing a runner could say to the agent and not to the map."""
+    response = client.post(
+        "/api/plans",
+        json={
+            "start": "37.7955,-122.3937",
+            "end": "37.7715,-122.4686",
+            "date": "2026-09-15",
+            "avoid_names": ["El Camino Real"],
+            "rounds": 0,
+        },
+    )
+
+    assert response.status_code == 202
+
+
+def test_a_submitted_polygon_is_rounded_before_it_reaches_a_routing_key(
+    plans: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The submission path needs the same treatment the edit path gets, and for the same
+    reason: an avoid area travels inside `custom_model`, `CachedRouter` hashes that into
+    its key, and sixteen digits of browser float is the worst case for it (M5.13)."""
+    from longrun.api.app import PlanSubmission, _rounded_area
+
+    raw = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [-122.4194123456789, 37.774912345678],
+                [-122.4184123456789, 37.774912345678],
+                [-122.4184123456789, 37.775912345678],
+                [-122.4194123456789, 37.774912345678],
+            ]
+        ],
+    }
+    area, refusal = _rounded_area(raw, "avoid-0")
+
+    assert refusal is None and area is not None
+    ring = area["geometry"]["coordinates"][0]
+    assert all(value == round(value, 6) for point in ring for value in point)
+    assert "avoid_polygons" in PlanSubmission.model_fields
+
+
+def test_an_over_cap_polygon_on_a_submission_is_refused_with_its_size(client: Any) -> None:
+    """Refused before the job starts, and by index, because a submission may carry several
+    and "one of them is too big" is not something a runner can act on."""
+    half = 0.03
+    lat, lon = 37.7749, -122.4194
+    response = client.post(
+        "/api/plans",
+        json={
+            "start": "37.7955,-122.3937",
+            "end": "37.7715,-122.4686",
+            "date": "2026-09-15",
+            "avoid_polygons": [
+                {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [lon - half, lat - half],
+                            [lon + half, lat - half],
+                            [lon + half, lat + half],
+                            [lon - half, lat + half],
+                            [lon - half, lat - half],
+                        ]
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "km2" in response.json()["detail"]
+    assert "avoid polygon 0" in response.json()["detail"]
+
+
+def test_a_finished_plan_lands_where_the_job_says_it_did(plans: Path) -> None:
+    """The round trip a browser makes when a plan completes: the poll reports `plan_id` and
+    the client opens `/api/plans/{that}`.
+
+    It 404'd. `_finish` named the directory `pad.job_id`, which at that moment is neither
+    the runner's job id - `jobs.submit` assigns that *after* `work` returns - nor the plan
+    id: it is the one `agent.loop._fresh` minted for the scratchpad. So every plan the API
+    produced landed under a name the API never reported again, and was reachable only by
+    clicking it in the list.
+    """
+    from types import SimpleNamespace
+
+    from longrun.api.app import _finish, _job_view, _plan_path
+
+    plan = Plan(
+        id="plan-abc", request=PlanRequest(mode="repair", date=date(2026, 9, 15)), route=ROUTE
+    )
+    pad = Scratchpad(plan_id="plan-abc", job_id="a-different-id", request=plan.request, route=ROUTE)
+    outcome = SimpleNamespace(scratchpad=pad, plan=plan, needs_input=False)
+
+    _finish(outcome, plans, lambda *args, **kwargs: None)
+
+    store = JobStore(plans / "jobs")
+    store.save(pad.model_copy(update={"status": "complete"}))
+    reported = _job_view(JobRunner(store), "a-different-id", "complete").plan_id
+    assert reported == "plan-abc"
+    assert _plan_path(plans, reported or "") is not None, "the id the job reports must resolve"
+
+
+# --- the five gestures (scope 10.3, M12.2) -----------------------------------
+#
+# Driven through the runner and waited on, because every write is a `jobs.submit` and a
+# 202 says only that the work was accepted. What each one asserts is the *stored plan*
+# afterwards: the endpoint that reported success and wrote nothing is the failure these
+# exist to catch.
+
+EDIT_LAT = 37.7749
+EDIT_LON = -122.4194
+EDIT_STEP = 0.00114
+EDIT_POINTS = 21
+
+
+@pytest.fixture
+def scored(plans: Path, tmp_path: Path) -> Path:
+    """A scored plan on disk, the way `longrun repair --out` leaves one.
+
+    Scored rather than hand-built: `choose` re-scores, and a plan with no results carries
+    nothing for `rescore_plan` to re-key, which is the half M11.3 exists for.
+    """
+    from datetime import datetime
+
+    from longrun.core.data.cache import SqliteCache
+    from longrun.core.data.file_store import FileLayerStore, FileRasterStore
+    from longrun.core.geo.gpx import normalize
+    from longrun.core.models.context import Budget, FrozenClock, ScorerContext
+    from longrun.core.models.coverage import CoverageManifest
+    from longrun.core.models.plan import Manifest, SnapshotPins
+    from longrun.core.plan.pipeline import build_plan, score_once
+    from longrun.core.preferences.store import load_defaults
+
+    made_at = datetime(2026, 3, 15, 7, 30)
+    route = Route(
+        id="editable",
+        points=normalize(
+            [
+                (EDIT_LAT, EDIT_LON + index * EDIT_STEP, 100.0 + index)
+                for index in range(EDIT_POINTS)
+            ]
+        ),
+    )
+    request = PlanRequest(mode="repair", date=made_at.date(), start_time=made_at.time())
+    manifest = Manifest(snapshot=SnapshotPins(osm_extract_date="2026-03-01"))
+    ctx = ScorerContext(
+        layers=FileLayerStore(tmp_path),
+        rasters=FileRasterStore(tmp_path),
+        cache=SqliteCache(offline=True),
+        clock=FrozenClock(made_at),
+        coverage=CoverageManifest(),
+        profile=load_defaults(),
+        budget=Budget(),
+    )
+    result = score_once(
+        route,
+        request,
+        ctx,
+        start_at=made_at,
+        manifest=manifest,
+        elevations=[100.0 + index for index in range(EDIT_POINTS)],
+    )
+    plan = build_plan(
+        result, request, profile=load_defaults(), coverage=result.coverage, manifest=manifest
+    )
+    directory = plans / "editable"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "plan.json"
+    path.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+    return path
+
+
+def _stored(path: Path) -> Plan:
+    return Plan.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _applied(runner: Any, response: Any) -> str:
+    """Wait for the edit the response accepted, and hand back its job id."""
+    assert response.status_code == 202, response.text
+    job_id = response.json()["job_id"]
+    pad = runner.wait(job_id, timeout=120)
+    assert pad.status == "complete", [event.message for event in runner.events(job_id)]
+    return str(job_id)
+
+
+def test_a_lock_reaches_the_stored_plan(client: Any, runner: Any, scored: Path) -> None:
+    """The endpoint that returns 202 and writes nothing is the failure this catches."""
+    response = client.post(
+        "/api/plans/editable/lock", json={"start_m": 800, "end_m": 1300, "reason": "roadworks"}
+    )
+    _applied(runner, response)
+
+    locked = _stored(scored).request.locked
+    assert [(lock.start_m, lock.end_m, lock.source) for lock in locked] == [(800.0, 1300.0, "user")]
+    assert locked[0].reason == "roadworks"
+
+
+def test_a_lock_written_over_http_is_the_runners_own(
+    client: Any, runner: Any, scored: Path
+) -> None:
+    """M11.1 added `source` so that "unlock what I locked" had a discriminator, and there is
+    exactly one loop-authored site in the tree. A browser is not it, so `source` is not a
+    parameter here and an unlock `--mine` must be able to take this back."""
+    _applied(runner, client.post("/api/plans/editable/lock", json={"start_m": 0, "end_m": 500}))
+    _applied(
+        runner,
+        client.post("/api/plans/editable/unlock", json={"start_m": 0, "end_m": 500, "mine": True}),
+    )
+
+    assert _stored(scored).request.locked == []
+
+
+def test_an_unlock_trims_a_lock_it_only_partly_covers(
+    client: Any, runner: Any, scored: Path
+) -> None:
+    """A runner who frees 2-3 km of a 0-10 km lock has said nothing about the other nine.
+    Dropping the whole entry would reopen them to the next round's reroute, which is the
+    failure scope 8.4's auto-lock exists to prevent, arriving through the undo button."""
+    _applied(runner, client.post("/api/plans/editable/lock", json={"start_m": 0, "end_m": 2000}))
+    _applied(
+        runner, client.post("/api/plans/editable/unlock", json={"start_m": 800, "end_m": 1200})
+    )
+
+    kept = [(lock.start_m, lock.end_m) for lock in _stored(scored).request.locked]
+    assert kept == [(0.0, 800.0), (1200.0, 2000.0)]
+
+
+def test_a_range_with_no_length_is_refused_before_a_job_starts(client: Any, scored: Path) -> None:
+    """422, not a job that fails a second later. A refusal a runner can act on belongs in
+    the response they are waiting on."""
+    assert (
+        client.post("/api/plans/editable/lock", json={"start_m": 900, "end_m": 900}).status_code
+        == 422
+    )
+
+
+def test_a_via_goes_in_in_route_order_and_the_line_is_left_where_it_was(
+    client: Any, runner: Any, scored: Path
+) -> None:
+    """`via` is ordered and the router draws through it in that order, so appending a point
+    that belongs at 3 km to a list whose last entry is at 30 km asks for a route that runs
+    out and back. The stored line is deliberately not cleared: one that no longer passes
+    through every via is what `gpx_verify` reports."""
+    before = _stored(scored).route
+    far = f"{EDIT_LAT},{EDIT_LON + 18 * EDIT_STEP}"
+    near = f"{EDIT_LAT},{EDIT_LON + 4 * EDIT_STEP}"
+    _applied(runner, client.post("/api/plans/editable/via", json={"at": far}))
+    job_id = _applied(runner, client.post("/api/plans/editable/via", json={"at": near}))
+
+    after = _stored(scored)
+    assert [round(point.lon, 5) for point in after.request.via] == [
+        round(EDIT_LON + 4 * EDIT_STEP, 5),
+        round(EDIT_LON + 18 * EDIT_STEP, 5),
+    ]
+    assert after.route.points == before.points, "nothing here routes"
+    messages = " ".join(event.message for event in runner.events(job_id))
+    assert "re-route to honour it" in messages, "a via nobody has routed through says so"
+
+
+def test_a_via_that_does_not_read_as_a_coordinate_is_refused(client: Any, scored: Path) -> None:
+    assert client.post("/api/plans/editable/via", json={"at": "somewhere"}).status_code == 422
+
+
+def _ring(half_deg: float) -> dict[str, Any]:
+    lat, lon = EDIT_LAT + 0.004, EDIT_LON + 0.004
+    return {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [lon - half_deg, lat - half_deg],
+                [lon + half_deg, lat - half_deg],
+                [lon + half_deg, lat + half_deg],
+                [lon - half_deg, lat + half_deg],
+                [lon - half_deg, lat - half_deg],
+            ]
+        ],
+    }
+
+
+def test_a_drawn_polygon_is_rounded_server_side(client: Any, runner: Any, scored: Path) -> None:
+    """M5.13's lesson, at the surface that is worst for it: a browser's polygon carries
+    sixteen significant digits of float, an avoid area travels inside `custom_model`, and
+    `CachedRouter` hashes that into its key. A client that rounded would be a second
+    implementation of a rule with one owner."""
+    job_id = _applied(
+        runner, client.post("/api/plans/editable/avoid", json={"polygon": _ring(0.002)})
+    )
+
+    areas = _stored(scored).request.avoid_polygons
+    assert len(areas) == 1
+    ring = areas[0]["geometry"]["coordinates"][0]
+    assert all(value == round(value, 6) for point in ring for value in point)
+    messages = " ".join(event.message for event in runner.events(job_id))
+    assert "drawn without it" in messages, "the frozen policy is admitted, not papered over"
+
+
+def test_two_drawn_areas_get_two_ids(client: Any, runner: Any, scored: Path) -> None:
+    """An area's id is not decoration. `graphhopper.route_body` uses it as the GeoJSON
+    feature id and builds one `{"if": "in_<id>", "multiply_by": "0"}` rule per feature, so
+    two areas sharing one id are two identical rules and one honoured polygon - the silent
+    failure scope 6.4 rules out, arriving through the door built to prevent it.
+
+    Found by drawing two of them against a running server, which is what the first version
+    of this endpoint did wrong: it passed a constant."""
+    _applied(runner, client.post("/api/plans/editable/avoid", json={"polygon": _ring(0.002)}))
+    _applied(runner, client.post("/api/plans/editable/avoid", json={"polygon": _ring(0.0015)}))
+
+    ids = [area["id"] for area in _stored(scored).request.avoid_polygons]
+    assert ids == ["avoid-0", "avoid-1"]
+    assert len(set(ids)) == len(ids)
+
+
+def test_an_over_cap_polygon_is_refused_by_name_with_its_size(client: Any, scored: Path) -> None:
+    """Closing four square kilometres takes the parallel streets a detour was going to use.
+    A runner told "that is 24 km2" can draw a smaller one; one told nothing gets a route
+    through the area they asked to stay out of."""
+    response = client.post("/api/plans/editable/avoid", json={"polygon": _ring(0.03)})
+
+    assert response.status_code == 422
+    assert "km2" in response.json()["detail"]
+    assert not _stored(scored).request.avoid_polygons, "refused, never stored"
+
+
+def test_a_polygon_that_is_not_one_is_a_reason_and_not_a_500(client: Any, scored: Path) -> None:
+    response = client.post("/api/plans/editable/avoid", json={"polygon": {"type": "Nonsense"}})
+
+    assert response.status_code == 422
+
+
+def test_choosing_an_alternative_splices_locks_and_rescores_in_one_request(
+    client: Any, runner: Any, scored: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The three are one job on purpose. A plan carrying an edited line and measurements of
+    the old one is exactly the state M11 exists to prevent, and separate requests would make
+    it reachable by closing the tab halfway."""
+    monkeypatch.setenv("LONGRUN_FIXTURES", str(tmp_path))
+    before = _stored(scored)
+    alternative = [
+        f"{EDIT_LAT + 0.0018},{EDIT_LON + (8 + index) * EDIT_STEP}" for index in range(6)
+    ]
+
+    response = client.post(
+        "/api/plans/editable/choose",
+        json={"start_m": 800, "end_m": 1300, "alternative": alternative},
+    )
+    _applied(runner, response)
+
+    after = _stored(scored)
+    assert after.route.source == "edited"
+    assert after.route.length_m != before.route.length_m
+    assert after.id == before.id, "the same plan with a different line"
+    assert [(lock.start_m, lock.end_m, lock.source) for lock in after.request.locked] == [
+        (800.0, 1300.0, "user")
+    ]
+
+
+def test_the_new_stretch_of_an_edited_line_has_no_elevation_and_the_plan_says_so(
+    client: Any, runner: Any, scored: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`splice` keeps the heights of the ground it did not touch and leaves the replacement's
+    unknown, and re-reading a DEM for the untouched two-thirds would be M10.4's bug through a
+    new door. The gap is real, `samples_missing` counts it, and a UI that drew it as zero
+    would throw that work away at the last surface it can be lost at."""
+    monkeypatch.setenv("LONGRUN_FIXTURES", str(tmp_path))
+    alternative = [
+        f"{EDIT_LAT + 0.0018},{EDIT_LON + (8 + index) * EDIT_STEP}" for index in range(6)
+    ]
+
+    _applied(
+        runner,
+        client.post(
+            "/api/plans/editable/choose",
+            json={"start_m": 800, "end_m": 1300, "alternative": alternative},
+        ),
+    )
+
+    after = _stored(scored)
+    unknown = [point for point in after.route.points if point.ele_m is None]
+    assert unknown, "the spliced stretch is unmeasured, not zero"
+    assert all(point.ele_m != 0.0 for point in after.route.points)
+
+
+def test_a_choose_that_names_a_scorer_nobody_answers_to_is_refused(
+    client: Any, scored: Path
+) -> None:
+    response = client.post(
+        "/api/plans/editable/choose",
+        json={
+            "start_m": 800,
+            "end_m": 1300,
+            "alternative": [f"{EDIT_LAT},{EDIT_LON}", f"{EDIT_LAT},{EDIT_LON + 0.001}"],
+            "only": ["no_such_scorer"],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "no_such_scorer" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "path,body",
+    [
+        ("lock", {"start_m": 0, "end_m": 100}),
+        ("unlock", {"start_m": 0, "end_m": 100}),
+        ("via", {"at": "37.0,-122.0"}),
+        ("avoid", {"polygon": {"type": "Polygon", "coordinates": [[]]}}),
+        ("choose", {"start_m": 0, "end_m": 100, "alternative": ["37.0,-122.0", "37.1,-122.0"]}),
+    ],
+)
+def test_every_write_refuses_a_plan_id_that_is_not_a_plain_name(
+    client: Any, path: str, body: dict[str, Any]
+) -> None:
+    """The read had one guard and it had a hole (M12.1). A write surface with five doors
+    needs the assertion made at all five, not at the one that was written first."""
+    assert client.post(f"/api/plans/C:evil/{path}", json=body).status_code in (404, 422)
+    assert client.post(f"/api/plans/nope/{path}", json=body).status_code == 404
 
 
 # --- region status -----------------------------------------------------------
