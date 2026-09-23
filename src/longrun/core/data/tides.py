@@ -190,17 +190,24 @@ class StationTides(BaseModel):
             return None
         return round((min(lows) - when).total_seconds() / 60.0, 1)
 
-    def coverage(self, kind: str, jurisdiction: str | None = None) -> CoverageEntry:
-        """One manifest line for this stretch's tide lookup."""
+    def coverage(self, kind: str, where: str | None = None) -> CoverageEntry:
+        """One manifest line for this stretch's tide lookup.
+
+        `where` prefixes the reason and is *not* `CoverageEntry.jurisdiction`, although it
+        is the same shape of fact. A stretch of coast is not a jurisdiction: §7.10 defines
+        one as a Census GEOID or a PAD-US unit id, and `access_hours` counts entries with a
+        `jurisdiction` to report "N agencies answered of M crossed" — so filing a beach
+        there would have the sheet claim a park agency answered about the tide.
+        """
+        prefix = f"{where}: " if where else ""
         if self.answered and self.station is not None:
             distance = "" if self.distance_m is None else f", {self.distance_m / 1000:.1f} km away"
             return CoverageEntry(
                 source=SOURCE,
                 kind=kind,
                 checked=True,
-                jurisdiction=jurisdiction,
                 reason=(
-                    f"{self.station.name} ({self.station.id}){distance}: "
+                    f"{prefix}{self.station.name} ({self.station.id}){distance}: "
                     f"{len(self.extremes)} predicted high and low waters"
                 ),
             )
@@ -208,8 +215,7 @@ class StationTides(BaseModel):
             source=SOURCE,
             kind=kind,
             checked=False,
-            jurisdiction=jurisdiction,
-            reason=self.reason or "no tide prediction for this stretch",
+            reason=f"{prefix}{self.reason or 'no tide prediction for this stretch'}",
         )
 
 

@@ -608,3 +608,273 @@ def test_the_jurisdiction_tally_counts_jurisdictions_not_coverage_lines() -> Non
         values["jurisdictions_answered"] + values["jurisdictions_unanswered"]
         == values["jurisdictions_crossed"]
     )
+
+
+# --- the tide half of access_hours (scope 7.6, ADR 0042) --------------------
+#
+# The classifier and the CO-OPS client have their own tests in `test_tides.py`. What is
+# tested here is the *seam*: which tier a conflict lands in, that one stretch produces one
+# flag, and - the property the whole milestone rests on - that a route with no tidal ground
+# is untouched, because that is what let this ship without moving a golden.
+
+TIDE_DAY = date(2026, 9, 15)
+
+#: Ocean Beach latitude, so the recorded station is inside `STATION_REACH_M`.
+TIDE_LAT, TIDE_LON = 37.7700, -122.5000
+
+#: ~100 m of latitude, so segment boundaries stay easy to reason about.
+TIDE_STEP_DEG = 0.0009
+
+HIGH_WATER = datetime(2026, 9, 15, 10, 2)
+LOW_WATER = datetime(2026, 9, 15, 16, 55)
+
+
+def _tide_route(points: int = 12) -> Route:
+    from longrun.core.geo.gpx import normalize
+
+    return Route(
+        id="tide",
+        points=normalize([(TIDE_LAT + i * TIDE_STEP_DEG, TIDE_LON, None) for i in range(points)]),
+    )
+
+
+def _write_tide_ways(root: Any, route: Route, way_ids: list[int], tags: dict[int, Any]) -> None:
+    import warnings
+
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    records, geometries = [], []
+    for way_id, way_tags in tags.items():
+        indices = [i for i, wid in enumerate(way_ids) if wid == way_id]
+        low, high = min(indices), min(max(indices) + 1, len(route.points) - 1)
+        records.append({"way_id": way_id, **way_tags})
+        geometries.append(
+            LineString([(route.points[i].lon, route.points[i].lat) for i in range(low, high + 1)])
+        )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        gpd.GeoDataFrame(records, geometry=geometries, crs="EPSG:4326").to_file(
+            root / "ways.gpkg", driver="GPKG"
+        )
+
+
+def _record_tide(path: Any) -> None:
+    """A CO-OPS cassette: the station list, and one day of high and low waters."""
+    from longrun.core.data.cache import STATIC_DAY, args_hash
+    from longrun.core.data.tides import SOURCE, predictions_args, stations_args
+
+    with SqliteCache(path) as recording:
+        recording.put(
+            f"{SOURCE}.stations",
+            args_hash(stations_args()),
+            STATIC_DAY,
+            {
+                "stations": [
+                    {"id": "9414290", "name": "San Francisco", "lat": 37.8063, "lng": -122.4659}
+                ]
+            },
+        )
+        recording.put(
+            f"{SOURCE}.predictions",
+            args_hash(predictions_args("9414290", TIDE_DAY)),
+            TIDE_DAY.isoformat(),
+            {
+                "predictions": [
+                    {"t": "2026-09-15 03:41", "v": "0.312", "type": "L"},
+                    {"t": "2026-09-15 10:02", "v": "1.688", "type": "H"},
+                    {"t": "2026-09-15 16:55", "v": "0.104", "type": "L"},
+                ]
+            },
+        )
+
+
+def _tide_ctx(tmp_path: Any, cache: SqliteCache) -> ScorerContext:
+    """No `features` and no parks layer: the gate half has nothing, the tide half still runs.
+
+    That is the independence property `_gates` was extracted to make possible - a route with
+    no parks layer is precisely a route that could still be on a beach.
+    """
+    return ScorerContext(
+        layers=FileLayerStore(tmp_path),
+        rasters=FileRasterStore(tmp_path),
+        cache=cache,
+        clock=FrozenClock(START),
+        coverage=CoverageManifest(),
+        profile=PreferenceProfile(),
+        budget=Budget(),
+    )
+
+
+def _run_tide(tmp_path: Any, tags: dict[int, Any], arrival: datetime, recorded: bool = True) -> Any:
+    """Score a route whose middle two ways carry `tags`, arriving at `arrival`."""
+    route = _tide_route()
+    way_ids: list[int | None] = [1, 1, 1, 2, 2, 2, 3, 3, 3, 1, 1, 1]
+    _write_tide_ways(
+        tmp_path, route, [w for w in way_ids if w is not None], {1: {"highway": "path"}, **tags}
+    )
+    segments = segment_route(route, way_ids=way_ids, max_len_m=10_000.0)
+
+    cassette = tmp_path / "tide.sqlite"
+    if recorded:
+        _record_tide(cassette)
+    with SqliteCache(cassette, offline=True) as cache:
+        result = ah.access_hours(
+            route, segments, _tide_ctx(tmp_path, cache), [arrival] * len(segments)
+        )
+    return result, segments
+
+
+def _summary(result: Any) -> dict[str, Any]:
+    from longrun.core.scorers._common import ROUTE_SUMMARY_ID
+
+    return next(m for m in result.measurements if m.segment_id == ROUTE_SUMMARY_ID).values
+
+
+def test_an_inland_route_gains_no_tide_key_no_flag_and_no_coverage_row(tmp_path: Any) -> None:
+    """The property the milestone rests on: nothing changes on a route with no tidal ground.
+
+    "No key" and "zero" read differently (`tests/golden/expectation.py` says so for waypoint
+    kinds), and a `noaa_coops` row on an Ozarks plan would be a source the plan never used.
+    This is why no golden moved.
+    """
+    result, _ = _run_tide(tmp_path, {2: {"highway": "path"}, 3: {"highway": "path"}}, HIGH_WATER)
+
+    assert [f.reason_code for f in result.flags] == []
+    assert "tidal_stretches" not in _summary(result)
+    # Three assertions, and the third is the one that stops this passing vacuously: a ways
+    # layer that failed to load would satisfy the first two and record a `tidal_ground` row
+    # saying so. Silence here has to mean "read it, nothing was tidal".
+    assert not [c for c in result.coverage if c.source == "noaa_coops"]
+    assert not [c for c in result.coverage if c.kind == "tidal_ground"]
+
+
+def test_a_tidal_way_at_high_water_is_soft_and_safety_tier(tmp_path: Any) -> None:
+    """ADR 0042. The first soft SAFETY flag in the codebase, and the reason it is one:
+    a gate is bought back by starting later and a high water is bought back by nothing."""
+    result, segments = _run_tide(
+        tmp_path,
+        {2: {"highway": "path", "tidal": "yes"}, 3: {"highway": "track", "tidal": "yes"}},
+        HIGH_WATER + timedelta(minutes=28),
+    )
+
+    flags = [f for f in result.flags if f.reason_code == "tide_conflict_at_eta"]
+    assert len(flags) == 1, "one flag per stretch, not one per segment it covers"
+    assert flags[0].kind is FlagKind.SOFT
+    assert flags[0].tier is Tier.SAFETY
+    assert flags[0].segment_id == segments[1].id, "on the segment the stretch begins at"
+    assert flags[0].severity == round(ah.TIDE_CONFLICT_SEVERITY * 0.9, 3)
+
+    values = _summary(result)
+    assert values["tidal_stretches"] == 1
+    assert values["tide_conflicts"] == 1
+    assert values["tide_stretches_unchecked"] == 0
+    assert values["tide_wait_to_low_water_min"] is not None
+    assert values["access_violations"] == 1
+
+
+def test_the_same_stretch_at_low_water_is_measured_as_none(tmp_path: Any) -> None:
+    """The third answer. A checked stretch with no conflict is not the same as no stretch."""
+    result, _ = _run_tide(
+        tmp_path,
+        {2: {"highway": "path", "tidal": "yes"}, 3: {"highway": "path", "tidal": "yes"}},
+        LOW_WATER,
+    )
+
+    assert not result.flags
+    values = _summary(result)
+    assert values["tidal_stretches"] == 1
+    assert values["tide_conflicts"] == 0
+    assert values["tide_stretches_unchecked"] == 0
+    answered = [c for c in result.coverage if c.source == "noaa_coops"]
+    assert len(answered) == 1 and answered[0].checked
+    assert "San Francisco (9414290)" in (answered[0].reason or "")
+
+
+def test_a_beach_stays_in_the_comfort_tier(tmp_path: Any) -> None:
+    """`natural=beach` says the ground is beach and leaves the water inferred, so it may
+    not claim incommensurability - ADR 0042's split on evidence rather than consequence."""
+    result, _ = _run_tide(
+        tmp_path,
+        {2: {"highway": "path", "natural": "beach"}, 3: {"highway": "path", "natural": "beach"}},
+        HIGH_WATER,
+    )
+
+    flags = [f for f in result.flags if f.reason_code == "tide_conflict_at_eta"]
+    assert len(flags) == 1
+    assert flags[0].tier is Tier.COMFORT
+    assert flags[0].severity == round(ah.TIDE_CONFLICT_SEVERITY * 0.5, 3)
+
+
+def test_a_tidal_stretch_with_no_tide_is_unknown_rather_than_clear(tmp_path: Any) -> None:
+    """Absence is not zero. The stretch keeps its tier - filing "this floods and nobody
+    could tell us when" under comfort would say not knowing is a comfort matter."""
+    result, _ = _run_tide(
+        tmp_path,
+        {2: {"highway": "path", "tidal": "yes"}, 3: {"highway": "path", "tidal": "yes"}},
+        HIGH_WATER,
+        recorded=False,
+    )
+
+    flags = [f for f in result.flags if f.reason_code == "tide_unknown"]
+    assert len(flags) == 1
+    assert flags[0].tier is Tier.SAFETY
+    assert flags[0].severity == round(ah.TIDE_UNKNOWN_SEVERITY * 0.9, 3)
+
+    values = _summary(result)
+    assert values["tidal_stretches"] == 1
+    assert values["tide_conflicts"] == 0
+    assert values["tide_stretches_unchecked"] == 1
+    unchecked = [c for c in result.coverage if c.source == "noaa_coops"]
+    assert unchecked and not unchecked[0].checked
+    assert "not in the cassette" in (unchecked[0].reason or "")
+
+
+def test_a_tide_conflict_is_placed_as_a_hazard_waypoint(tmp_path: Any) -> None:
+    """Scope 9 names hazards among the waypoints a GPX carries, and a stretch under water
+    is one. Not a ninth `WaypointKind`: widening a closed Literal would reach both course
+    writers for a symbol they already have."""
+    result, _ = _run_tide(
+        tmp_path,
+        {2: {"highway": "path", "tidal": "yes"}, 3: {"highway": "path", "tidal": "yes"}},
+        HIGH_WATER,
+    )
+
+    tide_points = [w for w in result.waypoints if w.detail == "tide_conflict_at_eta"]
+    assert len(tide_points) == 1
+    assert tide_points[0].kind == "hazard"
+    assert tide_points[0].scorer == "access_hours"
+
+
+def test_a_route_whose_ways_layer_is_missing_says_so_rather_than_reporting_no_tide(
+    tmp_path: Any,
+) -> None:
+    """The fourth answer, and the one silence would hide: on this route nobody established
+    whether the tide matters, which is not the same as an inland route."""
+    route = _tide_route()
+    segments = segment_route(route, max_len_m=10_000.0)
+    with SqliteCache(offline=True) as cache:
+        result = ah.access_hours(
+            route, segments, _tide_ctx(tmp_path, cache), [START] * len(segments)
+        )
+
+    rows = [c for c in result.coverage if c.kind == "tidal_ground"]
+    assert rows and not rows[0].checked
+    assert rows[0].source == "ways"
+    assert "not established" in (rows[0].reason or "")
+
+
+def test_the_tide_half_runs_although_the_gate_half_had_no_parks_layer(tmp_path: Any) -> None:
+    """`_gates` was extracted because each of its four early returns called `_summarise`,
+    so a second question asked after one would have been skipped on exactly the routes that
+    took it - and a route with no parks layer is precisely one that could be on a beach."""
+    result, _ = _run_tide(
+        tmp_path,
+        {2: {"highway": "path", "tidal": "yes"}, 3: {"highway": "path", "tidal": "yes"}},
+        HIGH_WATER,
+    )
+
+    gate_rows = [c for c in result.coverage if c.source == "access_hours"]
+    assert gate_rows and not gate_rows[0].checked and "parks" in (gate_rows[0].reason or "")
+    assert _summary(result)["agencies_crossed"] == 0
+    assert _summary(result)["tide_conflicts"] == 1
