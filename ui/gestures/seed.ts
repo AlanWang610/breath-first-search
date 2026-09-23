@@ -32,6 +32,15 @@
  * copied fresh from the seed. Tests would otherwise pass or fail on the order they ran in,
  * which is the failure the `A CORRECTION` commit on `main` is about: a test that agreed
  * with whoever ran it last.
+ *
+ * **A second route, for one test.** `kc-stateline` is scored as well, and it earns its nine
+ * seconds because of what `fittedFor` keys on. M12.4 fits the camera once per `plan.id` —
+ * the plan's own id, derived from the route — and not per *stored* plan id. Every copy of
+ * one seed therefore carries one `plan.id`, so switching between two copies is, to that
+ * guard, the same plan. That is correct, since the same id means the same geometry and a
+ * refit would be a no-op, but it means no number of copies can show that a genuinely
+ * different plan still refits. Only a second route can, and without one the guard could
+ * have been `fittedFor.current !== null` and passed everything.
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -44,12 +53,39 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The repository root, from `ui/gestures/`. */
 export const REPO_ROOT = path.resolve(HERE, "..", "..");
 
-/** The golden route the seed plan is scored from. */
-export const GOLDEN = path.join(REPO_ROOT, "tests", "golden", "routes", "synthetic-hazards");
+/** Where the golden routes live. */
+const ROUTES = path.join(REPO_ROOT, "tests", "golden", "routes");
+
+/** The route the four gestures are driven against, and whose cassette the server reads. */
+export const GOLDEN = path.join(ROUTES, "synthetic-hazards");
+
+/**
+ * The routes that get scored, each with the arguments its own `request.yaml` pins. Repair
+ * mode for both: `plan` mode replays a router cassette through the loop, and what this
+ * needs is a stored plan rather than a loop.
+ */
+const SEEDS = {
+  "synthetic-hazards": [
+    "--date",
+    "2026-09-12",
+    "--start",
+    "07:00",
+    "--target-km",
+    "4.0",
+    "--utc-offset",
+    "-7",
+  ],
+  "kc-stateline": ["--date", "2026-09-15", "--start", "08:00", "--utc-offset", "-5"],
+} as const;
+
+export type SeedRoute = keyof typeof SEEDS;
 
 /** Where `longrun repair` writes, and where every test's copy is taken from. */
 export const SEED_DIR = path.join(WORK_DIR, "seed");
-export const SEED_PLAN = path.join(SEED_DIR, "plan.json");
+
+function seedPlanPath(route: SeedRoute): string {
+  return path.join(SEED_DIR, route, "plan.json");
+}
 
 /** The working copy of the golden's cassette, which is what the server is pointed at. */
 export const CACHE_COPY = path.join(WORK_DIR, "cache.sqlite");
@@ -79,47 +115,52 @@ export default async function globalSetup(): Promise<void> {
   fs.mkdirSync(SEED_DIR, { recursive: true });
   fs.copyFileSync(path.join(GOLDEN, "cache.sqlite"), CACHE_COPY);
 
-  // `uv run`, not `.venv/Scripts/python.exe`: the entry point has to be on PATH, which is
-  // the same reason `test_installed_entry_point_works` fails under a bare interpreter.
-  execFileSync(
-    "uv",
-    [
-      "run",
-      "longrun",
-      "repair",
-      path.join(GOLDEN, "route.gpx"),
-      "--date",
-      "2026-09-12",
-      "--start",
-      "07:00",
-      "--fixtures",
-      path.join(GOLDEN, "fixtures"),
-      "--profile",
-      path.join(GOLDEN, "profile.yaml"),
-      "--snapshot",
-      path.join(GOLDEN, "snapshot.json"),
-      "--cache",
-      path.join(GOLDEN, "cache.sqlite"),
-      "--target-km",
-      "4.0",
-      "--utc-offset",
-      "-7",
-      "--out",
-      SEED_DIR,
-    ],
-    {
-      cwd: REPO_ROOT,
-      env: { ...process.env, LONGRUN_OFFLINE: "1" },
-      stdio: "pipe",
-      shell: process.platform === "win32",
-    },
-  );
+  const ids = new Set<string>();
+  for (const [route, pinned] of Object.entries(SEEDS)) {
+    const directory = path.join(ROUTES, route);
+    // `uv run`, not `.venv/Scripts/python.exe`: the entry point has to be on PATH, which is
+    // the same reason `test_installed_entry_point_works` fails under a bare interpreter.
+    execFileSync(
+      "uv",
+      [
+        "run",
+        "longrun",
+        "repair",
+        path.join(directory, "route.gpx"),
+        ...pinned,
+        "--fixtures",
+        path.join(directory, "fixtures"),
+        "--profile",
+        path.join(directory, "profile.yaml"),
+        "--snapshot",
+        path.join(directory, "snapshot.json"),
+        "--cache",
+        path.join(directory, "cache.sqlite"),
+        "--out",
+        path.join(SEED_DIR, route),
+      ],
+      {
+        cwd: REPO_ROOT,
+        env: { ...process.env, LONGRUN_OFFLINE: "1" },
+        stdio: "pipe",
+        shell: process.platform === "win32",
+      },
+    );
 
-  const plan = JSON.parse(fs.readFileSync(SEED_PLAN, "utf-8"));
-  // Checked rather than assumed. A `repair` that produced a plan with no segments would
-  // otherwise surface as "no feature under the pointer", which reads as a WebGL problem.
-  if (!Array.isArray(plan.segments) || plan.segments.length < 10) {
-    throw new Error(`the seeded plan has ${plan.segments?.length ?? 0} segments; expected 19`);
+    const plan = JSON.parse(fs.readFileSync(seedPlanPath(route as SeedRoute), "utf-8"));
+    // Checked rather than assumed. A `repair` that produced a plan with no segments would
+    // otherwise surface as "no feature under the pointer", which reads as a WebGL problem.
+    if (!Array.isArray(plan.segments) || plan.segments.length < 10) {
+      throw new Error(`${route} scored to ${plan.segments?.length ?? 0} segments; expected many`);
+    }
+    ids.add(String(plan.id));
+  }
+
+  // The reason the second route is here at all. If a change ever made `plan.id` constant
+  // across routes, `camera.spec.ts`'s refit test would quietly stop testing anything, and
+  // it would still be green.
+  if (ids.size !== Object.keys(SEEDS).length) {
+    throw new Error(`the seeded routes share a plan id: ${[...ids].join(", ")}`);
   }
 }
 
@@ -131,10 +172,10 @@ export default async function globalSetup(): Promise<void> {
  * would be testing the resolver, and `test_the_resolver_refuses_every_id_that_leaves_the_
  * plans_directory` already does that against the resolver itself.
  */
-export function seedPlan(planId: string): string {
+export function seedPlan(planId: string, route: SeedRoute = "synthetic-hazards"): string {
   const directory = path.join(PLANS_DIR, planId);
   fs.rmSync(directory, { recursive: true, force: true });
   fs.mkdirSync(directory, { recursive: true });
-  fs.copyFileSync(SEED_PLAN, path.join(directory, "plan.json"));
+  fs.copyFileSync(seedPlanPath(route), path.join(directory, "plan.json"));
   return planId;
 }

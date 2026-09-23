@@ -58,7 +58,16 @@ const MARKER_TIP_OFFSET_PX = 14;
 const PROBE_RADIUS_PX = 24;
 const PROBE_STEP_PX = 3;
 
-interface StoredPlan {
+/**
+ * A plan as the server dumps it.
+ *
+ * Declared here rather than reused from `src/api.ts` on purpose. Those types are the
+ * client's hand-written view, and M15 found two of them wrong against the wire — a test
+ * that imported them would inherit whatever mistake they hold and confirm it. This is what
+ * the suite reads out of the response, and `contract.spec.ts` is where the two are made to
+ * agree.
+ */
+export interface StoredPlan {
   id: string;
   request: {
     locked: { start_m: number; end_m: number; reason: string | null; source: string }[];
@@ -67,6 +76,18 @@ interface StoredPlan {
   };
   route: { points: { lat: number; lon: number; cum_dist_m: number; ele_m: number | null }[] };
   segments: { id: string; index: number; cum_start_m: number; length_m: number }[];
+  results: {
+    name: string;
+    flags: {
+      scorer: string;
+      segment_id: string;
+      kind: unknown;
+      tier: unknown;
+      severity: number;
+      reason_code: string;
+      detail: string | null;
+    }[];
+  }[];
 }
 
 export class App {
@@ -82,18 +103,31 @@ export class App {
     return (await response.json()) as StoredPlan;
   }
 
-  /** Open the page and the seeded plan, and wait until the map has drawn the route. */
+  /** Load the page and open this plan, then wait until the map has drawn its route. */
   async open(): Promise<void> {
     await this.page.goto("/");
+    await this.switchTo();
+    // The route reaching the *rendered* frame is a separate event from React rendering, and
+    // `queryRenderedFeatures` reads the frame. Probing for a segment is how a test finds
+    // out the difference has passed.
+    await this.pixelOnRoute(await this.midOf(9));
+  }
+
+  /**
+   * Open this plan in a page that is already loaded, from the stored-plans list.
+   *
+   * Separate from `open()` because a reload builds a new map, which fits unconditionally.
+   * Anything asking what the camera does when the *plan* changes has to change the plan
+   * inside one map, which is what a user does.
+   */
+  async switchTo(): Promise<void> {
     await this.page.getByRole("button", { name: this.planId, exact: true }).click();
     // The edit panel exists only when a plan is open, so it is the render's own signal.
     await expect(this.page.getByRole("heading", { name: "Edit this plan" })).toBeVisible();
     await expect(this.page.locator("canvas.maplibregl-canvas")).toBeVisible();
     await expect(this.page.locator("section.timeline")).toBeVisible();
-    // The route reaching the *rendered* frame is a separate event from React rendering, and
-    // `queryRenderedFeatures` reads the frame. Probing for a segment is how a test finds
-    // out the difference has passed.
-    await this.pixelOnRoute(this.midOf(9));
+    // `fitBounds` runs with `duration: 0`, so this is a render settle and not an animation.
+    await this.page.waitForTimeout(400);
   }
 
   /** The distance at the middle of segment `index`, which is the least ambiguous pixel. */
@@ -178,6 +212,11 @@ export class App {
    * first position whose popup names the expected segment wins; twenty-four pixels is
    * further than the marker offset could be wrong and still narrower than a segment, so a
    * hit is the segment that was asked for and not its neighbour.
+   *
+   * **Only answers while the map is in its selecting state.** In a draw mode `MapView`'s
+   * `mousemove` handler removes the popup and sets a crosshair without querying anything,
+   * which is correct — the map is not asking what is under the pointer then. A test that
+   * needs a pixel for a via or a polygon corner takes it before entering the mode.
    */
   async pixelOnRoute(metres: number | Promise<number>): Promise<Pixel> {
     const target = await metres;
