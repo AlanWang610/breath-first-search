@@ -19,11 +19,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from longrun.core.models.coverage import CoverageManifest
-from longrun.core.models.geometry import Route, Segment
+from longrun.core.models.geometry import LatLon, Route, Segment
 from longrun.core.models.measurement import ScorerResult
 from longrun.core.models.plan import Manifest, PendingQuestion, TradeOff
 from longrun.core.models.profile import PreferenceProfile
-from longrun.core.models.request import LockedRange, PlanRequest
+from longrun.core.models.request import LockedRange, LockSource, PlanRequest
 from longrun.core.models.routing import RoutingPolicy
 
 JobStatus = Literal["running", "needs_input", "complete", "failed"]
@@ -66,13 +66,67 @@ class Scratchpad(BaseModel):
     #: across exactly the boundary it is meant to survive.
     questions_asked: int = 0
 
-    def lock(self, start_m: float, end_m: float, reason: str | None = None) -> None:
+    def lock(
+        self,
+        start_m: float,
+        end_m: float,
+        reason: str | None = None,
+        *,
+        source: LockSource = "user",
+    ) -> None:
         """Exclude a range from rerouting (scope 6.4).
 
         Called explicitly, and automatically when the user resolves a trade-off: a choice
         already made should not be silently reopened on the next iteration.
+
+        `source` defaults to the runner for the reason `LockedRange.source` gives, so the
+        one site that is the loop's own has to say so.
+
+        The rule itself lives in `core.plan.edits.lock_range`, because a lock has two homes
+        - this list and `PlanRequest.locked` - and `agent.loop._with_locks` exists because
+        they drift. A second implementation would drift the same way somewhere nobody is
+        watching.
         """
-        self.locked.append(LockedRange(start_m=start_m, end_m=end_m, reason=reason))
+        from longrun.core.plan.edits import lock_range
+
+        self.locked = lock_range(self.locked, start_m, end_m, reason, source=source)
+
+    def unlock(
+        self, start_m: float, end_m: float, *, source: LockSource | None = None
+    ) -> list[LockedRange]:
+        """Release a stretch of the line, and say what was holding it (scope 10.3).
+
+        See `core.plan.edits.unlock_range` for the rules: a partial overlap is trimmed
+        rather than dropped, a trimmed lock keeps its author, and `source` is what lets
+        "unlock what I locked" leave the loop's own reroute locks standing.
+        """
+        from longrun.core.plan.edits import unlock_range
+
+        self.locked, freed = unlock_range(self.locked, start_m, end_m, source=source)
+        return freed
+
+    def add_via(self, point: LatLon, *, at_m: float | None = None) -> int:
+        """Scope 7.8's `pin_waypoint`: add a via point to the request (scope 10.3's drag).
+
+        **This is the owner `tools/editing.py` said did not exist yet.** Its refusal read
+        "a via point is a property of the request, and editing a stored request in place has
+        no owner yet - the loop takes its waypoints from `PlanRequest`", and that second
+        half fixes the location: `agent.loop` builds its router input as
+        `[request.start, *request.via, request.end]`, so a via that is not on
+        `PlanRequest.via` is a via the next round will not route through.
+
+        The route is deliberately **not** cleared. A line that no longer passes through
+        every via is exactly what `gpx_verify` is for, and blanking it here would destroy
+        the geometry an edit is meant to refine before anything has been drawn to replace
+        it.
+
+        Returns the index it went in at; the ordering rule is `edits.insert_via`'s.
+        """
+        from longrun.core.plan.edits import insert_via
+
+        via, index = insert_via(self.request.via, point, self.route, at_m)
+        self.request = self.request.model_copy(update={"via": via})
+        return index
 
     def locked_ids(self) -> frozenset[str]:
         from longrun.core.geo.segments import locked_segment_ids

@@ -23,11 +23,18 @@ only the sun's place in it does. So `corridor_horizons` runs **once** and every 
 start reuses it — which is what makes twelve candidates cost about what one does, and why
 risk R5 named this scorer as the one that could have broken the ~3-minute budget.
 
-**The window is relative to the requested start, not supplied.** A scorer receives
-`(route, segments, ctx, etas)` and never the `PlanRequest`, so it cannot read §6.4's start
-window. Sweeping a fixed span either side of the requested start answers the useful
-question anyway — "would earlier be better, and by how much" — and it keeps the scorer
-contract as it is. Passing a real window is the agent's job (§8.1) when it exists.
+**The window is the request's when the request gave one, and a fixed span either side
+of the requested start when it did not** (M11.6, ADR 0033). A scorer receives
+`(route, segments, ctx, etas)` and never the `PlanRequest`, so §6.1's `start_window`
+reaches it on `ScorerContext` — the same route `utc_offset_hours` takes, and for the same
+reason: it is a fact about the request that one scorer needs, and widening the scorer
+contract would hand all twenty-one of them the request so that one could read one field.
+
+The two cases are different questions and are kept apart. With no window the sweep asks
+*"would earlier be better, and by how much"* around the hour the runner named. With one it
+asks *"when, within the hours I can actually leave"*, and the answer must not reach outside
+them — a recommendation to start at 05:30 is worth nothing to somebody who said they cannot
+leave before seven.
 
 Nothing here flags. The optimizer measures alternatives; choosing among them is
 arbitration's business and, ultimately, the runner's.
@@ -49,6 +56,7 @@ from longrun.core.geo.svf import corridor_horizons
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import ScorerResult, SegmentMeasurement
+from longrun.core.models.request import TimeWindow
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.heat import wbgt_c
@@ -78,14 +86,31 @@ DARK_ELEVATION_RAD = np.radians(CIVIL_TWILIGHT_DEG)
 
 
 def candidate_starts(
-    start: datetime, window_hours: float = WINDOW_HOURS, step_minutes: float = STEP_MINUTES
+    start: datetime,
+    window_hours: float = WINDOW_HOURS,
+    step_minutes: float = STEP_MINUTES,
+    window: TimeWindow | None = None,
 ) -> list[datetime]:
-    """Start times either side of the requested one, the requested one included.
+    """Start times to evaluate: the request's window if it gave one, else a span either side.
 
     Kept on the same calendar day: a forecast is fetched per day, and a candidate that
     crossed midnight would silently compare one day's weather against another's.
+
+    A supplied window is swept from `earliest` to `latest` inclusive, at the same half-hour
+    resolution — the resolution argument is about what makes an answer actionable and does
+    not change with the width of the window. `latest` is always a candidate even when it
+    does not land on a step, because it is a time the runner named and the sweep would
+    otherwise quietly stop short of it.
+
+    The requested start is **not** added to a supplied window. `PlanRequest` refuses a start
+    time and a window together, so there is no requested start to add; the anchor the ETAs
+    were built from is whatever the caller chose to stand in for one.
     """
-    if step_minutes <= 0 or window_hours <= 0:
+    if step_minutes <= 0:
+        return [start]
+    if window is not None:
+        return _across(start, window, step_minutes)
+    if window_hours <= 0:
         return [start]
     steps = int(round(window_hours * 60.0 / step_minutes))
     out = []
@@ -93,6 +118,20 @@ def candidate_starts(
         candidate = start + timedelta(minutes=index * step_minutes)
         if candidate.date() == start.date():
             out.append(candidate)
+    return out
+
+
+def _across(start: datetime, window: TimeWindow, step_minutes: float) -> list[datetime]:
+    """Every step from `window.earliest` to `window.latest`, on `start`'s own day."""
+    day = start.date()
+    first = datetime.combine(day, window.earliest)
+    last = datetime.combine(day, window.latest)
+    out: list[datetime] = []
+    candidate = first
+    while candidate < last:
+        out.append(candidate)
+        candidate += timedelta(minutes=step_minutes)
+    out.append(last)
     return out
 
 
@@ -131,7 +170,7 @@ def start_time_optimizer(
 
     result = ScorerResult(name=name)
     rows: list[dict[str, Any]] = []
-    for start in candidate_starts(etas[0]):
+    for start in candidate_starts(etas[0], window=ctx.start_window):
         rows.append(_evaluate(route, _shift(etas, start), horizons, offset, forecast, water, stops))
 
     # One measurement per candidate rather than a table nested inside one. `values` holds
@@ -152,14 +191,7 @@ def start_time_optimizer(
     result.measurements.append(
         SegmentMeasurement(
             segment_id=ROUTE_SUMMARY_ID,
-            values={
-                "candidates": len(rows),
-                "window_hours": WINDOW_HOURS,
-                "step_minutes": STEP_MINUTES,
-                "requested_start": etas[0].strftime("%H:%M"),
-                "coolest_start": best.get("coolest"),
-                "shadiest_start": best.get("shadiest"),
-            },
+            values=_summary_values(rows, etas[0], ctx.start_window, best),
             confidence=1.0,
         )
     )
@@ -204,6 +236,44 @@ def start_time_optimizer(
         )
     )
     return result
+
+
+def _summary_values(
+    rows: list[dict[str, Any]],
+    requested: datetime,
+    window: TimeWindow | None,
+    best: dict[str, str],
+) -> dict[str, Any]:
+    """The one row describing the sweep itself, in two shapes that read differently.
+
+    **A plan with no window produces exactly the keys it produced before M11.6**, and that
+    is a constraint rather than a preference: `expectation.measurements_hash` walks every
+    key of every measurement, so a key added unconditionally moves the content hash of every
+    golden route on a milestone that measured nothing new. It did, and the golden suite
+    caught it — all six routes, on three keys whose values were `null`.
+
+    So the window keys appear only when there *is* a window, following the rule
+    `expectation._summary` already states for waypoint kinds: *"kinds with no finds are
+    omitted rather than written as zero — 'no key' and 'zero' should read differently"*.
+    `window_hours` present means the sweep used its own span around the requested start;
+    `window_earliest` and `window_latest` present mean the runner named the hours and these
+    were them. Neither shape is silent about which sweep ran, and a sheet printing
+    `window_hours: 3.0` beside a 05:00–09:00 request is what this prevents.
+    """
+    values: dict[str, Any] = {
+        "candidates": len(rows),
+        "step_minutes": STEP_MINUTES,
+        "requested_start": requested.strftime("%H:%M"),
+        "coolest_start": best.get("coolest"),
+        "shadiest_start": best.get("shadiest"),
+    }
+    if window is None:
+        values["window_hours"] = WINDOW_HOURS
+    else:
+        values["window_from"] = "request"
+        values["window_earliest"] = window.earliest.strftime("%H:%M")
+        values["window_latest"] = window.latest.strftime("%H:%M")
+    return values
 
 
 def _evaluate(

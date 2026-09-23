@@ -16,6 +16,11 @@ from longrun.core.models.geometry import LatLon
 
 EntryMode = Literal["generate", "repair"]
 
+#: Who put a lock on the line. Scope 7.8 lets a runner lock a range and scope 8.4 makes the
+#: loop lock one for them when they resolve a trade-off; only the first is theirs to take
+#: back, and until M11 the two were told apart by reading `reason` prose.
+LockSource = Literal["user", "loop"]
+
 
 class TimeWindow(BaseModel):
     """A range of acceptable start times, swept by `start_time_optimizer` (scope 7.7)."""
@@ -54,6 +59,24 @@ class LockedRange(BaseModel):
     start_m: float = Field(ge=0)
     end_m: float = Field(ge=0)
     reason: str | None = None
+    #: Who asked for it, so that "unlock what I locked" has something to select on.
+    #:
+    #: `reason` will not do the job. It is free prose for the sheet - `"round 3: rerouted"`
+    #: and `"chose B"` and whatever a user types - and selecting on a string the sheet is
+    #: free to rephrase is how an unlock silently starts removing the wrong ranges.
+    #:
+    #: Defaults to `"user"` because the only place a `LockedRange` is *constructed by a
+    #: runner* is `PlanRequest.locked`, which is the request and therefore theirs by
+    #: definition. Everything the loop adds says so at its own call site, and there is
+    #: exactly one such site - scope 8.4's auto-lock is **not** one of them: ADR 0019 gives
+    #: the choice among same-tier alternatives to the runner, so a lock that records their
+    #: choice is theirs and they may take it back.
+    #:
+    #: The residual risk is a scratchpad written before this field existed, which will
+    #: rehydrate the loop's own locks as the runner's. Nothing in the tree persists one
+    #: across that boundary, and a default of `None` would buy the distinction by making
+    #: every consumer handle a third state forever.
+    source: LockSource = "user"
 
     @model_validator(mode="after")
     def _check_order(self) -> LockedRange:

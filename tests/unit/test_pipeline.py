@@ -245,6 +245,10 @@ def test_a_partial_pass_produces_the_same_coverage_block_as_a_full_one(
         only={name for name in SCORERS if name not in time_independent},
         carried=[r for r in full.results if r.name in time_independent],
         carried_as_of=START,
+        # The full pass's own line and its own cut of it - the same route, so nothing moved
+        # and the partial pass carries every measurement the full one made (ADR 0032).
+        carried_route=full.route,
+        carried_segments=full.segments,
     )
 
     assert [(e.source, e.kind, e.checked) for e in partial.coverage.entries] == [

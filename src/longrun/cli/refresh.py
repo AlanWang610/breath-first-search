@@ -110,6 +110,10 @@ def refresh(
         cache_path=cache_path,
         remote_rasters=remote_rasters,
         utc_offset=stored.request.utc_offset_hours,
+        # A refresh keeps sweeping the window the plan was asked for. Dropping it here
+        # would make `longrun refresh` quietly answer a different question from the one
+        # `longrun plan` answered about the same route.
+        start_window=stored.request.start_window,
     ) as ctx:
         refreshed = rescore_plan(
             stored,

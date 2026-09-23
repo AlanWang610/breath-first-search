@@ -17,6 +17,8 @@ last ends at the final point.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 from longrun.core.geo.projections import bbox_of
@@ -29,6 +31,16 @@ DEFAULT_MAX_SEGMENT_M = 250.0
 
 #: Scope 5: scorers query a 300-500 m buffer around the route.
 DEFAULT_CORRIDOR_BUFFER_M = 400.0
+
+#: How far two segment boundaries may lie apart and still be called the same place.
+#:
+#: One metre, and the number is not doing much work: an edit that leaves a stretch alone
+#: leaves its *points* alone, so the unchanged part of a spliced or rerouted line agrees
+#: with the stored one to float noise rather than to a metre. The tolerance exists because
+#: `cum_dist_m` is re-accumulated from the first point on every pass, and because a line
+#: that came back from the router twice can differ in its seventh decimal place. It is far
+#: below `DEFAULT_MAX_SEGMENT_M`, which is what stops it reaching a neighbour.
+SAME_GROUND_M = 1.0
 
 
 def segment_id(index: int) -> str:
@@ -172,3 +184,136 @@ def locked_segment_ids(segments: list[Segment], locked: list[LockedRange]) -> fr
                 ids.add(segment.id)
                 break
     return frozenset(ids)
+
+
+@dataclass(frozen=True)
+class SegmentMap:
+    """Which ids of one segmentation still name the same ground in another (ADR 0032).
+
+    `segment_id(index)` is positional - `f"s{index:05d}"` - so an edit that inserts or
+    removes a single point renumbers every segment after it. Anything holding an id from
+    before the edit is then holding an index into a list that no longer exists, and the
+    dangerous part is that the id is still *valid*: `s00042` names a segment either way, a
+    few hundred metres from the one it was measured on.
+
+    So this is the inverse index, in the same spirit as M10.12's
+    `cumulative_after_normalize`: a way to ask "where did this go" that goes through the
+    ground rather than through the number.
+    """
+
+    #: False when the two segmentations describe the same line cut the same way. Then
+    #: `onto` is the identity and nothing was lost, and a caller can carry unchanged.
+    moved: bool
+    #: Old id -> new id, for the segments whose ground survives at the same distance.
+    onto: Mapping[str, str] = field(default_factory=dict)
+    #: Old ids with no counterpart. Reported rather than swallowed: "this measurement is
+    #: about ground that is not on the route any more" is an answer, and dropping it
+    #: silently is how a plan sheet ends up describing a street the runner will not see.
+    lost: tuple[str, ...] = ()
+    #: `(cum_start_m, cum_end_m)` for each stretch that survived, in route order.
+    #:
+    #: Here because not everything a scorer records is keyed on a segment: a `PlanWaypoint`
+    #: is keyed on `cum_dist_m`, and the question for one of those is whether the ground at
+    #: that distance is ground this map matched. Taken from the *new* segmentation, which is
+    #: the one whose distances this pass believes.
+    kept_spans: tuple[tuple[float, float], ...] = ()
+
+    def __contains__(self, old_id: str) -> bool:
+        """Whether `old_id` named a segment of the segmentation this map came from.
+
+        The third case a caller has to tell apart. An id that is neither kept nor lost was
+        never a segment id: `ROUTE_SUMMARY_ID`, a `start@07:00` sweep row, a `meet#0` crew
+        point. Those describe the whole route rather than a piece of it.
+        """
+        return old_id in self.onto or old_id in self.lost
+
+
+def map_segments(
+    old_route: Route,
+    old: Sequence[Segment],
+    new_route: Route,
+    new: Sequence[Segment],
+    tolerance_m: float = SAME_GROUND_M,
+) -> SegmentMap:
+    """Where each of `old`'s segments went in `new`, by ground rather than by index.
+
+    **Matched on `cum_start_m` and `length_m`, then checked against the line.** The span is
+    the cheap half and it is what makes the search local; on its own it is not enough, and
+    the counter-example is not exotic. Replace a kilometre in the middle of a route with a
+    different kilometre of the same length and every distance downstream is unchanged, so a
+    span match alone would re-point every measurement in the replaced stretch at new ground
+    with no sign that anything happened. The endpoints of the candidate are therefore
+    compared against the endpoints of the original, on their own routes, and a segment whose
+    span is right but whose ground is not counts as lost.
+
+    Only `lat`/`lon` are compared, never `ele_m`: `_score_pass` writes terrain heights onto
+    the points it returns, so the elevations of two readings of the same line differ
+    whenever one of them ran on a machine with a DEM and the other did not. That is a
+    difference in what was measured, not in where the segment is.
+
+    **A segment that moved by less than a metre still counts as the same place.** There is
+    no attempt to track a segment that *slid* - a stretch pushed 300 m down the route by an
+    insertion upstream is reported lost, not followed. Following it would need a claim about
+    which edit happened, and an edit is not always a single contiguous splice; the honest
+    answer for a measurement whose distance-along-route changed is that the thing it
+    measured has to be measured again.
+    """
+    if _same_line(old_route, old, new_route, new):
+        return SegmentMap(
+            moved=False,
+            onto={segment.id: segment.id for segment in old},
+            kept_spans=tuple((s.cum_start_m, s.cum_end_m) for s in new),
+        )
+
+    by_metre: dict[int, list[Segment]] = {}
+    for segment in new:
+        by_metre.setdefault(int(segment.cum_start_m), []).append(segment)
+
+    onto: dict[str, str] = {}
+    lost: list[str] = []
+    spans: list[tuple[float, float]] = []
+    for segment in old:
+        anchor = int(segment.cum_start_m)
+        candidates = [
+            candidate
+            for metre in (anchor - 1, anchor, anchor + 1)
+            for candidate in by_metre.get(metre, ())
+            if abs(candidate.cum_start_m - segment.cum_start_m) <= tolerance_m
+            and abs(candidate.length_m - segment.length_m) <= tolerance_m
+            and _ends_agree(old_route, segment, new_route, candidate, tolerance_m)
+        ]
+        if len(candidates) == 1:
+            onto[segment.id] = candidates[0].id
+            spans.append((candidates[0].cum_start_m, candidates[0].cum_end_m))
+        else:
+            lost.append(segment.id)
+    return SegmentMap(moved=True, onto=onto, lost=tuple(lost), kept_spans=tuple(sorted(spans)))
+
+
+def _same_line(
+    old_route: Route, old: Sequence[Segment], new_route: Route, new: Sequence[Segment]
+) -> bool:
+    """Whether both segmentations cut the same line in the same places.
+
+    The fast path, and the one that keeps `longrun refresh` exactly what it was: a refresh
+    passes no router, so the line is identical by construction (ADR 0030) and every carried
+    result keeps every measurement it had.
+    """
+    if len(old) != len(new) or list(old) != list(new):
+        return False
+    return [(p.lat, p.lon) for p in old_route.points] == [(p.lat, p.lon) for p in new_route.points]
+
+
+def _ends_agree(
+    old_route: Route, old: Segment, new_route: Route, new: Segment, tolerance_m: float
+) -> bool:
+    """Whether two segments start and finish at the same places on the ground."""
+    from longrun.core.geo.gpx import haversine_m
+
+    for old_idx, new_idx in ((old.start_idx, new.start_idx), (old.end_idx, new.end_idx)):
+        if old_idx >= len(old_route.points) or new_idx >= len(new_route.points):
+            return False
+        here, there = old_route.points[old_idx], new_route.points[new_idx]
+        if haversine_m(here.lat, here.lon, there.lat, there.lon) > tolerance_m:
+            return False
+    return True

@@ -87,6 +87,63 @@ def polygons_for_names(
     return areas, notes
 
 
+def area_from_polygon(
+    geometry: dict[str, Any], *, area_id: str = "avoid"
+) -> tuple[dict[str, Any] | None, str | None]:
+    """A polygon somebody drew, as an area `route_body` can pass - or the reason it cannot.
+
+    Scope 10.3's "draw an avoid polygon" arriving from a CLI or a map, and it needs the same
+    two treatments a geocoded name gets, for the same two reasons.
+
+    **Rounded at `AREA_PRECISION`, and that is not cosmetic.** An avoid-area travels inside
+    `custom_model`, which `CachedRouter` hashes into its key, and M5.13 was the milestone
+    spent finding out what unrounded coordinates do to a cache key across two platforms.
+    A polygon a browser drew carries sixteen significant digits of float and is the worst
+    case for it.
+
+    **And capped at `MAX_AREA_KM2`, refused by name with its size.** Closing four square
+    kilometres takes the parallel streets with it - the streets a detour was going to use -
+    and a runner told "not honoured, that is 11 km2" can draw a smaller one. Silently
+    routing through an avoid they asked for is the one outcome ruled out.
+
+    Returns `(area, None)` or `(None, reason)`. A reason rather than an exception, because
+    scope 3.6's rule holds here too: a plan that quietly dropped an avoid is worse than one
+    that says it could not honour it.
+    """
+    from pyproj import CRS
+    from shapely.geometry import mapping, shape
+    from shapely.ops import transform as shapely_transform
+
+    from longrun.core.geo.projections import transformer_from, transformer_to, utm_epsg
+
+    raw = geometry.get("geometry", geometry) if geometry.get("type") == "Feature" else geometry
+    try:
+        polygon = shape(raw)
+    except Exception as exc:  # noqa: BLE001 - any malformed GeoJSON is one answer
+        return None, f"could not read the polygon: {exc}"
+    if polygon.is_empty or polygon.area <= 0:
+        return None, "the polygon encloses no area"
+
+    centre = polygon.centroid
+    crs = CRS.from_epsg(utm_epsg(centre.y, centre.x))
+    to_local, to_wgs = transformer_to(crs), transformer_from(crs)
+    local = shapely_transform(lambda x, y: to_local.transform(x, y), polygon)
+    km2 = local.area / 1_000_000
+    if km2 > MAX_AREA_KM2:
+        return None, (
+            f"the polygon covers {km2:.1f} km2, larger than the {MAX_AREA_KM2:g} km2 cap; "
+            f"closing that much would take the streets around it with it"
+        )
+
+    back = shapely_transform(lambda x, y: to_wgs.transform(x, y), local)
+    return {
+        "type": "Feature",
+        "id": area_id,
+        "properties": {},
+        "geometry": round_coordinates(mapping(back)),
+    }, None
+
+
 def area_for(place: Place, *, area_id: str = "avoid") -> dict[str, Any] | None:
     """One place as a GeoJSON feature `route_body` can pass as an area, or `None` if too big."""
     from pyproj import CRS
@@ -123,4 +180,10 @@ def area_for(place: Place, *, area_id: str = "avoid") -> dict[str, Any] | None:
     }
 
 
-__all__ = ["MAX_AREA_KM2", "POINT_RADIUS_M", "area_for", "polygons_for_names"]
+__all__ = [
+    "MAX_AREA_KM2",
+    "POINT_RADIUS_M",
+    "area_for",
+    "area_from_polygon",
+    "polygons_for_names",
+]

@@ -19,8 +19,9 @@ from collections.abc import Collection, Iterable, Sequence
 from datetime import datetime
 from typing import Any, cast
 
+from longrun.core.geo.segments import SegmentMap, map_segments
 from longrun.core.models.context import BudgetExceeded, ScorerContext
-from longrun.core.models.measurement import ScorerResult
+from longrun.core.models.measurement import Regrounded, ScorerResult
 from longrun.core.models.plan import Manifest, ToolCall
 from longrun.core.scorers.base import unavailable
 
@@ -91,6 +92,16 @@ class StalePrior(ValueError):
     """A partial pass would have fed a scorer an earlier result it did not re-run."""
 
 
+class UngroundedCarry(ValueError):
+    """Results were offered to carry with no segmentation to say what their ids meant.
+
+    A carried `segment_id` is an index into the segmentation that produced it, and without
+    that segmentation there is no way to tell whether `s00042` still names the same ground.
+    Refused rather than assumed, for the reason `StalePrior` is: assuming produces a
+    *wrong* number rather than a missing one, and a wrong one is silent.
+    """
+
+
 def closure(names: Iterable[str]) -> frozenset[str]:
     """`names`, plus everything they read out of `prior`, transitively.
 
@@ -109,20 +120,79 @@ def closure(names: Iterable[str]) -> frozenset[str]:
     return frozenset(wanted)
 
 
-def carry(result: ScorerResult, as_of: datetime) -> ScorerResult:
-    """A stored result, restated as one this pass did not produce.
+def carry(result: ScorerResult, as_of: datetime, onto: SegmentMap | None = None) -> ScorerResult:
+    """A stored result, restated as one this pass did not produce, on this pass's ground.
 
-    `result.carried_from or as_of` rather than `as_of`, and that is the whole function: a
-    result carried through five successive refreshes must keep the date it was *originally
-    measured for*. Overwriting it each time would make a six-month-old `legality` report as
-    one day old after a single refresh, which turns the honesty field into a laundering
-    mechanism.
+    `result.carried_from or as_of` rather than `as_of`: a result carried through five
+    successive refreshes must keep the date it was *originally measured for*. Overwriting
+    it each time would make a six-month-old `legality` report as one day old after a single
+    refresh, which turns the honesty field into a laundering mechanism.
 
     `deep=True` because `ScorerResult` is the one measurement model that is not frozen and
     `record_coverage` appends to `result.coverage` in place - a shallow copy would share its
     lists with the stored plan's objects.
+
+    **`onto` is the other half, and it is what M11.3 is for** (ADR 0032). A stored
+    measurement is keyed on a `segment_id`, `segment_id` is `f"s{index:05d}"`, and an edit
+    that moves the line renumbers every segment downstream of it - so a carried measurement
+    whose id is merely *reused* is a measurement of different ground, presented as this
+    one's. Where the map says the segmentation did not move, nothing here changes, which is
+    every refresh. Where it moved, every measurement, flag and waypoint is re-keyed or
+    dropped, and `Regrounded` records which.
+
+    Dropped, never re-pointed. There is no rule by which the nearest surviving segment
+    inherits a measurement: "close to where this was taken" is not "where this was taken",
+    and scope 3.6's whole argument is that an absent answer beats a plausible wrong one.
     """
-    return result.model_copy(update={"carried_from": result.carried_from or as_of}, deep=True)
+    carried = result.model_copy(update={"carried_from": result.carried_from or as_of}, deep=True)
+    if onto is None or not onto.moved:
+        return carried
+
+    kept_measurements = []
+    dropped = totals_dropped = 0
+    for measurement in carried.measurements:
+        landed = onto.onto.get(measurement.segment_id)
+        if landed is not None:
+            kept_measurements.append(measurement.model_copy(update={"segment_id": landed}))
+        elif measurement.segment_id in onto:
+            dropped += 1
+        else:
+            totals_dropped += 1
+
+    kept_flags = []
+    flags_dropped = 0
+    for flag in carried.flags:
+        landed = onto.onto.get(flag.segment_id)
+        if landed is not None:
+            kept_flags.append(flag.model_copy(update={"segment_id": landed}))
+        else:
+            flags_dropped += 1
+
+    # A waypoint carries no segment id - it is keyed on `cum_dist_m`, which is a distance
+    # along the line that was just edited. Kept only where the ground at that distance is
+    # ground this map matched, because that is exactly the condition under which the
+    # distance still points at the place the scorer found.
+    spans = onto.kept_spans
+    kept_waypoints = [w for w in carried.waypoints if _within(spans, w.cum_dist_m)]
+
+    carried.measurements = kept_measurements
+    carried.flags = kept_flags
+    dropped_waypoints = len(carried.waypoints) - len(kept_waypoints)
+    carried.waypoints = kept_waypoints
+    carried.regrounded = Regrounded(
+        measurements_kept=len(kept_measurements),
+        measurements_dropped=dropped,
+        route_totals_dropped=totals_dropped,
+        flags_kept=len(kept_flags),
+        flags_dropped=flags_dropped,
+        waypoints_kept=len(kept_waypoints),
+        waypoints_dropped=dropped_waypoints,
+    )
+    return carried
+
+
+def _within(spans: Sequence[tuple[float, float]], distance_m: float) -> bool:
+    return any(start <= distance_m <= end for start, end in spans)
 
 
 def load_scorer(module_path: str) -> Any | None:
@@ -157,6 +227,32 @@ def _call(
     return cast("ScorerResult", func(route, segments, ctx, etas))
 
 
+def _grounding(
+    route: Any,
+    segments: Sequence[Any],
+    carried: Sequence[ScorerResult],
+    carried_route: Any,
+    carried_segments: Sequence[Any] | None,
+) -> SegmentMap | None:
+    """The map from the stored results' segmentation onto this pass's, or None to carry none.
+
+    Computed once for the whole pass rather than per scorer: every carried result was
+    measured against the same line, so twenty-one identical searches would be twenty of them
+    wasted - and, worse, twenty chances for two scorers to disagree about where a segment
+    went.
+    """
+    if not carried:
+        return None
+    if carried_route is None or carried_segments is None:
+        raise UngroundedCarry(
+            f"{len(carried)} stored result(s) were offered to carry with no segmentation "
+            f"they were measured against. Pass `carried_route` and `carried_segments`; a "
+            f"`segment_id` is positional, so without them a carried measurement cannot say "
+            f"whether it is still about the same ground."
+        )
+    return map_segments(carried_route, list(carried_segments), route, list(segments))
+
+
 def _check_only(only: Collection[str]) -> None:
     """Refuse a partial pass that would misreport, before any of it runs."""
     known = set(SCORERS) | set(NOT_YET_IMPLEMENTED)
@@ -181,6 +277,8 @@ def run_scorers(
     only: Collection[str] | None = None,
     carried: Sequence[ScorerResult] = (),
     carried_as_of: datetime | None = None,
+    carried_route: Any = None,
+    carried_segments: Sequence[Any] | None = None,
 ) -> list[ScorerResult]:
     """Run every scorer that exists; report every one that does not.
 
@@ -192,6 +290,14 @@ def run_scorers(
     `only` names the scorers to actually run; the rest are taken from `carried` and stamped
     with `carried_as_of`. `only=None` runs everything and must stay a bit-exact no-op - the
     golden suite is what checks that.
+
+    `carried_route` and `carried_segments` are the line and the segmentation those stored
+    results were measured against, and they are **required** whenever anything is carried.
+    A `segment_id` is `f"s{index:05d}"` - an index - so without them there is no way to ask
+    whether `s00042` still names the same ground, and the failure of guessing is silent
+    (ADR 0032). `carried_segments=[]` is a real answer and not a missing one: it says the
+    stored results were measured against no segmentation, which is what a synthetic result
+    in a test has, and it maps identically onto `segments=[]`.
 
     **The merge happens here rather than in a caller, and that is the load-bearing choice.**
     Two things force it. `prior` is assembled from the list under construction, so a carried
@@ -207,6 +313,7 @@ def run_scorers(
     wanted = set(SCORERS) if only is None else set(only)
     stored = {result.name: result for result in carried}
     as_of = carried_as_of or (etas[0] if etas else None)
+    onto = _grounding(route, segments, carried, carried_route, carried_segments)
 
     results: list[ScorerResult] = []
     #: Scorers this pass actually invoked, as opposed to carried. Counted separately so the
@@ -225,7 +332,7 @@ def run_scorers(
         if name not in wanted:
             previous = stored.get(name)
             results.append(
-                carry(previous, as_of)
+                carry(previous, as_of, onto)
                 if previous is not None and as_of is not None
                 else unavailable(name, "not re-scored, and no stored result was available to carry")
             )
@@ -269,6 +376,7 @@ __all__ = [
     "PRIOR_DEPENDENCIES",
     "SCORERS",
     "StalePrior",
+    "UngroundedCarry",
     "UnknownScorer",
     "carry",
     "closure",

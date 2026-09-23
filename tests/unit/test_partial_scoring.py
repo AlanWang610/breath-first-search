@@ -87,6 +87,8 @@ def test_a_partial_pass_returns_every_scorer_not_just_the_ones_it_ran(tmp_path: 
         only={"lighting"},
         carried=[_stored(name) for name in SCORERS if name != "lighting"],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     assert [r.name for r in results] == list(SCORERS)
 
@@ -104,6 +106,8 @@ def test_a_carried_result_says_it_was_carried_and_a_rescored_one_does_not(
         only={"lighting"},
         carried=[stored],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     by_name = {r.name: r for r in results}
 
@@ -129,6 +133,8 @@ def test_a_result_carried_twice_keeps_the_date_it_was_measured_for(tmp_path: Pat
         only={"lighting"},
         carried=[_stored("legality")],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     twice = run_scorers(
         route,
@@ -138,6 +144,8 @@ def test_a_result_carried_twice_keeps_the_date_it_was_measured_for(tmp_path: Pat
         only={"lighting"},
         carried=[r for r in once if r.name == "legality"],
         carried_as_of=REFRESHED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     assert next(r for r in twice if r.name == "legality").carried_from == MEASURED_AT
 
@@ -191,6 +199,8 @@ def test_a_rescored_scorer_is_handed_the_carried_results_in_registry_order(
         only={"third"},
         carried=[_stored("first"), _stored("second")],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     assert seen == [["first", "second"]], (
         "the carried results were not in `prior`, in registry order, when `third` ran"
@@ -215,6 +225,8 @@ def test_a_declared_prior_is_always_re_run_and_so_is_never_carried(tmp_path: Pat
         only=closure({"heat_stress"}),
         carried=[_stored(name) for name in SCORERS],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     by_name = {r.name: r for r in results}
     assert by_name["sun_exposure"].carried_from is None
@@ -252,6 +264,8 @@ def test_a_carried_scorers_coverage_reaches_the_manifest_exactly_once(
         only={"lighting"},
         carried=[_stored("legality")],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     stored_entries = [e for e in ctx.coverage.entries if e.kind == "stored"]
     assert len(stored_entries) == 1
@@ -270,6 +284,8 @@ def test_a_carried_scorer_costs_no_latency_and_no_manifest_entry(tmp_path: Path)
         only={"lighting"},
         carried=[_stored(name) for name in SCORERS if name != "lighting"],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     assert {c.tool for c in manifest.tool_calls} == {"lighting"}
 
@@ -286,6 +302,8 @@ def test_an_exhausted_budget_still_carries_rather_than_dropping(tmp_path: Path) 
         only={"lighting"},
         carried=[_stored("legality")],
         carried_as_of=MEASURED_AT,
+        carried_route=route,
+        carried_segments=[],
     )
     legality = next(r for r in results if r.name == "legality")
     assert legality.carried_from == MEASURED_AT

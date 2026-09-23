@@ -140,6 +140,10 @@ def score_route(
         cache_path=cache_path,
         remote_rasters=remote_rasters,
         utc_offset=utc_offset,
+        # Read off the request rather than passed in: the window is a property of what was
+        # asked for, and this function already holds the request. A second parameter could
+        # disagree with it, and the one that reached the scorer would be the wrong one.
+        start_window=request.start_window,
         cache=cache,
         budget=budget,
     ) as ctx:

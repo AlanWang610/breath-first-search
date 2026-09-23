@@ -1,7 +1,11 @@
 """Scope 7.8: changing a plan rather than measuring one.
 
-Five of these are new here and cheap, because scope 9 and 10.1 already promise them and
-the pieces each needs already exist. Two are not, and say so.
+Five of these were new in M5 and cheap, because scope 9 and 10.1 already promised them and
+the pieces each needed already existed. Two were not, and said so. `pin_waypoint` is the
+sixth as of M11 - what it was waiting for was not effort but an owner: something that could
+edit a *stored* request, since the loop takes its router waypoints from `PlanRequest` and a
+via held anywhere else is a via no round will draw through. `place_notes` still says so,
+and still for its own reason: nothing in the tree models a user note.
 """
 
 from __future__ import annotations
@@ -112,14 +116,38 @@ def register(server: Any, settings: ToolSettings) -> None:
             "written": plan_path if write else None,
         }
 
-    @server.tool(name="pin_waypoint", description="Scope 7.8: not available in this build.")
-    def pin_waypoint(**kwargs: Any) -> dict[str, Any]:
-        return unavailable(
-            "pin_waypoint",
-            "a via point is a property of the request, and editing a stored request in "
-            "place has no owner yet - the loop takes its waypoints from `PlanRequest`",
-            blocked_on="work",
-        )
+    @server.tool(name="pin_waypoint", description="Scope 7.8: add a via point to a plan.")
+    def pin_waypoint(
+        scratchpad_path: str, lat: float, lon: float, at_m: float | None = None
+    ) -> dict[str, Any]:
+        """Writes through the scratchpad, for the same reason `lock_segment` does.
+
+        This refused until M11 because "a via point is a property of the request, and
+        editing a stored request in place has no owner yet". `Scratchpad.add_via` is that
+        owner, and the reason it is the right one is the other half of the old refusal:
+        the loop takes its waypoints from `PlanRequest`, so a via anywhere else is a via
+        no round will route through.
+
+        **Adding a via does not redraw the line**, and the result says so rather than
+        implying otherwise. Drawing it is a routing call against the plan's own frozen
+        policy, which is `longrun edit reroute`'s job and not a side effect of a pin.
+        Until then the stored route does not visit the new point, and `gpx_verify` is
+        what says so.
+        """
+        from longrun.core.models.geometry import LatLon
+        from longrun.core.plan.scratchpad import Scratchpad
+
+        pad = Scratchpad.load(scratchpad_path)
+        point = LatLon(lat=lat, lon=lon)
+        index = pad.add_via(point, at_m=at_m)
+        pad.save(scratchpad_path)
+        return {
+            "checked": True,
+            "via": [p.model_dump(mode="json") for p in pad.request.via],
+            "inserted_at": index,
+            "routed": False,
+            "reason": "the stored line still runs where it did; re-route to draw through it",
+        }
 
     @server.tool(name="place_notes", description="Scope 7.8: not available in this build.")
     def place_notes(**kwargs: Any) -> dict[str, Any]:

@@ -16,6 +16,13 @@ Latitude = Annotated[float, Field(ge=-90, le=90)]
 Longitude = Annotated[float, Field(ge=-180, le=180)]
 Meters = Annotated[float, Field(ge=0)]
 
+#: Where a line came from. Three answers, and they are not interchangeable: an imported line
+#: is the runner's own (scope 6.1's repair mode), a generated one is what the router drew,
+#: and an edited one is a generated or imported line a scope 10.3 gesture has since changed.
+#: `gpx_verify` check 10 and `route_diff` both compare a line against the one it replaced,
+#: and a reader of a stored plan needs to know which of the three they are holding.
+RouteSource = Literal["imported", "generated", "edited"]
+
 
 class LatLon(BaseModel):
     """A WGS84 position."""
@@ -47,7 +54,7 @@ class Route(BaseModel):
     id: str
     points: list[RoutePoint]
     name: str | None = None
-    source: Literal["imported", "generated", "edited"] = "imported"
+    source: RouteSource = "imported"
 
     @model_validator(mode="after")
     def _check_points(self) -> Route:

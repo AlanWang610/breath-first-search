@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import IO, TYPE_CHECKING
+from typing import IO, TYPE_CHECKING, cast
 
 import gpxpy
 import gpxpy.gpx
 
-from longrun.core.models.geometry import Route, RoutePoint
+from longrun.core.models.geometry import Route, RoutePoint, RouteSource
 from longrun.core.models.waypoint import WaypointKind
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -194,7 +194,24 @@ def gpx_read(
         raise GpxError("GPX contains no track or route with at least two points")
 
     name = next((t.name for t in gpx.tracks if t.name), None)
-    return Route(id=route_id, points=points, name=name, source="imported")
+    return Route(id=route_id, points=points, name=name, source=_source_of(gpx))
+
+
+#: The three `RouteSource` literals, as the strings a GPX track's `<type>` carries them in.
+#:
+#: GPX 1.1 gives a track a free-text `<type>`, and this project writes its own provenance
+#: there because scope 9 makes GPX an output format: a plan whose line was edited, exported
+#: and read back in would otherwise come back claiming the runner drew it. Any other value -
+#: and most files in the world have one, or none - reads as `"imported"`, which is the true
+#: answer for a file somebody handed us.
+SOURCE_TYPES: tuple[str, ...] = ("imported", "generated", "edited")
+
+
+def _source_of(gpx: gpxpy.gpx.GPX) -> RouteSource:
+    for track in gpx.tracks:
+        if track.type in SOURCE_TYPES:
+            return cast("RouteSource", track.type)
+    return "imported"
 
 
 def gpx_string(
@@ -227,6 +244,10 @@ def _build(
     gpx.creator = "longrun"
 
     track = gpxpy.gpx.GPXTrack(name=route.name or route.id)
+    # Provenance survives the round trip. Without this an edited line exported to GPX and
+    # read back is indistinguishable from the runner's own, and `Route.source` would be a
+    # field that only holds while the process that set it is alive.
+    track.type = route.source  # type: ignore[assignment]  # gpxpy types this None
     segment = gpxpy.gpx.GPXTrackSegment()
     segment.points = [
         gpxpy.gpx.GPXTrackPoint(latitude=p.lat, longitude=p.lon, elevation=p.ele_m)
