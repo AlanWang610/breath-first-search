@@ -14,13 +14,21 @@ here, then" and stops.
 It is also the first scorer whose data comes from outside, so it is the first that can be
 partly answered: eighteen sites of twenty-one is a real result, and the segments nearest
 the three that failed carry lower confidence rather than the whole route being discarded.
+
+**The ETAs handed to `for_segments` are naive local and are converted there, not here**
+(ADR 0045). Until M15 they were not converted at all: Open-Meteo is requested with
+`timezone=UTC`, so a 17:30 local arrival was matched against the 17:30 UTC row — 10:30 in
+San Francisco — and every plan this project produced read the wrong hour. The conversion
+sits behind `RouteForecast` rather than in this function because five scorers ask the same
+question and three of them had got it wrong; one of the three, `sun_exposure`, was
+resolving the offset correctly for its solar half in the same call.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from longrun.core.data.forecast import DEFAULT_SPACING_M, route_forecast
+from longrun.core.data.forecast import DEFAULT_SPACING_M, route_forecast, window_gap_entry
 from longrun.core.models.measurement import ScorerResult, SegmentMeasurement
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID
 from longrun.core.scorers.base import unavailable
@@ -99,12 +107,21 @@ def microclimate(
                 "min_temp_c": min(temps) if temps else None,
                 "max_temp_c": max(temps) if temps else None,
                 "providers": ", ".join(f"{k}:{v}" for k, v in sorted(forecast.providers.items())),
+                # Which hour was read, and on whose authority. The same three-state report
+                # `sun_exposure` and `lighting` already carry (ADR 0008), extended here
+                # because the hour is precisely what M15 found wrong: a reader comparing
+                # this figure against a weather site needs to know which clock it is on.
+                "utc_offset_hours": forecast.utc_offset_hours,
+                "utc_offset_source": forecast.utc_offset_source,
             },
             confidence=1.0 if forecast.answered else 0.0,
         )
     )
 
     result.coverage.extend(forecast.coverage())
+    window_gap = window_gap_entry(forecast, readings)
+    if window_gap is not None:
+        result.coverage.append(window_gap)
     return result
 
 
