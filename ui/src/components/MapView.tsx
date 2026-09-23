@@ -50,11 +50,32 @@ import {
   type Vertex,
 } from "../lib/plan";
 
+/**
+ * The ground everything is drawn on, and the one key it must **not** carry.
+ *
+ * There is no `glyphs` entry here, and its absence is load-bearing. `glyphs: undefined` was
+ * written to say "this style has no fonts", which is true and which is also what leaving the
+ * key out says. But a style object is validated as data, not as TypeScript: `glyphs?: string`
+ * makes `glyphs: undefined` type-check, while `validateStyle` sees a *present* key whose
+ * value is not a string and reports `glyphs: string expected, undefined found`. MapLibre's
+ * `Style._load` returns early on any validation error, so `_loaded` never becomes true,
+ * `load` never fires and `isStyleLoaded()` is false forever.
+ *
+ * Everything below hangs off that event. The draw effect's `else instance.once("load", draw)`
+ * branch never runs, so there is no `segments` source, no layer, no `fitBounds`; the basemap
+ * fetch in `once("load")` never runs, so `/api/basemap` is never called and not even the
+ * "No basemap" note appears; and the click and hover handlers, which both begin
+ * `if (!instance.getLayer("segments")) return`, silently do nothing. A map with no route, no
+ * ground and no explanation — the exact empty rectangle ADR 0023 restructured this file to
+ * make impossible, arriving through a key that was supposed to be inert.
+ *
+ * M15's first browser test is what found it. `tsc` cannot: the property is optional and
+ * `undefined` is assignable to it.
+ */
 const BLANK_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {},
   layers: [{ id: "bg", type: "background", paint: { "background-color": "#11151a" } }],
-  glyphs: undefined,
 };
 
 /** What a click on the map means right now. `null` is "select a segment". */
