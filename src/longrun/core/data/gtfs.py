@@ -19,7 +19,11 @@ time is exactly that, and it moves the cost off the ~3-minute plan budget (§6.4
 
 What this gives up is `transit_at`'s exact departure board (§7.7). That is a tool rather
 than a scorer, it needs GTFS-RT to be worth much, and it should be added as its own path
-when something needs it — not smuggled in as a table nothing can read.
+when something needs it — not smuggled in as a table nothing can read. M16 looked at
+building that path and did not: RT is delta-encoded against the static `stop_times` this
+module deliberately does not load, so it is two data paths rather than one, and a board is
+valid for thirty seconds against a cache keyed by the *day*
+([ADR 0043](../../../../docs/decisions/0043-gtfs-rt-departure-boards-are-not-built.md)).
 
 **Feeds are named by the caller, not discovered.** §13 step 2 says "all intersecting GTFS
 feeds", and discovery needs a registry (the Mobility Database, transit.land) with its own

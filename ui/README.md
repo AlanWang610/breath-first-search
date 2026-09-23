@@ -107,7 +107,12 @@ have raised the number without changing that sentence, so there is none.
 
 **The chat pane**, which wants the MCP session and the browser talking to one agent.
 `api/` reaches `tools/` only by importing the same `core/` functions those tools wrap,
-never through `MCPServer` itself — that is a second integration, not a panel.
+never through `MCPServer` itself — that is a second integration, not a panel. Deferred
+three times now, so M16 wrote the argument down:
+[ADR 0044](../docs/decisions/0044-the-chat-pane-is-a-second-integration.md), which also
+names the cheap experiment that would settle it — a *question* panel over the
+`needs_input` job state that already exists, which needs no new integration and no model
+call.
 
 **A re-route endpoint.** `longrun edit reroute` needs a GraphHopper server, which the
 hermetic suite does not have and must not reach, so an endpoint for it would be an

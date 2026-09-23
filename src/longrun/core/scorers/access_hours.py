@@ -7,7 +7,7 @@ runner who arrives two hours after it opens.
 
 **Soft, at severity 0.9, and a locked gate really is disqualifying** - which looks like a
 contradiction and is the most considered decision in
-[ADR 0013](../../../docs/decisions/0013-closures-may-hard-fail.md). An arbitration tier is
+[ADR 0013](../../../../docs/decisions/0013-closures-may-hard-fail.md). An arbitration tier is
 not a severity ranking; it is a claim of *incommensurability*, and `Tier.SAFETY` means no
 amount of everything below can buy it back. A gate is bought back by starting twenty minutes
 later. Scope 6.4 already files *"earliest start (e.g. gate opens)"* as a **request
