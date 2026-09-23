@@ -20,9 +20,19 @@
  * the ground it did not touch and leaves the new stretch's unknown - so this is not a
  * theoretical case in M12, it is what every `choose` produces.
  */
-import type { Flag, Plan, RoutePoint, Segment } from "../api";
+import { FLAG_KIND, TIER, type Flag, type Plan, type RoutePoint, type Segment } from "../api";
 
-/** Flags by segment id, worst first — what the map colours a segment by. */
+/**
+ * Flags by segment id, worst first — what the map colours a segment by.
+ *
+ * **The comparator is arithmetic on `kind`, not a string test**, and that is M15's
+ * correction rather than a style. `FlagKind` is an `IntEnum` on the wire, so the old
+ * `a.kind === "hard" ? -1 : 1` was false for every flag that has ever arrived: whenever two
+ * flags differed in kind it returned `1` for both orderings, which is not a comparator at
+ * all. A soft flag could therefore end up at `[0]` and colour the segment, and a segment
+ * whose real worst flag is a hard safety one would be painted for the wrong reason — on a
+ * map somebody is reading for safety.
+ */
 export function flagsBySegment(plan: Plan): Map<string, Flag[]> {
   const out = new Map<string, Flag[]>();
   for (const result of plan.results ?? []) {
@@ -32,8 +42,10 @@ export function flagsBySegment(plan: Plan): Map<string, Flag[]> {
       out.set(flag.segment_id, list);
     }
   }
+  // Hard before soft — `FLAG_KIND.HARD` is the larger value, so descending on kind — and
+  // severity descending within a kind.
   for (const list of out.values()) {
-    list.sort((a, b) => (a.kind === b.kind ? b.severity - a.severity : a.kind === "hard" ? -1 : 1));
+    list.sort((a, b) => (a.kind === b.kind ? b.severity - a.severity : b.kind - a.kind));
   }
   return out;
 }
@@ -45,16 +57,50 @@ export function flagsBySegment(plan: Plan): Map<string, Flag[]> {
  * amount of discomfort — and a gradient over severity would put a 0.9 comfort flag and a
  * 0.9 safety flag in the same colour, which is exactly the comparison arbitration refuses
  * to make.
+ *
+ * **It takes a number, because `Tier` is an `IntEnum`.** Until M15 this switched on
+ * `"safety"` and `"physiological"`, and every real flag carries `0` or `1`, so every branch
+ * fell through to the default and the whole map was painted comfort blue. The tier colouring
+ * `ui/README.md` leads with — "each segment coloured by its worst flag's tier" — had never
+ * once happened on a screen.
  */
-export function tierColour(tier: string): string {
+export function tierColour(tier: number): string {
   switch (tier) {
-    case "safety":
+    case TIER.SAFETY:
       return "#d1495b";
-    case "physiological":
+    case TIER.PHYSIOLOGICAL:
       return "#e8a33d";
     default:
       return "#4a8fc2";
   }
+}
+
+/**
+ * A tier as a word, for the hover popup.
+ *
+ * The popup exists so that somebody reading the map finds out *why* a segment is coloured,
+ * and `${worst.tier}` on an `IntEnum` puts a `2` there — worse than the reason code the
+ * popup was written to improve on. An unfamiliar tier is rendered as `tier N` rather than
+ * guessed at, for the same reason `tierColour` declines to invent a colour for one.
+ */
+export function tierName(tier: number): string {
+  switch (tier) {
+    case TIER.SAFETY:
+      return "safety";
+    case TIER.PHYSIOLOGICAL:
+      return "physiological";
+    case TIER.COMFORT:
+      return "comfort";
+    default:
+      return `tier ${tier}`;
+  }
+}
+
+/** A flag kind as a word, for the same reason and with the same caution. */
+export function kindName(kind: number): string {
+  if (kind === FLAG_KIND.HARD) return "hard";
+  if (kind === FLAG_KIND.SOFT) return "soft";
+  return `kind ${kind}`;
 }
 
 /**

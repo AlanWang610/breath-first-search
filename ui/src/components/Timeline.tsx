@@ -29,7 +29,7 @@
  * map reads it as a marker.
  */
 import { useRef } from "react";
-import type { Plan } from "../api";
+import { FLAG_KIND, type Plan } from "../api";
 import { elevationRuns, flagsBySegment, segmentRange, tierColour, unmeasuredMetres } from "../lib/plan";
 
 const WIDTH = 1000;
@@ -77,7 +77,7 @@ export function Timeline({
         x: x(startM),
         width: Math.max(1.5, x(segment.length_m)),
         colour: tierColour(worst.tier),
-        opacity: worst.kind === "hard" ? 0.95 : 0.5,
+        opacity: worst.kind === FLAG_KIND.HARD ? 0.95 : 0.5,
       };
     })
     .filter((bar): bar is NonNullable<typeof bar> => bar !== null);

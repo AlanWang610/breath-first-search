@@ -1,0 +1,29 @@
+{
+  // The browser suite (M15) type-checks under its own compiler options, and the split is
+  // the point rather than a convenience.
+  //
+  // `tsconfig.json` sets `"types": ["vite/client"]`, so nothing under `src/` can reach a
+  // Node global: a component that typed `process.env` would fail there, which is correct,
+  // because the bundle has no `process`. The gesture suite is the opposite situation — it
+  // is Node driving a browser, and it needs `node:path`, `node:os`, `child_process` and
+  // `process.env` to spawn the API server and seed a plan.
+  //
+  // Folding both into one `types` list would give `src/` the Node globals as a side
+  // effect, and the first thing to go wrong would be silent: a `process.env.X` in a
+  // component that type-checks and is `undefined` in the browser.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["gestures"]
+}

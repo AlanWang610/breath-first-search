@@ -57,3 +57,11 @@ ui/tsconfig.tsbuildinfo
 # plan is a run of somebody's, not a fixture: the goldens are where a plan this project
 # tests against belongs, and one committed here would be a sixth golden nobody reviewed.
 plans/
+
+# What the M15 browser suite leaves behind: `test-results/` holds the trace Playwright
+# keeps for a failed gesture, `playwright-report/` the viewer for it. Both are a record of
+# one run on one machine. The suite's own scratch - the seeded plan and the server's
+# `plans/` directory - is written under the system temp directory and never inside the
+# tree, which is the rule immediately above applied rather than worked around.
+ui/test-results/
+ui/playwright-report/

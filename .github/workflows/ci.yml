@@ -191,3 +191,80 @@ jobs:
         # Selected by marker rather than by a list of paths, so a new database-backed
         # module joins this job by carrying `postgis` and nothing here has to be edited.
         run: uv run pytest -m postgis
+
+  # M15. The browser tier: the five scope 10.3 gestures driven against a real page, a real
+  # `longrun api` and a real MapLibre canvas. Until this milestone `ui/README.md` said
+  # plainly that "nothing verifies a gesture" and that a headless run could not; the first
+  # commit of M15 measured whether that was still true and found it was not.
+  #
+  # **A fourth job rather than a step on `ui`**, and the reason is what it costs. `ui` is
+  # `npm ci` plus two commands over pure functions and finishes in well under a minute;
+  # this needs Python, uv, the golden fixtures, a Chromium download and a server, and runs
+  # a minute of browser on top. Folding them together would make a ten-minute budget cover
+  # two very different things and would stop a vitest regression being legible on its own.
+  #
+  # **Not a step on `test` either.** That matrix has no headroom - M6's rule is to watch the
+  # budget rather than raise it - and its Windows leg is primary for path, locale and CRLF
+  # failures that have nothing to do with a browser.
+  #
+  # **Ubuntu only, Chromium only.** MapLibre GL 5.x needs WebGL 2 and a headless browser
+  # gives it a software rasteriser; Chromium's is ANGLE over SwiftShader and it is the one
+  # M15.1 measured - 25 launches, 25 clean resolutions of a rendered query. Firefox and
+  # WebKit would be three rasterisers to keep honest instead of one, for behaviour that is
+  # the application's rather than the browser's. `retries: 0` is set in the Playwright
+  # config on purpose: a retry here is how a flaky browser job becomes one everybody learns
+  # to re-run.
+  gestures:
+    runs-on: ubuntu-latest
+    # Measured at ~2 minutes of tests locally on Windows, plus the Chromium download. 20
+    # leaves room for a cold cache without leaving room for a suite that has got slow.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        # `api` is the one this job cannot do without - it serves the page under test - and
+        # the rest are here because `longrun repair` seeds the plan through the same CLI the
+        # golden suite uses, and a narrower install would be a second definition of what the
+        # command needs.
+        run: uv sync --frozen --extra dev --extra tools --extra agent --extra history --extra api
+
+      - name: Install dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: ui
+        # `--with-deps` because a GitHub runner has none of the shared libraries a browser
+        # links against. Chromium alone: see the note above on why there is no matrix here.
+        run: npx playwright install --with-deps chromium
+
+      - name: Gestures
+        working-directory: ui
+        # Builds `ui/dist` first and then serves it with `longrun api --ui ui/dist`, which
+        # is one origin and is what `ui/README.md` tells a reviewer to run. The seeded plan
+        # is generated from a golden at test time and written under the system temp
+        # directory - `plans/` is gitignored for a reason and this suite does not argue
+        # with it.
+        run: npm run test:gestures
+
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gesture-traces
+          path: ui/test-results/
+          retention-days: 7

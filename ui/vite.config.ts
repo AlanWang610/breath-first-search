@@ -13,10 +13,17 @@ export default defineConfig({
     },
   },
   build: { outDir: "dist" },
-  // M12.8. `node`, not `jsdom`: everything under test is a function of a plan and returns a
-  // value, and a DOM would invite tests of components that a headless run cannot honestly
-  // check anyway. A MapLibre drag has no coverage here and the PR says so rather than
-  // implying otherwise — mounting a component to assert it rendered would have looked like
-  // it did.
+  // M12.8. `node`, not `jsdom`: everything under test here is a function of a plan and
+  // returns a value, and a DOM would invite tests of components that assert they rendered
+  // and look like gesture coverage without being any.
+  //
+  // **M15 kept the setting and corrected the reason.** The original comment went on to say
+  // a headless run could not honestly check a MapLibre drag anyway. It can — in a browser,
+  // which is what `ui/gestures/` is, and it found two bugs in this directory in its first
+  // hour. What a *fake* DOM cannot do is answer `queryRenderedFeatures`, because jsdom and
+  // happy-dom have no WebGL, so a test written against one would be asserting that a
+  // handler called a mock. So this stays `node` and stays `.test.ts`, the browser tier is
+  // a separate suite with a separate runner and a separate CI job, and neither can be
+  // mistaken for the other. See ADR 0040.
   test: { environment: "node", include: ["src/**/*.test.ts"] },
 });

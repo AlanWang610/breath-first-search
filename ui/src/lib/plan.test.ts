@@ -18,16 +18,18 @@
  * and it was checking a mistake against itself.
  */
 import { describe, expect, it } from "vitest";
-import type { Plan, RoutePoint, Segment } from "../api";
+import { FLAG_KIND, TIER, type Plan, type RoutePoint, type Segment } from "../api";
 import {
   elevationRuns,
   flagsBySegment,
+  kindName,
   lineFromVertices,
   pointAtDistance,
   polygonFromVertices,
   segmentAt,
   segmentRange,
   tierColour,
+  tierName,
   unmeasuredMetres,
 } from "./plan";
 
@@ -67,17 +69,42 @@ function plan(results: Plan["results"]): Plan {
 }
 
 describe("tierColour", () => {
+  // **The numbers are the fixture, and that is M15's correction.** `Tier` is an `IntEnum`,
+  // so a plan off the wire carries `0`, `1`, `2`. These cases used to pass `"safety"` and
+  // `"comfort"` - spellings no server has ever sent - so they agreed with `api.ts`, which
+  // was wrong in the same direction, and every real flag fell through to the default. The
+  // map was painted one colour and a green suite said otherwise.
   it("gives each tier its own colour", () => {
-    expect(tierColour("safety")).toBe("#d1495b");
-    expect(tierColour("physiological")).toBe("#e8a33d");
-    expect(tierColour("comfort")).toBe("#4a8fc2");
+    expect(tierColour(TIER.SAFETY)).toBe("#d1495b");
+    expect(tierColour(TIER.PHYSIOLOGICAL)).toBe("#e8a33d");
+    expect(tierColour(TIER.COMFORT)).toBe("#4a8fc2");
   });
 
   it("does not invent a colour for a tier it has not met", () => {
     // Scope 8.4's tiers are lexicographic and comfort is the bottom one, so an unknown
     // tier rendering as comfort understates rather than overstates. A thrown error or a
     // transparent line would both be worse on a map somebody is reading for safety.
-    expect(tierColour("something-new")).toBe(tierColour("comfort"));
+    expect(tierColour(7)).toBe(tierColour(TIER.COMFORT));
+  });
+});
+
+describe("tierName and kindName", () => {
+  it("say the word the popup needs, because a runner cannot read an IntEnum", () => {
+    // The hover exists so somebody finds out *why* a segment is coloured. Interpolating
+    // the enum put `hazards 0 (2)` in the popup - less use than the reason code the prose
+    // was written to improve on.
+    expect(tierName(TIER.SAFETY)).toBe("safety");
+    expect(tierName(TIER.PHYSIOLOGICAL)).toBe("physiological");
+    expect(tierName(TIER.COMFORT)).toBe("comfort");
+    expect(kindName(FLAG_KIND.HARD)).toBe("hard");
+    expect(kindName(FLAG_KIND.SOFT)).toBe("soft");
+  });
+
+  it("names an unfamiliar value rather than guessing at it", () => {
+    // Same rule as `tierColour`: a tier this UI has not met is reported as the number it
+    // is, never folded into one it recognises.
+    expect(tierName(9)).toBe("tier 9");
+    expect(kindName(9)).toBe("kind 9");
   });
 });
 
@@ -91,8 +118,8 @@ describe("flagsBySegment", () => {
         {
           name: "x",
           flags: [
-            { scorer: "x", segment_id: "s00000", kind: "soft", tier: "comfort", severity: 0.9, reason_code: "a" },
-            { scorer: "y", segment_id: "s00000", kind: "hard", tier: "safety", severity: 0.1, reason_code: "b" },
+            { scorer: "x", segment_id: "s00000", kind: FLAG_KIND.SOFT, tier: TIER.COMFORT, severity: 0.9, reason_code: "a" },
+            { scorer: "y", segment_id: "s00000", kind: FLAG_KIND.HARD, tier: TIER.SAFETY, severity: 0.1, reason_code: "b" },
           ],
         },
       ]),
@@ -107,8 +134,8 @@ describe("flagsBySegment", () => {
         {
           name: "x",
           flags: [
-            { scorer: "x", segment_id: "s00000", kind: "soft", tier: "comfort", severity: 0.2, reason_code: "low" },
-            { scorer: "y", segment_id: "s00000", kind: "soft", tier: "comfort", severity: 0.8, reason_code: "high" },
+            { scorer: "x", segment_id: "s00000", kind: FLAG_KIND.SOFT, tier: TIER.COMFORT, severity: 0.2, reason_code: "low" },
+            { scorer: "y", segment_id: "s00000", kind: FLAG_KIND.SOFT, tier: TIER.COMFORT, severity: 0.8, reason_code: "high" },
           ],
         },
       ]),
