@@ -99,6 +99,13 @@ markers = [
   "contract: adapter contract test against a recorded response",
   "network: requires a live external service; skipped by default",
   "slow: budget and performance assertions; skipped in CI",
+  # Always applied *alongside* `network`, never instead of it. A database is a live
+  # service, so `not network` must keep deselecting these - what the second marker adds is
+  # which kind of live service, and that is the difference between a thing CI can start
+  # (a Postgres container) and a thing it cannot (the USGS tile server, a DOT's feed).
+  # `.github/workflows/ci.yml`'s `contract` job selects on it, so a new database-backed
+  # module joins that job by carrying the marker rather than by editing a list of paths.
+  "postgis: also needs a live PostGIS; run by the CI leg that can host a service container",
 ]
 
 [tool.ruff]

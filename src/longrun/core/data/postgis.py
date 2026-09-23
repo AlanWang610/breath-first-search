@@ -64,9 +64,11 @@ DEFAULT_LAYER_TABLES: dict[str, str] = {
     # corridor query, so precomputing at build time is what makes transit reachable
     # through the seam at all. See core/data/gtfs.py.
     "transit_stops": "gtfs.stops",
-    # No loader yet: the FCC mobile coverage download is a manual step. Mapped anyway, so
-    # `cell_coverage` reports "no layer" rather than "no table mapped" - one of those
-    # names a missing dataset and the other a missing line of code.
+    # `national.load_fcc_bdc` writes this (M13.4), from a file somebody downloads by hand:
+    # the FCC needs no credential and its CDN 403s every non-browser request. Mapped since
+    # before the loader existed, so `cell_coverage` reported "no layer" rather than "no
+    # table mapped" - one of those names a missing dataset and the other a missing line of
+    # code, and until M13.4 it was honestly both.
     "cell_coverage": "fcc_bdc.cell_coverage",
 }
 

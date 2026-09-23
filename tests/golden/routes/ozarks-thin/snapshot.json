@@ -1,0 +1,24 @@
+{
+  "osm_extract_date": "2026-09-13",
+  "hpms_vintage": null,
+  "dem_resolution_m": 8.17741611257411,
+  "canopy_version": null,
+  "gtfs_feed_versions": {},
+  "adapter_versions": {},
+  "layer_vintages": {
+    "ways": "2026-09-13",
+    "nodes": "2026-09-13",
+    "amenities": "2026-09-13",
+    "parks": "padus-4.1",
+    "railways": "2026-09-13",
+    "flowlines": "nhd-hu4",
+    "transit_stops": "gtfs-mbta",
+    "boundaries": "tiger-2025"
+  },
+  "region": "ozarks",
+  "graph": "2026-09-13+lts1",
+  "extra": {
+    "transit_stops_vintage": "gtfs-mbta is not this region's feed and there is no ozarks row to prefer over it. PostGISLayerStore.vintage() selects the most recent meta.layer_vintage row for the schema without knowing which region asked, and no GTFS feed has ever been loaded for the Ozarks because no agency publishes one. The layer froze 0 features, so nothing in this route reads a stop that came from Boston - but the pin is a statement about a feed this corridor does not have, and it is left as the freeze wrote it rather than hand-corrected. See the route README.",
+    "canopy": "not fetched. The DSM over Mark Twain National Forest is terrain plus canopy and that arithmetic has never met a real forest, but the canopy raster is a separate national fetch this build has not made for any region - so its absence here is the same absence every other golden carries, not a choice about this one."
+  }
+}

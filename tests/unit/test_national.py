@@ -312,3 +312,122 @@ def test_a_row_with_no_name_is_still_loaded() -> None:
     assert row["name"] == "unnamed"
     assert row["agency"] == "unknown"
     assert row["unit_id"]
+
+
+# --- FCC BDC: a loader for a file nobody here has held (M13.4) --------------
+#
+# The download needs no credential and its CDN 403s every non-browser request, so nothing
+# in this project will ever fetch one. What that means for a test suite is that these are
+# the *only* check on the loader until somebody runs the errand, and they are written for
+# that: the column aliases are a guess off the published field list, and the behaviour
+# pinned hardest is what happens when the guess is wrong.
+
+
+def _bdc_frame(
+    *, provider_column: str = "provider", id_column: str = "provider_id"
+) -> gpd.GeoDataFrame:
+    """Two polygons for one carrier and one for another, in one state's file."""
+    from shapely.geometry import Polygon
+
+    def box(x: float) -> Polygon:
+        return Polygon([(x, 37.0), (x + 0.1, 37.0), (x + 0.1, 37.1), (x, 37.1)])
+
+    return gpd.GeoDataFrame(
+        {
+            provider_column: ["Big Telco", "Big Telco", "Small Telco"],
+            id_column: ["130077", "130077", "131425"],
+            "technology": ["400", "400", "300"],
+            "geometry": [box(-91.5), box(-91.3), box(-91.5)],
+        },
+        crs="EPSG:4326",
+    )
+
+
+def test_one_carrier_service_becomes_one_row_whatever_the_file_split_it_into() -> None:
+    """The decision `normalise_fcc_bdc` exists to make.
+
+    A BDC state file publishes many polygons per provider and gives no stable per-polygon
+    id, so a key built from a row ordinal changes when the file is downloaded again in a
+    different order - and `load_frame`'s upsert would then write a second copy of the state
+    beside the first rather than replacing it. Unioning by (provider, technology) makes the
+    key a fact about the filing, and loses nothing the scorer asks: "is this point inside
+    anybody's polygon" and "whose" both survive a union.
+    """
+    from longrun.core.data.national import normalise_fcc_bdc
+
+    out = normalise_fcc_bdc(_bdc_frame(), "29")
+
+    assert len(out) == 2, "the two Big Telco polygons should have dissolved into one row"
+    assert set(out["coverage_id"]) == {"29:130077:400", "29:131425:300"}
+    assert set(out["statefp"]) == {"29"}
+    big = out[out["provider_id"] == "130077"].iloc[0]
+    # Both original polygons are still in there; the union is the row, not a replacement.
+    assert big.geometry.covers(_bdc_frame().geometry.iloc[0].centroid)
+    assert big.geometry.covers(_bdc_frame().geometry.iloc[1].centroid)
+
+
+def test_the_id_does_not_depend_on_the_order_the_rows_arrived_in() -> None:
+    """The property the dissolve was chosen for, asserted rather than assumed.
+
+    Re-downloading the same state has to upsert onto the same rows. A key that moved with
+    row order would double the table on every refresh, silently, and a scorer would still
+    answer correctly - which is why this is worth a test and not a comment.
+    """
+    from longrun.core.data.national import normalise_fcc_bdc
+
+    forward = normalise_fcc_bdc(_bdc_frame(), "29")
+    backward = normalise_fcc_bdc(_bdc_frame().iloc[::-1].reset_index(drop=True), "29")
+
+    assert set(forward["coverage_id"]) == set(backward["coverage_id"])
+
+
+def test_a_shapefile_spelling_is_read_as_readily_as_a_geopackage_one() -> None:
+    """A Shapefile truncates field names to ten characters, so the same FCC dataset has two
+    spellings depending on which format somebody clicked. Both are the same download."""
+    from longrun.core.data.national import normalise_fcc_bdc
+
+    out = normalise_fcc_bdc(_bdc_frame(id_column="provider_i"), "29")
+
+    assert set(out["coverage_id"]) == {"29:130077:400", "29:131425:300"}
+
+
+def test_a_file_whose_columns_we_guessed_wrong_fails_by_name() -> None:
+    """The assertion that makes writing this loader in advance honest.
+
+    `_lowercased` materialises every declared column, so a missing one would otherwise read
+    as NULL on every row: the table would load, `cell_coverage` would answer the "is it
+    covered" question correctly, and the carrier list would be empty with nothing anywhere
+    saying why. `FCC_COLUMN_ALIASES` was read off the published field list and has never met
+    a real file, so the wrong-guess path is the likely one and it has to be loud.
+    """
+    from longrun.core.data.national import UnknownSourceColumns, normalise_fcc_bdc
+
+    with pytest.raises(UnknownSourceColumns) as caught:
+        normalise_fcc_bdc(_bdc_frame(provider_column="carrier_marketing_name"), "29")
+
+    message = str(caught.value)
+    assert "'provider'" in message, "the missing column has to be named"
+    assert "carrier_marketing_name" in message, "so does what the file actually carried"
+    assert "FCC_COLUMN_ALIASES" in message, "and where to fix it"
+
+
+def test_a_missing_download_names_the_errand_rather_than_the_file() -> None:
+    """ "You have not run an errand" and "the code is broken" are different answers, and a
+    bare `FileNotFoundError` on a path is indistinguishable from the second."""
+    from pathlib import Path
+
+    from longrun.core.data.national import FCC_DOWNLOAD_PAGE, load_fcc_bdc
+
+    with pytest.raises(FileNotFoundError) as caught:
+        load_fcc_bdc(None, "ozarks", {"29": Path("data/does-not-exist.gpkg")})
+
+    assert FCC_DOWNLOAD_PAGE in str(caught.value)
+
+
+def test_the_fcc_source_is_the_one_with_no_fetchable_url() -> None:
+    """Every other `NationalSource` carries a template `download()` calls. This one carries
+    a page a person opens, and the difference is the whole of M13.4's blocker."""
+    from longrun.core.data.national import FCC_BDC, FCC_DOWNLOAD_PAGE
+
+    assert FCC_BDC.url() == FCC_DOWNLOAD_PAGE
+    assert ".zip" not in FCC_BDC.url_template and "{" not in FCC_BDC.url_template

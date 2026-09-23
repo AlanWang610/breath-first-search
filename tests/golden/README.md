@@ -45,11 +45,20 @@ GeoPackages, because that is what the database gave.
 Start with one of each and resist adding more until scorer semantics stop churning. A
 golden suite grown too early becomes a tax that discourages fixing scorers.
 
-There are now exactly two: `synthetic-hazards` (hand-written, every figure checkable)
-and `bay-urban` (real 3DEP terrain and 8,480 Overture buildings). Each caught a class of
-bug the other could not — the synthetic one an azimuth convention and a nodata policy,
-the real one a rasterizing loop that was a hundred times too slow and an absolute path
-in a coverage reason that would have failed on CI.
+There are now **seven**: one synthetic and six real. This paragraph said "exactly two"
+until M13, having been written when `synthetic-hazards` (hand-written, every figure
+checkable) and `bay-urban` (real 3DEP terrain and 8,480 Overture buildings) were the whole
+suite. Each of those caught a class of bug the other could not — the synthetic one an
+azimuth convention and a nodata policy, the real one a rasterizing loop that was a hundred
+times too slow and an absolute path in a coverage reason that would have failed on CI.
+
+The five that followed are one per dimension scope §11 asks for contrast on, not five more
+of the same: `phoenix-heat` (region 2, WBGT in ordinary conditions), `kc-stateline`
+(region 4, two DOTs on one route), `boston-winter` (region 1, the first plan run in the
+dark), `ozarks-thin` (region 3, the coverage manifest with most of the data missing), and
+`loop-bayarea`, which is the only one that runs the scope §8.1 loop. Each route's own
+README opens by saying which of those it is; a new one that cannot finish that sentence is
+the tax this section warns about.
 
 ## What `expected.json` holds
 

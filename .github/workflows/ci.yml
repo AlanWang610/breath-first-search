@@ -23,9 +23,18 @@ jobs:
     # mid-`pytest` at 14m17s of testing, having grown from 11m5s before the fifth golden.
     # M0 set 15 with the note that keeping CI short "is itself the enforcement mechanism
     # for small fixtures", which was right and is now doing the wrong job - the fixtures
-    # are inside their 50 MB cap and it is the test count that grew, from 502 to 1,246.
+    # are inside their cap and it is the test count that grew, from 502 to 1,246.
     # 30 restores headroom without removing the pressure; the day this is hit again the
     # answer is to look at what got slow, not to raise it again.
+    #
+    # **That rule was applied in M10 and it worked.** ADR 0031's amendment ran
+    # `pytest --durations` rather than raising anything: the golden tier was 272 s of a
+    # 306 s suite because four tests each ran a full pipeline per route, and a
+    # session-scoped fixture took the whole suite to 85 s. So the 26m2s figure this comment
+    # used to quote is from before that and is not current - and M13 has not replaced it,
+    # because a Windows wall clock can only be measured by a Windows run. Locally the
+    # hermetic suite is ~90 s with seven golden routes. Read the next main-branch run for
+    # the real number; do not trust one written here.
     timeout-minutes: 30
 
     steps:
@@ -53,6 +62,7 @@ jobs:
         run: uv run mypy
 
       # `network` needs live services; `slow` holds budget assertions (scope 6.4).
+      # The `postgis` subset of `network` runs in the `contract` job below.
       - name: Test
         run: uv run pytest -m "not network and not slow" --cov=longrun --cov-report=term-missing
 
@@ -101,3 +111,83 @@ jobs:
       - name: Test
         working-directory: ui
         run: npm test
+
+
+  # The contract tier that needs a database, on the one leg that can host one.
+  #
+  # **Not a third matrix entry, and not an oversight.** GitHub's `services:` are Docker
+  # containers, and Docker containers do not run on the Windows runner - a `services:` block
+  # on `windows-latest` fails the job before a step runs. So this is ubuntu-only, and the
+  # asymmetry is deliberate: 44 tests that have never run anywhere but a developer's laptop
+  # now run on every pull request, on one platform rather than none. See ADR 0034.
+  #
+  # What this does *not* cover, and the reason each stays out:
+  #
+  #   * `test_way_lts_table` needs a built region - 1,600 Ozarks ways loaded by
+  #     `longrun build-region` - and a service container starts empty. The five modules
+  #     below all seed their own scratch schemas, which is why they can run here at all.
+  #   * `test_graphhopper`, `test_wzdx`, `test_tiles_live`, `test_forecast_providers`,
+  #     `test_keyed_adapters` and `test_agent_model` need the internet or a key, not a
+  #     database. Those stay `network` and stay out of CI.
+  contract:
+    runs-on: ubuntu-latest
+    # A tenth of the `test` job's budget: 44 tests, 42 s locally, and no golden fixtures
+    # read. If this ever approaches 15 the thing to look at is what got slow.
+    timeout-minutes: 15
+
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          # Matches deploy/docker-compose.yml and `postgis.DEFAULT_DSN`, which is what the
+          # tests fall back to: `conftest._clear_longrun_env` deletes every `LONGRUN_*`
+          # variable before each test, so an exported DSN could not reach them anyway.
+          POSTGRES_USER: longrun
+          POSTGRES_PASSWORD: longrun
+          POSTGRES_DB: longrun
+          # Byte-ordinal collation, for the reason the compose file gives: a fixture frozen
+          # from a query is reproducible only while row ordering does not depend on the
+          # host's locale. `test_text_ordering_is_platform_stable` asserts it.
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U longrun -d longrun"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Apply the schema the loaders expect
+        # Locally `deploy/postgis/init/` is mounted into `docker-entrypoint-initdb.d`. A
+        # service container has no repository to mount: it starts before `checkout` runs.
+        # Applying the same file with `psql` afterwards executes the same statements, and
+        # it is what makes `test_postgis_schema` a check on the committed SQL rather than
+        # on whatever a long-lived container happens to hold.
+        env:
+          PGPASSWORD: longrun
+        run: |
+          psql -h localhost -U longrun -d longrun -v ON_ERROR_STOP=1 \
+            -f deploy/postgis/init/01-schemas.sql
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        # The `test` job's extras plus `ingest`. `test_osm_load` needs pyosmium and 8 of
+        # the 44 skip without it; `ingest` is kept off the `test` job because `mypy`'s
+        # override list says so - osmium ships stubs, so a job with it installed type
+        # checks differently from one without, and the gate must be the same on both legs.
+        run: >-
+          uv sync --frozen --extra dev --extra tools --extra agent --extra history
+          --extra api --extra ingest
+
+      - name: Contract tests against PostGIS
+        # Selected by marker rather than by a list of paths, so a new database-backed
+        # module joins this job by carrying `postgis` and nothing here has to be edited.
+        run: uv run pytest -m postgis

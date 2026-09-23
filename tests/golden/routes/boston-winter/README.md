@@ -72,7 +72,10 @@ which is not enough for a seventh route. This entry said the next route to want 
 force a decision rather than shave itself, and name the honest options: trim `bay-urban`
 (14.4 MB, nine layers), or raise the cap.
 
-**M10 raised it, to 64 MB, with ADR 0031.** Worth reading that ADR before adding a route,
+**M10 raised it, to 64 MB, with ADR 0031, and M13 added the seventh route** — `ozarks-thin`,
+at 4.7 MB, taking the suite to 53.2 MB with 10.8 MB free. It did not have to shave itself or
+force a second decision, because the region it covers holds 341 ways in a 400 m corridor
+against this one's 14,158. Worth reading that ADR before adding a route,
 because it says two things this paragraph could not: M10 itself spends almost none of the new
 headroom (waypoints cost ~2 kB across six `expected.json` files), and **the constraint that
 actually binds is not disk but the 30-minute CI job**, which every one of these fixtures is

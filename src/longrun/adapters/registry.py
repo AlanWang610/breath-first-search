@@ -56,7 +56,16 @@ if TYPE_CHECKING:  # pragma: no cover
 #: of `alerts.MAX_ALERT_SITES`: beyond it, remaining jurisdictions get a reason rather than
 #: a silently truncated answer. Fetches are ordered best-tier-first and most-specific-first,
 #: so what a ceiling drops is the least useful thing left.
+#:
+#: **A tier-4 extraction is a fetch and spends this.** It did not until M13.5, which is the
+#: bug `_extracted` documents: tier 4 makes a model call per uncovered jurisdiction, and
+#: `Budget.model_calls_max` is 12 while `MAX_JURISDICTIONS` is 40.
 MAX_ADAPTER_FETCHES = 24
+
+#: Decimal places on the mean confidence a tier-4 answer reports. The coverage manifest goes
+#: verbatim into `expected.json`, so an unrounded mean is a golden that fails on a different
+#: libm rather than on a different measurement.
+EXTRACTION_CONFIDENCE_DP = 3
 
 #: Jurisdictions one plan resolves against adapters. A route crossing more than this many
 #: distinct bodies is a route through a metro area's worth of incorporated places, and
@@ -183,7 +192,15 @@ class AdapterRegistry:
                 features.extend(result.features)
 
         for jurisdiction in considered:
-            answers.append(self._answer(kind, jurisdiction, day, plan, results))
+            # Two values, because the loop above collects only what an *adapter* returned.
+            # A tier-4 extraction happens inside `_answer` - it has no entry in `plan` and
+            # no `AdapterResult` in `results` - so its records had nowhere to go and were
+            # dropped on the floor, while `JurisdictionAnswer.count` still counted them.
+            # See `_extracted`: this is the other half of M13.5's first bug, and the half
+            # that made the polygon fix necessary but not sufficient.
+            answer, extracted = self._answer(kind, jurisdiction, day, polygon, plan, results)
+            answers.append(answer)
+            features.extend(extracted)
 
         answers.extend(
             JurisdictionAnswer(
@@ -258,9 +275,17 @@ class AdapterRegistry:
         kind: FeatureKind,
         jurisdiction: Jurisdiction,
         day: date,
+        polygon: Any,
         plan: dict[str, tuple[Adapter, list[Jurisdiction]]],
         results: dict[str, AdapterResult],
-    ) -> JurisdictionAnswer:
+    ) -> tuple[JurisdictionAnswer, list[Feature]]:
+        """One jurisdiction's answer, and any records only this call has seen.
+
+        The second value is empty for every jurisdiction an adapter covered, because
+        `fetch` collected those from the `AdapterResult` before this ran. It is non-empty
+        only on the tier-4 path, which performs its own fetch here and is otherwise the one
+        source whose records nothing downstream would ever receive.
+        """
         from longrun.core.models.features import JurisdictionAnswer
 
         asked = [
@@ -269,64 +294,136 @@ class AdapterRegistry:
             if jurisdiction in covered
         ]
         if not asked:
-            return self._extracted(kind, jurisdiction, day)
+            return self._extracted(kind, jurisdiction, day, polygon)
 
         answered = [entry for entry in asked if entry[2].answered]
         if not answered:
             # Every adapter covering this jurisdiction failed. Their reasons are different
             # facts - one key missing, one feed down - so they are joined rather than
             # reduced to the first, which is what a reader needs to act on either.
-            return JurisdictionAnswer(
-                jurisdiction=jurisdiction.id,
-                name=jurisdiction.name,
-                kind=kind,
-                checked=False,
-                adapter="; ".join(a.name for a, _, _ in asked),
-                reason="; ".join(dict.fromkeys(r.reason or "no reason given" for _, _, r in asked)),
+            return (
+                JurisdictionAnswer(
+                    jurisdiction=jurisdiction.id,
+                    name=jurisdiction.name,
+                    kind=kind,
+                    checked=False,
+                    adapter="; ".join(a.name for a, _, _ in asked),
+                    reason="; ".join(
+                        dict.fromkeys(r.reason or "no reason given" for _, _, r in asked)
+                    ),
+                ),
+                [],
             )
 
         count = 0
         for _, _, result in answered:
             count += sum(1 for f in result.features if f.jurisdiction in (None, jurisdiction.id))
         first_covered = answered[0][1][0]
-        return JurisdictionAnswer(
-            jurisdiction=jurisdiction.id,
-            name=jurisdiction.name,
-            kind=kind,
-            checked=True,
-            tier=min(int(a.tier) for a, _, _ in answered),  # type: ignore[arg-type]
-            adapter="; ".join(a.name for a, _, _ in answered),
-            covered_by=first_covered.id if first_covered.id != jurisdiction.id else None,
-            count=count,
-            vintage="; ".join(dict.fromkeys(r.vintage for _, _, r in answered if r.vintage))
-            or None,
+        return (
+            JurisdictionAnswer(
+                jurisdiction=jurisdiction.id,
+                name=jurisdiction.name,
+                kind=kind,
+                checked=True,
+                tier=min(int(a.tier) for a, _, _ in answered),  # type: ignore[arg-type]
+                adapter="; ".join(a.name for a, _, _ in answered),
+                covered_by=first_covered.id if first_covered.id != jurisdiction.id else None,
+                count=count,
+                vintage="; ".join(dict.fromkeys(r.vintage for _, _, r in answered if r.vintage))
+                or None,
+            ),
+            [],
         )
 
     def _extracted(
-        self, kind: FeatureKind, jurisdiction: Jurisdiction, day: date
-    ) -> JurisdictionAnswer:
+        self, kind: FeatureKind, jurisdiction: Jurisdiction, day: date, polygon: Any
+    ) -> tuple[JurisdictionAnswer, list[Feature]]:
         """§7.10's fallback: no adapter means tier-4 search-and-extract.
 
         With `NullExtractor` this is always an honest `checked=False`, which is what the
         jurisdiction would have reported anyway - but it is reported *through* the tier-4
         path, so wiring a real extractor in M5 changes one constructor argument and not the
         shape of a single coverage entry.
+
+        **Everything this passes on was wrong while the path was inert** (M13.5). None of it
+        had a symptom, because `ModelExtractor` had no instantiation anywhere and
+        `NullExtractor` reaches none of it - which is exactly why it was worth fixing before
+        a live extractor made it visible as bad output rather than as a bug.
+
+        *The records themselves.* This returns them now. `fetch` collects features from the
+        `AdapterResult`s in its `plan` loop, and a tier-4 extraction has no entry in `plan`
+        and no `AdapterResult` in `results` - so its records went nowhere at all, while
+        `count` below still counted them. That is the *actual* mechanism behind "tier 4
+        answered, 3 records, zero flags": not a geometry that `closures` rejected, but
+        records `closures` never received. Worth stating plainly, because the geometry bug
+        below looks like a sufficient explanation and is not.
+
+        *The corridor polygon.* This used to pass `polygon=None`. A tier-4 record has no
+        geometry of its own, so `model._geometry` falls back to the shape it is handed, and
+        `None` produces an empty `GeometryCollection`: `runs_along` then returns `inf` and
+        `closures.py` drops the feature for being off-route. So the records that now escape
+        would have been discarded on arrival. Two bugs, one symptom, and fixing either alone
+        would have left the symptom exactly where it was.
+
+        *The fetch ceiling.* `_ask` checks and increments `MAX_ADAPTER_FETCHES`; this did
+        neither, so tier 4 ran outside the budget `Budget.model_calls_max`'s own comment
+        claims it lives behind ("tier-4 extraction is capped separately, by the adapter
+        fetch limits it already lives behind"). A route crossing forty uncovered
+        jurisdictions would have made up to forty model calls against a twelve-call
+        ceiling, and `ask` returns `None` on `BudgetExceeded` rather than raising - so calls
+        thirteen onward read as "extraction returned nothing", which is a sentence about the
+        page rather than about the budget. Checked before the call and reported by name,
+        the same way `_ask` does it, and counted on the same counter because they are the
+        same budget.
+
+        *The confidence.* §7.10 asks for "a manifest entry marked unverified" and this
+        conveyed it by `tier=4` alone, leaving `JurisdictionAnswer.confidence` - which
+        `CoverageEntry` carries and the plan sheet prints - empty on every tier-4 answer.
+        It is the **mean** over the records rather than the maximum: one confident line must
+        not speak for a page of vague ones, and mean is how every other confidence in this
+        project is summarised. Rounded, because the coverage manifest is serialized verbatim
+        into a golden expectation and an unrounded mean is cross-platform float noise.
+
+        An answer that carries no records keeps `confidence=None`, and that is not an
+        oversight. "The page states no closure" is a checked answer with nothing to attach a
+        number to, and a confidence invented for it would be a number about nothing - the
+        tier still says the reading is unverified.
         """
         from longrun.core.models.features import JurisdictionAnswer
 
+        if self._fetches >= MAX_ADAPTER_FETCHES:
+            return (
+                JurisdictionAnswer(
+                    jurisdiction=jurisdiction.id,
+                    name=jurisdiction.name,
+                    kind=kind,
+                    reason=f"adapter fetch ceiling ({MAX_ADAPTER_FETCHES}) reached",
+                ),
+                [],
+            )
+        self._fetches += 1
         result = self._extractor.extract(
-            ExtractionRequest(jurisdiction=jurisdiction, kind=kind, polygon=None, day=day),
+            ExtractionRequest(jurisdiction=jurisdiction, kind=kind, polygon=polygon, day=day),
             AdapterContext(cache=self._cache, budget=self._budget, offline=self._offline),
         )
-        return JurisdictionAnswer(
-            jurisdiction=jurisdiction.id,
-            name=jurisdiction.name,
-            kind=kind,
-            checked=result.answered,
-            tier=4 if result.answered else None,
-            adapter="extraction" if result.answered else None,
-            count=len(result.features),
-            reason=result.reason,
+        confidences = [float(f.confidence) for f in result.features]
+        return (
+            JurisdictionAnswer(
+                jurisdiction=jurisdiction.id,
+                name=jurisdiction.name,
+                kind=kind,
+                checked=result.answered,
+                tier=4 if result.answered else None,
+                adapter="extraction" if result.answered else None,
+                count=len(result.features),
+                reason=result.reason,
+                confidence=(
+                    round(sum(confidences) / len(confidences), EXTRACTION_CONFIDENCE_DP)
+                    if confidences
+                    else None
+                ),
+            ),
+            list(result.features) if result.answered else [],
         )
 
 

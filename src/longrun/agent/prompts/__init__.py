@@ -2,8 +2,21 @@
 
 Kept here rather than inline for the reason the scaffold gives: a prompt and the schema it
 fills are one thing, and a prompt that drifts from its schema produces output that
-validates and means something else. `VERSION` changes when any text below does, and it is
-recorded on the plan so a sheet can say which wording produced it.
+validates and means something else.
+
+**`VERSION` changes when any text below does, and nothing reads it.** That second half is
+new wording in M13.6 and the sentence it replaces was a claim, not a description: it said
+the version "is recorded on the plan so a sheet can say which wording produced it", and no
+plan has ever carried it. There is no field for it on `Plan` or `Manifest`, nothing sets
+one, and no sheet prints one.
+
+Corrected rather than implemented, deliberately. Putting it on the plan is a one-line
+change and it would move the coverage or manifest block of **every** `expected.json` in the
+golden suite - so it is a change with a diff to review, and M13.6 is the milestone for
+making stale sentences true, not for making true sentences expensive. What the constant is
+worth today is still real: it is the one place to bump when a prompt changes, and a
+reviewer comparing two model-assisted runs can read it here. What it is not is something a
+plan reports, and this file should not say otherwise until it is.
 
 Every prompt says what the model must **not** do, because the constraints are the whole
 design: the model never chooses a route (ADR 0019), never sets a preference without

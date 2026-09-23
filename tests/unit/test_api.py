@@ -160,7 +160,14 @@ def test_the_resolver_refuses_every_id_that_leaves_the_plans_directory(
     plans: Path, attempt: str
 ) -> None:
     """The resolver itself, because it is now the *write* surface's whole addressing and a
-    404 from one endpoint does not prove the next one is guarded (ADR 0034)."""
+    404 from one endpoint does not prove the next one is guarded (ADR 0036).
+
+    Cited 0034 until this merge. On M12's branch that number resolved to nothing, which is
+    a dangling reference; on `main` it resolves to "the contract tier runs on one CI leg",
+    which is a CI decision standing in for the reason a path-traversal guard exists. The
+    second is worse than the first and nothing would have caught it, because a citation that
+    resolves reads as correct.
+    """
     from longrun.api.app import _plan_id_dir
 
     assert _plan_id_dir(plans, attempt) is None

@@ -93,6 +93,44 @@ def test_a_spec_with_nothing_but_a_polygon_is_valid(tmp_path: Path) -> None:
     spec = RegionSpec.load(_spec_dir(tmp_path))
     assert spec.osm_extract is None
     assert spec.huc4 == []
+    assert spec.cell_coverage == {}
+
+
+def test_a_hand_downloaded_coverage_file_is_named_by_its_state(tmp_path: Path) -> None:
+    """M13.4. `cell_coverage` maps a state FIPS to a file, and the key is not decoration:
+    an FCC state download does not reliably carry the state it is, so `normalise_fcc_bdc`
+    takes it from here the way `normalise_nhd` takes its watershed from the spec.
+
+    The YAML key is quoted in practice - `29` unquoted is an integer - which is why the
+    loader coerces it back to a string rather than trusting the file.
+    """
+    (tmp_path / "bdc_29_mobile.gpkg").write_bytes(b"")
+    spec = RegionSpec.load(
+        _spec_dir(
+            tmp_path,
+            cell_coverage={29: "bdc_29_mobile.gpkg"},
+            cell_coverage_vintage="fcc-bdc-2025-06-30",
+        )
+    )
+    assert set(spec.cell_coverage) == {"29"}
+    assert spec.cell_coverage["29"].is_absolute()
+    assert spec.cell_coverage_vintage == "fcc-bdc-2025-06-30"
+
+
+def test_the_missing_coverage_layer_reports_an_errand_and_not_an_account() -> None:
+    """The wrong reason survived here after five other copies of it were fixed.
+
+    "Behind an account" says a reader cannot get this; "nobody has clicked a link" says
+    they can. The first is what this line claimed until M13.4 and it was never true - the
+    FCC page needs no credential, its CDN 403s every non-browser request, and that is the
+    whole of the blocker. Pinned as a test for the reason it was wrong in the first place:
+    a sentence living as a literal inside a list is a sentence nothing checks.
+    """
+    from longrun.regions.build import FCC_ERRAND_REASON
+
+    assert "account" not in FCC_ERRAND_REASON
+    assert "403" in FCC_ERRAND_REASON and "manual" in FCC_ERRAND_REASON
+    assert "load_fcc_bdc" in FCC_ERRAND_REASON, "the reason should name what to feed"
 
 
 # --- the manifest -----------------------------------------------------------

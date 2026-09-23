@@ -77,7 +77,7 @@ NPS = ApiKey(
 )
 
 #: The model key, which is a key-gated external source like any other - it just happens to
-#: gate four call sites rather than one feed. Listed here so the two contract tests that
+#: gate five call sites rather than one feed. Listed here so the two contract tests that
 #: keep every other key honest keep this one honest too: blank in `.env.example`, and a
 #: registration URL somebody can actually follow.
 ANTHROPIC = ApiKey(
