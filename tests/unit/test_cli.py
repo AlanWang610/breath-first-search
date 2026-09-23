@@ -545,3 +545,84 @@ def test_refresh_refuses_a_scorer_no_one_answers_to(tmp_path: Path) -> None:
         ["refresh", str(out / "plan.json"), "--date", "2026-03-20", "--only", "lightng"],
     )
     assert result.exit_code == 2
+
+
+# --- `longrun plan`'s must-avoids (scope 6.4, M12.3) --------------------------
+#
+# The CLI half of `PlanSubmission`'s parity. A parameter the UI had and a command did not
+# would be a capability only the UI had, which is the one thing scope 3.9 forbids - so the
+# two grew together and are asserted on both sides.
+
+
+def _square(path: Path, half_deg: float) -> Path:
+    import json as _json
+
+    lat, lon = 37.7749, -122.4194
+    ring = [
+        [lon - half_deg, lat - half_deg],
+        [lon + half_deg, lat - half_deg],
+        [lon + half_deg, lat + half_deg],
+        [lon - half_deg, lat + half_deg],
+        [lon - half_deg, lat - half_deg],
+    ]
+    path.write_text(_json.dumps({"type": "Polygon", "coordinates": [ring]}), encoding="utf-8")
+    return path
+
+
+def test_plan_takes_the_same_two_must_avoids_the_api_does() -> None:
+    """`PlanSubmission` grew `avoid_names` and `avoid_polygons` in M12.3, and this is the
+    direction its own test cannot check.
+
+    **Asked of the command, not of its help text.** The first version read the two switches
+    out of `plan --help`, which passed locally and failed on both CI legs: Typer renders
+    help through Rich, and Rich's option highlighter styles a switch in pieces, so a
+    coloured `--avoid-name` is not the substring `--avoid-name`. CI sets `FORCE_COLOR` and
+    a developer shell usually does not, which makes rendered help a test that agrees with
+    whoever ran it last. What the milestone actually promised is that the flag *exists*,
+    and `click` knows that without rendering anything.
+    """
+    from typer.main import get_command
+
+    plan_command = get_command(app).commands["plan"]  # type: ignore[attr-defined]
+    switches = {switch for param in plan_command.params for switch in param.opts}
+
+    assert "--avoid-name" in switches
+    assert "--avoid-polygon" in switches
+
+
+def test_an_avoid_polygon_is_rounded_before_anything_is_routed(tmp_path: Path) -> None:
+    """M5.13: an avoid area travels inside `custom_model` and `CachedRouter` hashes that
+    into its key, so this happens before the router is opened rather than after."""
+    from longrun.cli.plan import _avoid_areas
+
+    areas = _avoid_areas([_square(tmp_path / "small.json", 0.002)])
+
+    assert len(areas) == 1
+    ring = areas[0]["geometry"]["coordinates"][0]
+    assert all(value == round(value, 6) for point in ring for value in point)
+
+
+def test_an_over_cap_avoid_polygon_stops_the_plan_by_name_with_its_size(tmp_path: Path) -> None:
+    """A polygon is a shape the runner drew: there is nothing to be uncertain about, so it
+    stops the plan rather than becoming a note. A name that will not geocode is a note,
+    because prose is ambiguous - that asymmetry is deliberate and `_avoid_areas` says so.
+
+    It also exits before the router is reached, which is what makes this testable at all
+    in a suite that must not open a socket."""
+    result = runner.invoke(
+        app,
+        [
+            "plan",
+            "--from",
+            "37.7955,-122.3937",
+            "--to",
+            "37.7715,-122.4686",
+            "--date",
+            "2026-09-15",
+            "--avoid-polygon",
+            str(_square(tmp_path / "huge.json", 0.03)),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "km2" in result.output

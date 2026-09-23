@@ -23,6 +23,7 @@ about it is `core.plan.refresh.rescore_plan`'s question and the CLI's.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
 
 from longrun.core.geo.gpx import haversine_m, normalize
@@ -30,6 +31,9 @@ from longrun.core.models.geometry import LatLon, Route
 from longrun.core.models.request import LockedRange, LockSource
 
 if TYPE_CHECKING:  # pragma: no cover
+    from datetime import date as date_type
+
+    from longrun.core.models.plan import Plan
     from longrun.core.plan.scratchpad import Scratchpad
     from longrun.core.routing.base import CostingModel, Router
 
@@ -144,6 +148,29 @@ def distance_along(route: Route | None, point: LatLon) -> float | None:
     return at
 
 
+def scored_at(plan: Plan, *, on: date_type | None = None, at: time | None = None) -> datetime:
+    """The hour an edit to `plan` should be re-scored at.
+
+    Here rather than in a command, because M12 gave the same five gestures a second door
+    and this is the rule both have to agree on. An edit asks "what is this line *now*", so
+    silently moving the date would change every time-dependent answer under cover of a
+    geometry change - and a CLI and an HTTP handler that each picked their own hour would
+    score the same edit differently, which is the drift `agent.loop._with_locks` exists to
+    document and `core.plan.edits` exists to prevent.
+
+    The plan's first ETA is preferred over `request.start_time` because it is the time the
+    plan was *actually* scored at: `longrun plan --start-window` drops the start time and
+    scores at the window's earliest, so a plan can have a window and no start time at all.
+    Reading the clock is not among the options - `core/` may not, and an edit re-scored at
+    the wall clock would answer a question nobody asked.
+    """
+    day = on if on is not None else plan.request.date
+    if at is not None:
+        return datetime.combine(day, at)
+    clock = plan.etas[0].time() if plan.etas else (plan.request.start_time or time())
+    return datetime.combine(day, clock)
+
+
 def splice(route: Route, start_m: float, end_m: float, replacement: Route) -> Route:
     """The line, with `start_m`-`end_m` replaced by `replacement`. Scope 10.3's "choose an
     alternative", which auto-locks (scope 7.8) once the caller has the new line.
@@ -243,6 +270,7 @@ __all__ = [
     "insert_via",
     "lock_range",
     "redraw",
+    "scored_at",
     "splice",
     "unlock_range",
 ]

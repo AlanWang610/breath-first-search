@@ -55,3 +55,49 @@ jobs:
       # `network` needs live services; `slow` holds budget assertions (scope 6.4).
       - name: Test
         run: uv run pytest -m "not network and not slow" --cov=longrun --cov-report=term-missing
+
+  # M12.8. `ui/` had no automated verification of any kind: `package.json` carried
+  # `typecheck` and no test runner, and this workflow never entered the directory - so the
+  # only thing between a regression and `main` was somebody opening a browser. That is not
+  # a gap worth noting in a milestone that adds five write paths to those components; it is
+  # the only thing that will catch a regression in that milestone's own work.
+  #
+  # Its own job, on ubuntu only, and that is two decisions.
+  #
+  # **Not added to `test`.** That job's Windows leg is primary because the geospatial
+  # stack's path, locale and CRLF failures are Windows-specific, and it ran 26m2s against a
+  # 30-minute timeout after M9. Node has none of those failure modes - nothing under test
+  # here touches a filesystem or a locale - so a second leg would buy no coverage and spend
+  # a budget that M6's rule says to watch rather than raise.
+  #
+  # **One leg, not a matrix**, for the same reason: `vitest run` over pure functions gives
+  # the same answer on both operating systems, and a matrix that cannot disagree with
+  # itself is a bill rather than a test.
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ui
+        run: npm ci
+
+      # `tsc --noEmit` existed and nothing ran it. It is the weaker of the two: the types
+      # in `api.ts` are hand-written against the plan schema, so it checks them against
+      # each other rather than against the server - which is how `TradeOff.options`
+      # type-checked for five milestones while throwing on every plan that had one.
+      - name: Type check
+        working-directory: ui
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: ui
+        run: npm test

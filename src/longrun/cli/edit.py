@@ -37,7 +37,14 @@ from longrun.core.export.sheet_md import render_markdown
 from longrun.core.geo.gpx import gpx_read
 from longrun.core.models.geometry import LatLon
 from longrun.core.models.plan import Plan
-from longrun.core.plan.edits import NotAnEdit, insert_via, lock_range, splice, unlock_range
+from longrun.core.plan.edits import (
+    NotAnEdit,
+    insert_via,
+    lock_range,
+    scored_at,
+    splice,
+    unlock_range,
+)
 from longrun.core.plan.refresh import rescore_plan
 from longrun.core.routing.avoid import area_from_polygon
 from longrun.core.scorers.registry import SCORERS, StalePrior, UnknownScorer, closure
@@ -335,13 +342,17 @@ def _rescore(
 
 
 def _start_at(stored: Plan, date: datetime | None, start: str | None) -> datetime:
-    day = date.date() if date is not None else stored.request.date
+    """The hour to re-score at. The rule is `edits.scored_at`; this only parses `--start`.
+
+    Moved into `core/` in M12: the API grew the same five gestures, and a CLI and a handler
+    that each chose their own hour would score the same edit differently.
+    """
+    day = date.date() if date is not None else None
     if start is None:
-        clock = stored.etas[0].time() if stored.etas else (stored.request.start_time or time_type())
-        return datetime.combine(day, clock)
+        return scored_at(stored, on=day)
     try:
         hour, _, minute = start.partition(":")
-        return datetime.combine(day, time_type(int(hour), int(minute or 0)))
+        return scored_at(stored, on=day, at=time_type(int(hour), int(minute or 0)))
     except ValueError as exc:
         typer.echo(f"error: could not read --start {start!r}; expected HH:MM", err=True)
         raise typer.Exit(code=2) from exc
