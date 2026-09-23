@@ -34,7 +34,8 @@ def register(server: Any, settings: ToolSettings) -> None:
             "transit_at",
             "GTFS is loaded as a per-stop service summary, not as stop_times - which "
             "`core/data/gtfs.py` states and defends: a departure board needs GTFS-RT "
-            "to be worth much",
+            "to be worth much, and RT is delta-encoded against the static timetable, so "
+            "it is two data paths rather than one (ADR 0043)",
             blocked_on="data",
         )
 

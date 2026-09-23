@@ -7,7 +7,7 @@ and it is why `padus.units.agency` was loaded in M3, months before anything read
 **Soft flags only, and the reason is that a park alert is prose.** "Muddy in places",
 "bridge out at mile 4", "mountain lion activity" - sorting the disqualifying from the merely
 wet is exactly the act scope 3.2 forbids a scorer: attaching a sign to a measurement.
-[ADR 0013](../../../docs/decisions/0013-closures-may-hard-fail.md) settles it, and gives the
+[ADR 0013](../../../../docs/decisions/0013-closures-may-hard-fail.md) settles it, and gives the
 escape hatch a structural shape rather than a textual one: an agency adapter that sees a
 *structured* closure emits `Feature(kind="closures")` instead, so there is one hard-flag
 owner, one check, and no classifier trying to read English.

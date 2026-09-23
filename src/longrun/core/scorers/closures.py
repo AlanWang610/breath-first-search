@@ -1,7 +1,8 @@
 """Street and lane closures overlapping the route (scope 7.6, 7.10).
 
 The first scorer whose data comes from an adapter rather than a layer, and the only one of
-M4's three that can fail a route. [ADR 0013](../../../docs/decisions/0013-closures-may-hard-fail.md)
+M4's three that can fail a route.
+[ADR 0013](../../../../docs/decisions/0013-closures-may-hard-fail.md)
 is why: a scorer emits hard flags exactly when §7.9 gives it a check, `check_6` exists and
 reads hard flags only, so a flagless `closures` would make check 6 pass vacuously wherever
 an adapter answered - which is worse than skipping, because it reports a verified pass that

@@ -6,7 +6,7 @@ fountain is maintained" — and M4's `trail_status` and `access_hours` will read
 columns to decide whose alerts page to consult at all.
 
 **A bbox query, not a national download**, and the reason is the same one that earned
-Overture its exception in [ADR 0009](../../../docs/decisions/0009-osm-loads-into-postgis.md):
+Overture its exception in [ADR 0009](../../../../docs/decisions/0009-osm-loads-into-postgis.md):
 USGS publishes PAD-US as a public ArcGIS FeatureServer with a spatial index, so a region's
 protected areas come back in a handful of paged requests rather than out of a multi-gigabyte
 national GeoPackage. The rows still land in `padus.units` like every other layer, so nothing

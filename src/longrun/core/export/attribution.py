@@ -241,7 +241,18 @@ LICENCES: dict[str, SourceLicence] = {
         licence="see nws and open_meteo",
         attribution="Forecast: NWS and Open-Meteo.com",
     ),
-    "noaa_coops": SourceLicence(source="noaa_coops", licence="US public domain"),
+    # Pre-registered in M2 with no consumer, which is what let `core/data/tides.py` arrive
+    # in M16 without tripping `test_every_recorded_source_has_a_licence`. That safety net
+    # not firing is the reason to check the row by hand rather than to trust it, and the
+    # check found one thing missing: with no `attribution`, `line()` falls back to the
+    # source name and a sheet that used tide data would have printed `noaa_coops (US public
+    # domain)`. The licence is right - CO-OPS is a work of the US government - so nothing is
+    # owed; the credit line is here because a reader should know whose tide table they read.
+    "noaa_coops": SourceLicence(
+        source="noaa_coops",
+        licence="US public domain",
+        attribution="Tide predictions: NOAA CO-OPS",
+    ),
     "fcc_bdc": SourceLicence(source="fcc_bdc", licence="US public domain"),
     "canopy": SourceLicence(
         source="canopy",
