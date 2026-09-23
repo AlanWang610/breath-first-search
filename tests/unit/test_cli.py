@@ -571,12 +571,23 @@ def _square(path: Path, half_deg: float) -> Path:
 
 def test_plan_takes_the_same_two_must_avoids_the_api_does() -> None:
     """`PlanSubmission` grew `avoid_names` and `avoid_polygons` in M12.3, and this is the
-    direction its own test cannot check."""
-    result = runner.invoke(app, ["plan", "--help"])
+    direction its own test cannot check.
 
-    assert result.exit_code == 0
-    assert "--avoid-name" in result.output
-    assert "--avoid-polygon" in result.output
+    **Asked of the command, not of its help text.** The first version read the two switches
+    out of `plan --help`, which passed locally and failed on both CI legs: Typer renders
+    help through Rich, and Rich's option highlighter styles a switch in pieces, so a
+    coloured `--avoid-name` is not the substring `--avoid-name`. CI sets `FORCE_COLOR` and
+    a developer shell usually does not, which makes rendered help a test that agrees with
+    whoever ran it last. What the milestone actually promised is that the flag *exists*,
+    and `click` knows that without rendering anything.
+    """
+    from typer.main import get_command
+
+    plan_command = get_command(app).commands["plan"]  # type: ignore[attr-defined]
+    switches = {switch for param in plan_command.params for switch in param.opts}
+
+    assert "--avoid-name" in switches
+    assert "--avoid-polygon" in switches
 
 
 def test_an_avoid_polygon_is_rounded_before_anything_is_routed(tmp_path: Path) -> None:
