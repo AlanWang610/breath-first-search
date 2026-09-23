@@ -402,7 +402,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "0707386ca72b30e9ed70f27f20b8ce2484e97985bf736f701498ebb0f30b3eda",
+  "measurements_sha256": "a147d2c5175b7cde2235b603678af6828317e16dc60f8000d9ff4d69f5f0fa41",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -575,8 +575,8 @@
       "mean_confidence": 1.0,
       "measured_segments": 20,
       "summary": {
-        "max_us_aqi": 56.0,
-        "mean_us_aqi": 56.0,
+        "max_us_aqi": 57.0,
+        "mean_us_aqi": 57.0,
         "sites": 2,
         "sites_answered": 2,
         "source": "open-meteo (CAMS model)"
@@ -720,8 +720,8 @@
       "summary": {
         "formula": "ACSM/BoM approximation: temperature and humidity only",
         "hard_floor_c": 30.0,
-        "max_wbgt_c": 18.651,
-        "mean_wbgt_c": 18.149,
+        "max_wbgt_c": 18.189,
+        "mean_wbgt_c": 17.763,
         "segments_above_soft": 0,
         "soft_threshold_c": 26.0
       },
@@ -788,12 +788,14 @@
       "mean_confidence": 1.0,
       "measured_segments": 20,
       "summary": {
-        "max_temp_c": 16.4,
-        "min_temp_c": 14.637,
+        "max_temp_c": 15.401,
+        "min_temp_c": 13.8,
         "providers": "open-meteo:2",
         "sites": 2,
         "sites_answered": 2,
-        "spacing_m": 5000.0
+        "spacing_m": 5000.0,
+        "utc_offset_hours": -7.0,
+        "utc_offset_source": "stated"
       },
       "waypoints": {},
       "worst": []
@@ -814,7 +816,7 @@
         "suggested_carry_ml": 213.699,
         "water_hard_threshold_min": 150.0,
         "water_soft_threshold_min": 90.0,
-        "wbgt_used_c": 18.651
+        "wbgt_used_c": 18.189
       },
       "waypoints": {
         "food": 1,
@@ -902,7 +904,7 @@
       "measured_segments": 14,
       "summary": {
         "candidates": 13,
-        "coolest_start": "10:00",
+        "coolest_start": "06:00",
         "requested_start": "07:00",
         "shadiest_start": "04:00",
         "step_minutes": 30.0,
@@ -973,7 +975,7 @@
       "measured_segments": 20,
       "summary": {
         "mean_sky_view_factor": 0.908,
-        "peak_irradiance_w_m2": 45.541,
+        "peak_irradiance_w_m2": 45.545,
         "raycast_rung": "full",
         "shaded_fraction": 0.218,
         "surface": "shade measured from buildings, canopy and dem",

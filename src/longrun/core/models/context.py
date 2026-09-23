@@ -149,9 +149,15 @@ class ScorerContext:
     #: default, because "no registry was configured" and "a registry, but nobody covers
     #: this county" are different claims and the sheet has to be able to make both.
     features: FeatureSource | None = None
-    #: Hours to add to a naive plan time to get UTC. `None` means nobody said, and a
-    #: scorer that needs it derives one from the route's longitude and reports having
-    #: guessed - an hour of error is fifteen degrees of solar azimuth, which moves a
+    #: Hours **from** UTC, in `datetime.utcoffset`'s sense: -7 for Pacific Daylight Time.
+    #: Subtracted from a naive plan time to reach UTC, never added - this said "hours to
+    #: add ... to get UTC" until ADR 0045, which is the opposite sign from every reader of it
+    #: (`solar._index`, `forecast.to_utc`), and a sign error here is a fourteen-hour one.
+    #:
+    #: `None` means nobody *stated* one, which is the common case and not a failure: a
+    #: scorer that needs it calls `solar.utc_offset_for`, which looks the zone up from the
+    #: coordinate and falls back to longitude, and reports which of the three it used
+    #: (ADR 0008). An hour of error is fifteen degrees of solar azimuth, which moves a
     #: shadow across the street, so this is not a detail that may be assumed silently.
     utc_offset_hours: float | None = None
     #: Scope 6.1's start-time window, for the one scorer whose question it is (ADR 0033).

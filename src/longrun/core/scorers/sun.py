@@ -147,13 +147,24 @@ def sun_exposure(
             confidence=0.7 if guessed else 1.0,
         )
     )
-    if not forecast.answered:
+    # Gated on the CLOUD rather than on `forecast.answered`, because ADR 0045 stopped those
+    # being the same question. `_cloud_factors(None)` returns `(1.0, 1.0)`, so a missing
+    # cloud figure silently becomes clear sky - and once ETAs are read at their true UTC
+    # instant a route can fetch every site successfully and still have no cloud for the
+    # hour it runs in, which is what `bay-urban` now does. Gating on the fetch alone would
+    # then hand a reader an upper bound labelled as a measurement.
+    if not any(value is not None for value in cloud):
         result.coverage.append(
             CoverageEntry(
                 source="forecast",
                 kind="cloud_cover",
                 checked=False,
-                reason="no forecast: irradiance reported as clear-sky, an upper bound",
+                reason=(
+                    "no cloud cover at this plan's hours: irradiance reported as "
+                    "clear-sky, an upper bound"
+                    if forecast.answered
+                    else "no forecast: irradiance reported as clear-sky, an upper bound"
+                ),
             )
         )
     return result

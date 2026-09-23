@@ -591,7 +591,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "4eed49c3bc0ed99d2f875ebae674d47085eff8c4cc08b0cc4ee805ad0c00c322",
+  "measurements_sha256": "2329247b5aa5b5c75279b5bec4321f3f5a115dd5a7ae133a9490477d793b30d9",
   "pacing": {
     "duration_s": 1130.3,
     "finish": "2026-09-15T08:18:50"
@@ -626,7 +626,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00062",
-      "severity": 0.601,
+      "severity": 0.392,
       "tier": "physiological"
     },
     {
@@ -634,7 +634,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00061",
-      "severity": 0.602,
+      "severity": 0.392,
       "tier": "physiological"
     },
     {
@@ -642,7 +642,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00060",
-      "severity": 0.602,
+      "severity": 0.392,
       "tier": "physiological"
     },
     {
@@ -650,7 +650,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00059",
-      "severity": 0.603,
+      "severity": 0.392,
       "tier": "physiological"
     },
     {
@@ -658,7 +658,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00058",
-      "severity": 0.604,
+      "severity": 0.392,
       "tier": "physiological"
     },
     {
@@ -666,7 +666,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00057",
-      "severity": 0.605,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -674,7 +674,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00056",
-      "severity": 0.605,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -682,7 +682,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00055",
-      "severity": 0.605,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -690,7 +690,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00054",
-      "severity": 0.606,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -698,7 +698,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00053",
-      "severity": 0.607,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -706,7 +706,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00052",
-      "severity": 0.607,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -714,7 +714,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00051",
-      "severity": 0.608,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -722,7 +722,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00050",
-      "severity": 0.608,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -730,7 +730,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00049",
-      "severity": 0.609,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -738,7 +738,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00048",
-      "severity": 0.609,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -746,7 +746,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00047",
-      "severity": 0.61,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -754,7 +754,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00046",
-      "severity": 0.611,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -762,7 +762,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00045",
-      "severity": 0.611,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -770,7 +770,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00044",
-      "severity": 0.612,
+      "severity": 0.393,
       "tier": "physiological"
     },
     {
@@ -778,7 +778,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00043",
-      "severity": 0.612,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -786,7 +786,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00042",
-      "severity": 0.613,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -794,7 +794,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00041",
-      "severity": 0.613,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -802,7 +802,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00040",
-      "severity": 0.613,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -810,7 +810,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00039",
-      "severity": 0.614,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -818,7 +818,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00038",
-      "severity": 0.614,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -826,7 +826,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00037",
-      "severity": 0.615,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -834,7 +834,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00036",
-      "severity": 0.615,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -842,7 +842,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00035",
-      "severity": 0.616,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -850,7 +850,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00034",
-      "severity": 0.616,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -858,7 +858,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00033",
-      "severity": 0.617,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -866,7 +866,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00032",
-      "severity": 0.617,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -874,7 +874,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00031",
-      "severity": 0.618,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -882,7 +882,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00030",
-      "severity": 0.619,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -890,7 +890,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00029",
-      "severity": 0.62,
+      "severity": 0.394,
       "tier": "physiological"
     },
     {
@@ -898,7 +898,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00028",
-      "severity": 0.621,
+      "severity": 0.395,
       "tier": "physiological"
     },
     {
@@ -906,7 +906,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00027",
-      "severity": 0.572,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -914,7 +914,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00026",
-      "severity": 0.573,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -922,7 +922,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00025",
-      "severity": 0.573,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -930,7 +930,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00024",
-      "severity": 0.573,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -938,55 +938,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00023",
-      "severity": 0.574,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00000",
-      "severity": 0.59,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00001",
-      "severity": 0.59,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00002",
-      "severity": 0.589,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00003",
-      "severity": 0.588,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00004",
-      "severity": 0.587,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00005",
-      "severity": 0.587,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -994,87 +946,31 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00022",
-      "severity": 0.574,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
       "kind": "soft",
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
-      "segment_id": "s00006",
-      "severity": 0.586,
+      "segment_id": "s00000",
+      "severity": 0.344,
       "tier": "physiological"
     },
     {
       "kind": "soft",
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
-      "segment_id": "s00007",
-      "severity": 0.586,
+      "segment_id": "s00001",
+      "severity": 0.344,
       "tier": "physiological"
     },
     {
       "kind": "soft",
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
-      "segment_id": "s00008",
-      "severity": 0.585,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00009",
-      "severity": 0.583,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00010",
-      "severity": 0.581,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00011",
-      "severity": 0.581,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00012",
-      "severity": 0.58,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00013",
-      "severity": 0.58,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00014",
-      "severity": 0.579,
-      "tier": "physiological"
-    },
-    {
-      "kind": "soft",
-      "reason_code": "wbgt_above_soft_threshold",
-      "scorer": "heat_stress",
-      "segment_id": "s00015",
-      "severity": 0.578,
+      "segment_id": "s00002",
+      "severity": 0.344,
       "tier": "physiological"
     },
     {
@@ -1082,7 +978,111 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00021",
-      "severity": 0.575,
+      "severity": 0.342,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00003",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00004",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00005",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00006",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00007",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00008",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00009",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00010",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00011",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00012",
+      "severity": 0.343,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00013",
+      "severity": 0.342,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00014",
+      "severity": 0.342,
+      "tier": "physiological"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "wbgt_above_soft_threshold",
+      "scorer": "heat_stress",
+      "segment_id": "s00015",
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -1090,7 +1090,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00016",
-      "severity": 0.578,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -1098,7 +1098,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00017",
-      "severity": 0.577,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -1106,7 +1106,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00018",
-      "severity": 0.577,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -1114,7 +1114,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00019",
-      "severity": 0.576,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -1122,7 +1122,7 @@
       "reason_code": "wbgt_above_soft_threshold",
       "scorer": "heat_stress",
       "segment_id": "s00020",
-      "severity": 0.576,
+      "severity": 0.342,
       "tier": "physiological"
     },
     {
@@ -1172,8 +1172,8 @@
       "mean_confidence": 1.0,
       "measured_segments": 64,
       "summary": {
-        "max_us_aqi": 36.0,
-        "mean_us_aqi": 36.0,
+        "max_us_aqi": 34.0,
+        "mean_us_aqi": 33.111,
         "sites": 2,
         "sites_answered": 2,
         "source": "open-meteo (CAMS model)"
@@ -1307,8 +1307,8 @@
       "summary": {
         "formula": "ACSM/BoM approximation: temperature and humidity only",
         "hard_floor_c": 30.0,
-        "max_wbgt_c": 28.483,
-        "mean_wbgt_c": 28.389,
+        "max_wbgt_c": 27.578,
+        "mean_wbgt_c": 27.483,
         "segments_above_soft": 63,
         "soft_threshold_c": 26.0
       },
@@ -1318,35 +1318,35 @@
           "kind": "soft",
           "reason_code": "wbgt_above_soft_threshold",
           "segment_id": "s00028",
-          "severity": 0.621,
+          "severity": 0.395,
           "tier": "physiological"
         },
         {
           "kind": "soft",
           "reason_code": "wbgt_above_soft_threshold",
           "segment_id": "s00029",
-          "severity": 0.62,
+          "severity": 0.394,
           "tier": "physiological"
         },
         {
           "kind": "soft",
           "reason_code": "wbgt_above_soft_threshold",
           "segment_id": "s00030",
-          "severity": 0.619,
+          "severity": 0.394,
           "tier": "physiological"
         },
         {
           "kind": "soft",
           "reason_code": "wbgt_above_soft_threshold",
           "segment_id": "s00031",
-          "severity": 0.618,
+          "severity": 0.394,
           "tier": "physiological"
         },
         {
           "kind": "soft",
           "reason_code": "wbgt_above_soft_threshold",
           "segment_id": "s00032",
-          "severity": 0.617,
+          "severity": 0.394,
           "tier": "physiological"
         }
       ]
@@ -1404,12 +1404,14 @@
       "mean_confidence": 1.0,
       "measured_segments": 64,
       "summary": {
-        "max_temp_c": 30.223,
-        "min_temp_c": 30.026,
+        "max_temp_c": 26.762,
+        "min_temp_c": 26.5,
         "providers": "open-meteo:2",
         "sites": 2,
         "sites_answered": 2,
-        "spacing_m": 5000.0
+        "spacing_m": 5000.0,
+        "utc_offset_hours": -5.0,
+        "utc_offset_source": "stated"
       },
       "waypoints": {},
       "worst": []
@@ -1428,9 +1430,9 @@
         "max_toilet_gap_min": 18.839,
         "services_with_unreadable_hours": 0,
         "suggested_carry_ml": 80.613,
-        "water_hard_threshold_min": 103.451,
-        "water_soft_threshold_min": 62.071,
-        "wbgt_used_c": 28.483
+        "water_hard_threshold_min": 120.407,
+        "water_soft_threshold_min": 72.244,
+        "wbgt_used_c": 27.578
       },
       "waypoints": {
         "food": 26,
@@ -1495,7 +1497,7 @@
       "measured_segments": 14,
       "summary": {
         "candidates": 13,
-        "coolest_start": "11:00",
+        "coolest_start": "07:00",
         "requested_start": "08:00",
         "shadiest_start": "05:00",
         "step_minutes": 30.0,
@@ -1530,7 +1532,7 @@
       "measured_segments": 64,
       "summary": {
         "mean_sky_view_factor": 0.996,
-        "peak_irradiance_w_m2": 160.202,
+        "peak_irradiance_w_m2": 40.044,
         "raycast_rung": "full",
         "shaded_fraction": 0.0,
         "surface": "shade measured from dem; buildings and canopy unavailable",

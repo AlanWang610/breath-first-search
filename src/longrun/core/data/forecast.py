@@ -26,13 +26,58 @@ cassette and an Open-Meteo cassette are then interchangeable downstream, and a p
 not re-score differently because a fallback fired — while `RouteForecast.providers` still
 records which answered, so a cassette that quietly lost its NWS recording shows up as a
 reviewable diff rather than a silent change of source.
+
+## The one time convention (ADR 0045)
+
+Two clocks meet in this module and until ADR 0045 they met without being converted:
+
+* **An hour in the series is a naive UTC instant.** `HourlyPoint.time` is always naive and
+  always UTC — for both providers, enforced at parse time, never a local wall clock and
+  never tz-aware.
+* **An ETA is a naive *local* wall clock.** ADR 0008 opens with it: a plan carries a naive
+  local start time, `FrozenClock` takes one, `request.yaml` pins one, and the pacing model
+  propagates it down the line.
+
+Those two are not comparable, and every reader here was comparing them. `open_meteo_args`
+asks for `timezone=UTC`, so a 17:30 local ETA in San Francisco was matched against the
+17:30 **UTC** row — 10:30 local, seven hours of the wrong weather, on every plan this
+project has ever produced. NWS made the same mistake differently: its `validTime` is an ISO
+interval carrying an offset, so its stamps parsed tz-*aware* and comparing one against a
+naive ETA raised `TypeError`, which `run_scorers` caught and reported as `scorer failed`.
+Scope §7.4 makes NWS the primary provider, so the primary path had never once run end to
+end — no cassette records it, and nothing fed NWS-parsed points into `at()`.
+
+**The conversion happens here, once, and not in the scorers.** `RouteForecast` carries the
+resolved offset and `at_distance`/`for_segments` do the subtraction, exactly as
+`core.geo.solar._index` does it for pvlib — the caller passes local times and an offset and
+the module converts. Five scorers read this data (`microclimate`, `heat_stress`,
+`sun_exposure`, `start_time_optimizer`, and `air_quality` through `core.data.air`); asking
+each of them to remember is how three of the five came to read the wrong hour while
+`sun_exposure` and `start_time_optimizer` were resolving an offset correctly for the solar
+half of the very same function.
+
+## The window this cannot cover (ADR 0045)
+
+`open_meteo_args` asks for one calendar day of **UTC** hours — 00:00 to 23:00 — so a route
+west of Greenwich gets forecast from local `24 + offset` o'clock on the *previous* day to
+`23 + offset` o'clock on this one. At UTC−7 that is local 17:00 yesterday to 16:00 today.
+**An evening ETA falls off the end and reads as absent**, which is what `bay-urban` now
+reports: it starts at 17:30.
+
+That is a known gap and it is not fixed here, because the fix is a wider request and a
+wider request is a different cache key. A new key orphans every committed cassette, and for
+air quality that is irreversible: `open_meteo_root` can fall back to
+`archive-api.open-meteo.com` for a past weather day, and `core.data.air` has **no archive
+endpoint at all**, so an AQ cassette for a past date can never be re-fetched. Reporting the
+gap honestly costs a golden its evening readings; papering over it costs every past-dated
+route its air quality permanently.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
@@ -104,11 +149,37 @@ _UOM_SCALE: dict[str, float] = {
 _DURATION = re.compile(r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?)?$")
 
 
+def as_naive_utc(when: datetime) -> datetime:
+    """Any instant to the one stamp shape this module stores: naive UTC.
+
+    A tz-aware stamp is converted and stripped; a naive one is already UTC by this
+    module's convention and is returned unchanged. Applied at every parse so the two
+    providers cannot disagree about what kind of datetime they produce — which is the
+    asymmetry ADR 0045 exists to remove, and which showed up as a `TypeError` from `at()`
+    rather than as a wrong number, so nobody saw it for thirteen milestones.
+    """
+    return when.astimezone(UTC).replace(tzinfo=None) if when.tzinfo is not None else when
+
+
+def to_utc(local_when: datetime, utc_offset_hours: float) -> datetime:
+    """A naive **local** wall clock to the naive UTC instant it names.
+
+    `utc_offset_hours` is hours *from* UTC in `datetime.utcoffset`'s sense — −7 for Pacific
+    Daylight Time — so it is subtracted, not added. The same arithmetic and the same sign
+    as `core.geo.solar._index`, and deliberately spelled the same way so the two cannot
+    drift apart.
+    """
+    return local_when - timedelta(hours=utc_offset_hours)
+
+
 class HourlyPoint(BaseModel):
     """One hour of forecast at one place. Every field optional: a provider may not say."""
 
     model_config = {"frozen": True}
 
+    #: **Naive UTC, always** — never a local wall clock and never tz-aware, whichever
+    #: provider answered. An ETA is naive *local*, so the two are not comparable without
+    #: the conversion `RouteForecast` makes; see the module docstring and ADR 0045.
     time: datetime
     temp_c: float | None = None
     dewpoint_c: float | None = None
@@ -140,7 +211,13 @@ class SiteForecast(BaseModel):
     reason: str | None = None
 
     def at(self, when: datetime) -> HourlyPoint | None:
-        """The forecast at an instant, interpolated between bracketing hours.
+        """The forecast at a **UTC instant**, interpolated between bracketing hours.
+
+        `when` is naive UTC, the same convention `HourlyPoint.time` stores. It is *not* a
+        plan ETA: those are naive local, and converting them is `RouteForecast`'s job, not
+        this one's. A tz-aware `when` is normalized rather than refused — comparing one
+        against a naive hour used to raise `TypeError`, which `run_scorers` swallowed into
+        `scorer failed` three layers away (ADR 0045).
 
         Returns None outside the horizon rather than clamping to the last hour. A run
         planned three weeks out is beyond any hourly forecast, and saying so is the
@@ -148,6 +225,7 @@ class SiteForecast(BaseModel):
         """
         if not self.hours:
             return None
+        when = as_naive_utc(when)
         ordered = sorted(self.hours, key=lambda h: h.time)
         if when < ordered[0].time or when > ordered[-1].time:
             return None
@@ -160,10 +238,33 @@ class SiteForecast(BaseModel):
 
 
 class RouteForecast(BaseModel):
-    """Every site along one route, for one day."""
+    """Every site along one route, for one day — and the offset its ETAs are read with.
+
+    **This is the seam where local becomes UTC** (ADR 0045). `at_distance` and
+    `for_segments` take a naive *local* ETA, because that is what a plan carries and what
+    every scorer is handed; `SiteForecast.at` below takes a naive UTC instant, because
+    that is what the series stores. One conversion, in one place, on the way between them.
+    """
 
     sites: list[SiteForecast] = Field(default_factory=list)
     spacing_m: float = DEFAULT_SPACING_M
+    #: Hours from UTC for this route's ETAs, in `datetime.utcoffset`'s sense: −7 for
+    #: Pacific Daylight Time. Required and not defaulted, so a forecast cannot be built
+    #: without someone deciding how to read its clock.
+    #:
+    #: `None` is a real answer and means the offset could not be resolved. Every reader
+    #: then reports **absence** — no reading, confidence 0 — rather than defaulting to
+    #: zero, which would silently reinstate exactly the bug this field exists to fix: an
+    #: assumed UTC ETA read against UTC hours looks entirely well-formed and is seven
+    #: hours wrong. Absence is not zero (scope §12).
+    #:
+    #: In practice `route_forecast` always fills it, because `solar.utc_offset_for` always
+    #: answers — stated, looked up, or derived from longitude — and says which (ADR 0008).
+    utc_offset_hours: float | None
+    #: How that offset was arrived at, in `utc_offset_for`'s words. Reported rather than
+    #: hidden, for the reason ADR 0008 gives: a guessed offset is an hour of error, and an
+    #: hour of error here is a different hour's weather.
+    utc_offset_source: str | None = None
 
     @property
     def providers(self) -> dict[str, int]:
@@ -189,8 +290,16 @@ class RouteForecast(BaseModel):
         return min(with_hours, key=lambda s: abs(s.site.cum_dist_m - cum_dist_m))
 
     def at_distance(self, cum_dist_m: float, when: datetime) -> HourlyPoint | None:
+        """The forecast at a place, at a **naive local** ETA (ADR 0045).
+
+        The local-to-UTC step is here rather than in the five scorers that ask, so a sixth
+        cannot forget it. With no resolved offset there is no instant to look up, and this
+        says so by returning nothing.
+        """
         site = self.nearest(cum_dist_m)
-        return None if site is None else site.at(when)
+        if site is None or self.utc_offset_hours is None:
+            return None
+        return site.at(to_utc(when, self.utc_offset_hours))
 
     def gap_to_nearest_m(self, cum_dist_m: float) -> float | None:
         site = self.nearest(cum_dist_m)
@@ -199,7 +308,12 @@ class RouteForecast(BaseModel):
     def for_segments(
         self, segments: Sequence[Segment], etas: Sequence[datetime]
     ) -> list[HourlyPoint | None]:
-        """One forecast per segment, at that segment's own arrival time."""
+        """One forecast per segment, at that segment's own arrival time.
+
+        `etas` are naive local, as every ETA vector in this project is; `at_distance`
+        converts. A segment whose ETA falls outside the fetched window gets `None` — see
+        the module docstring on the window a UTC-hours request leaves uncovered.
+        """
         out: list[HourlyPoint | None] = []
         for segment in segments:
             when = etas[segment.start_idx] if segment.start_idx < len(etas) else None
@@ -324,6 +438,14 @@ def expand_intervals(field: dict[str, Any] | None) -> dict[datetime, float]:
     NWS publishes values over ISO-8601 *intervals* (`2026-09-12T14:00:00+00:00/PT3H`), not
     at instants, so a three-hour block has to become three hours. The `uom` is honoured
     here rather than assumed: wind arrives in km/h from some offices and m/s from others.
+
+    **The stamp is normalized to naive UTC before it is keyed** (ADR 0045). A `validTime`
+    carries its own offset — a Pacific office writes `2026-09-26T07:00:00-07:00` — so
+    `fromisoformat` returns a tz-*aware* datetime, while Open-Meteo's `2026-09-26T14:00`
+    returns a naive one. Two providers producing two kinds of datetime is the whole
+    asymmetry: an aware hour compared against a naive ETA raises `TypeError`, and
+    `run_scorers` turns that into `scorer failed` three layers away from the cause. The
+    offset is honoured here rather than discarded, so 07:00−07:00 and 14:00Z agree.
     """
     if not field or not isinstance(field.get("values"), list):
         return {}
@@ -335,7 +457,7 @@ def expand_intervals(field: dict[str, Any] | None) -> dict[datetime, float]:
             continue
         stamp, _, duration = str(entry.get("validTime", "")).partition("/")
         try:
-            start = datetime.fromisoformat(stamp)
+            start = as_naive_utc(datetime.fromisoformat(stamp))
         except ValueError:
             continue
         for hour in range(_duration_hours(duration)):
@@ -367,7 +489,13 @@ def parse_nws_gridpoint(payload: dict[str, Any]) -> list[HourlyPoint]:
 
 
 def parse_open_meteo(payload: dict[str, Any]) -> list[HourlyPoint]:
-    """An Open-Meteo hourly payload into the same normalized hours."""
+    """An Open-Meteo hourly payload into the same normalized hours.
+
+    Naive already, and naive *UTC* rather than naive local only because `open_meteo_args`
+    asks for `timezone=UTC` — the response echoes `timezone: GMT, utc_offset_seconds: 0`.
+    Normalized anyway, so this reads as the deliberate convention it is rather than as a
+    coincidence of one request parameter.
+    """
     hourly = payload.get("hourly") or {}
     stamps = hourly.get("time") or []
     columns = {
@@ -388,7 +516,7 @@ def parse_open_meteo(payload: dict[str, Any]) -> list[HourlyPoint]:
             name: (float(col[i]) if i < len(col) and col[i] is not None else None)
             for name, col in columns.items()
         }
-        out.append(HourlyPoint(time=when, **values))
+        out.append(HourlyPoint(time=as_naive_utc(when), **values))
     return out
 
 
@@ -411,6 +539,20 @@ def nws_grid_args(office: str, grid_x: int, grid_y: int) -> dict[str, Any]:
 
 
 def open_meteo_args(lat: float, lon: float, day: date) -> dict[str, Any]:
+    """Cache-key inputs for one site's hours.
+
+    **`timezone=UTC` with a single local calendar day is a known coverage gap, and it is
+    deliberately not fixed here** (ADR 0045). The request asks for `[day 00:00, day 23:00]`
+    in UTC, so a route at UTC−7 is covered from local 17:00 the previous day to local 17:00
+    — and an evening ETA falls off the end and is reported absent.
+
+    The fix would be a wider window, and a wider window is a different `args_hash`, which
+    is a different cache key, which orphans every committed cassette. `open_meteo_root`
+    could re-record the weather from the archive; `core.data.air` has no archive endpoint,
+    so a past-dated air-quality cassette re-fetches as nothing at all and is gone. Six of
+    the seven golden routes pin a date that is already in the past. Losing one route's
+    evening readings is recoverable; losing every past route's air quality is not.
+    """
     return {
         "latitude": round(lat, COORD_PRECISION),
         "longitude": round(lon, COORD_PRECISION),
@@ -560,6 +702,64 @@ def _describe(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
+def route_offset(route: Route, ctx: ScorerContext) -> tuple[float | None, str | None]:
+    """`(hours from UTC, how)` for this route's ETAs, or `(None, None)` with no geometry.
+
+    Shared by `route_forecast` and `core.data.air.route_air_quality` so weather and air
+    quality can never be read on two different clocks. ADR 0008 decides *how* the offset is
+    found and that the answer says which of the three ways it was found; this only decides
+    *where* it is asked, which is once per fetch rather than once per scorer.
+
+    A route with no points has no coordinate to resolve against, so there is no offset to
+    report. `None` reaches `RouteForecast.utc_offset_hours` and every reading there becomes
+    absent — the alternative, zero, is an assumption dressed as a measurement.
+    """
+    from longrun.core.geo.solar import utc_offset_for
+
+    if not route.points:
+        return None, None
+    first = route.points[0]
+    hours, how = utc_offset_for(first.lat, first.lon, ctx.clock.now(), ctx.utc_offset_hours)
+    return hours, how
+
+
+def window_gap_entry(
+    forecast: RouteForecast, readings: Sequence[HourlyPoint | None]
+) -> CoverageEntry | None:
+    """The coverage line for "we fetched hours, and none of them was the hour you asked".
+
+    Only produced when sites *answered* and every reading is still absent, because that is
+    the one case a reader would otherwise misread as a failed fetch. It is neither: the
+    cassette is intact and the request was the wrong shape — one local calendar day of UTC
+    hours, which at a negative offset ends before the evening it was asked about
+    (ADR 0045).
+
+    Silent before ADR 0045, and silently *wrong* rather than absent: the ETA was matched against
+    the UTC row of the same wall-clock number, so a 17:30 local run in San Francisco
+    reported the weather at 10:30 and nothing said so.
+    """
+    if not forecast.answered or any(r is not None for r in readings):
+        return None
+    hours = [h.time for site in forecast.sites for h in site.hours]
+    if not hours or forecast.utc_offset_hours is None:
+        return None
+    offset = forecast.utc_offset_hours
+    first_local = min(hours) + timedelta(hours=offset)
+    last_local = max(hours) + timedelta(hours=offset)
+    return CoverageEntry(
+        source="open_meteo",
+        kind="forecast",
+        checked=False,
+        reason=(
+            "hours were fetched but none covers this plan: the request asks for one local "
+            f"calendar day of UTC hours, which at UTC{offset:+.0f} reaches local "
+            f"{first_local:%Y-%m-%d %H:%M} to {last_local:%H:%M}. Widening it would change "
+            "the cache key and orphan every committed cassette, and air quality for a past "
+            "date can never be re-fetched (ADR 0045)"
+        ),
+    )
+
+
 def route_forecast(
     route: Route,
     ctx: ScorerContext,
@@ -575,8 +775,15 @@ def route_forecast(
     one missing cassette key must not take the whole scorer down; what it must not do is
     pass silently, which is why every failure lands in `SiteForecast.reason` and from there
     in the coverage manifest.
+
+    **The UTC offset is resolved once, here** (ADR 0045), from the route's first point and
+    `ctx.clock.now()` — which is `FrozenClock(start_at)`, the plan's own naive local start,
+    so no wall clock is read and the answer is reproducible. `utc_offset_for` is the same
+    function `sun_exposure`, `lighting` and `start_time_optimizer` already call with the
+    same two arguments, so the forecast is read on the clock the shade is computed on.
     """
     sites = sample_points(route, spacing_m=spacing_m, max_points=max_points)
+    offset, how = route_offset(route, ctx)
     results: list[SiteForecast] = []
     exhausted = False
 
@@ -612,7 +819,12 @@ def route_forecast(
             else SiteForecast(site=site, reason="; ".join(reasons) or "no provider answered")
         )
 
-    return RouteForecast(sites=results, spacing_m=spacing_m)
+    return RouteForecast(
+        sites=results,
+        spacing_m=spacing_m,
+        utc_offset_hours=offset,
+        utc_offset_source=how,
+    )
 
 
 __all__ = [
@@ -630,6 +842,7 @@ __all__ = [
     "RouteForecast",
     "SiteForecast",
     "OPEN_METEO_FIELDS",
+    "as_naive_utc",
     "expand_intervals",
     "nws_grid_args",
     "nws_points_args",
@@ -638,6 +851,9 @@ __all__ = [
     "parse_nws_gridpoint",
     "parse_open_meteo",
     "route_forecast",
+    "route_offset",
     "sample_points",
+    "to_utc",
     "user_agent",
+    "window_gap_entry",
 ]
