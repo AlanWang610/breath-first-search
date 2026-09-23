@@ -18,7 +18,8 @@ from datetime import datetime
 
 import pytest
 
-from longrun.core.data.air import AIR_FIELDS, air_args, parse_air
+from longrun.core.data.air import AIR_FIELDS, AirSite, RouteAirQuality, air_args, parse_air
+from longrun.core.data.forecast import ForecastSite
 from longrun.core.geo.solar import (
     CIVIL_TWILIGHT_DEG,
     clear_sky,
@@ -240,6 +241,43 @@ def test_the_air_quality_cache_key_rounds_its_coordinates() -> None:
         37.7955, -122.4001, date(2026, 9, 12)
     )
     assert air_args(37.7955, -122.4, date(2026, 9, 12))["hourly"] == AIR_FIELDS
+
+
+def test_air_quality_reads_a_local_eta_at_the_utc_hour_it_names() -> None:
+    """The same bug as `microclimate`'s, from the same `timezone=UTC` request (ADR 0045).
+
+    `air_args` asks Open-Meteo for UTC hours and an ETA is a naive local wall clock, so a
+    12:00 arrival in San Francisco has to select 19:00 UTC. It selected 12:00 UTC — 05:00
+    Pacific, the small hours — on every plan until M15.
+    """
+    hours = parse_air(
+        {
+            "hourly": {
+                "time": ["2026-09-12T12:00", "2026-09-12T19:00"],
+                "us_aqi": [42.0, 88.0],
+                "pm2_5": [9.1, 22.0],
+                "pm10": [14.0, 30.0],
+            }
+        }
+    )
+    site = AirSite(
+        site=ForecastSite(index=0, route_index=0, lat=SF_LAT, lon=SF_LON, cum_dist_m=0.0),
+        hours=hours,
+    )
+    air = RouteAirQuality(sites=[site], utc_offset_hours=-7.0)
+
+    reading = air.at_distance(0.0, datetime(2026, 9, 12, 12, 0))
+    assert reading is not None and reading.us_aqi == 88.0
+
+
+def test_air_quality_without_a_resolved_offset_reports_nothing() -> None:
+    """Absence, not a silently-assumed zero that would read UTC hours as local ones."""
+    site = AirSite(
+        site=ForecastSite(index=0, route_index=0, lat=SF_LAT, lon=SF_LON, cum_dist_m=0.0),
+        hours=parse_air({"hourly": {"time": ["2026-09-12T19:00"], "us_aqi": [88.0]}}),
+    )
+    air = RouteAirQuality(sites=[site], utc_offset_hours=None)
+    assert air.at_distance(0.0, datetime(2026, 9, 12, 12, 0)) is None
 
 
 def test_the_offset_is_looked_up_rather_than_guessed() -> None:

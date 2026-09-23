@@ -33,7 +33,9 @@ from longrun.core.data.forecast import (
     parse_open_meteo,
     route_forecast,
     sample_points,
+    to_utc,
     user_agent,
+    window_gap_entry,
 )
 from longrun.core.models.context import Budget, FrozenClock, ScorerContext
 from longrun.core.models.coverage import CoverageManifest
@@ -251,15 +253,140 @@ def test_a_time_beyond_the_horizon_returns_nothing_rather_than_the_last_hour() -
 
 
 def test_the_nearest_site_is_measured_along_the_route() -> None:
-    """On an out-and-back a site 300 m away across the turnaround is 8 km away in fact."""
+    """On an out-and-back a site 300 m away across the turnaround is 8 km away in fact.
+
+    `utc_offset_hours=0.0` because this test is about *distance* and wants the clock out of
+    the way — and stating it is now the only way to get that, which is the point of the
+    field having no default (ADR 0045).
+    """
     forecast = RouteForecast(
-        sites=[_site_forecast(cum_dist_m=0.0, base_temp=10.0), _site_forecast(cum_dist_m=8000.0)]
+        sites=[_site_forecast(cum_dist_m=0.0, base_temp=10.0), _site_forecast(cum_dist_m=8000.0)],
+        utc_offset_hours=0.0,
     )
     near = forecast.at_distance(500.0, NOON)
     far = forecast.at_distance(7800.0, NOON)
     assert near is not None and far is not None
     assert near.temp_c == 10.0
     assert far.temp_c == 20.0
+
+
+# --- the two clocks (ADR 0045) ----------------------------------------------
+
+
+class TestTheTwoClocks:
+    """The bug M15 fixed: a naive local ETA read against naive UTC hours.
+
+    Nothing in this suite fed NWS-parsed points into `at()` before — `_site_forecast` above
+    labels itself `provider="nws"` but builds its `HourlyPoint`s by hand, so the stamps NWS
+    actually produces never reached the comparison. That is the gap these close, and it is
+    why the primary provider Scope §7.4 names had never run end to end: all seven golden
+    cassettes record Open-Meteo only.
+    """
+
+    #: A Pacific NWS office writes its `validTime` with the offset attached. `fromisoformat`
+    #: therefore returns a tz-**aware** datetime, where Open-Meteo's bare `2026-09-12T19:00`
+    #: returns a naive one. Both name the same instant.
+    PACIFIC = "2026-09-12T12:00:00-07:00/PT3H"
+
+    def _nws_hours(self) -> list[HourlyPoint]:
+        field = {"uom": "wmoUnit:degC", "values": [{"validTime": self.PACIFIC, "value": 24.0}]}
+        return parse_nws_gridpoint({"properties": {"temperature": field}})
+
+    def test_both_providers_produce_the_same_kind_of_stamp(self) -> None:
+        """Naive UTC from both, or the comparison downstream is a coin toss."""
+        nws = self._nws_hours()
+        meteo = parse_open_meteo(
+            {"hourly": {"time": ["2026-09-12T19:00"], "temperature_2m": [24.0]}}
+        )
+        assert nws[0].time.tzinfo is None
+        assert meteo[0].time.tzinfo is None
+        assert nws[0].time == meteo[0].time == datetime(2026, 9, 12, 19, 0)
+
+    def test_an_nws_hour_fed_to_at_with_a_naive_eta_does_not_raise(self) -> None:
+        """This raised `TypeError`, and `run_scorers` reported it as `scorer failed`.
+
+        The regression that matters is not the exception: it is that a caught exception
+        three layers from its cause is indistinguishable from a provider being down, so the
+        primary path could stay broken for thirteen milestones without anybody seeing it.
+        """
+        site = SiteForecast(
+            site=ForecastSite(index=0, route_index=0, lat=37.8, lon=-122.4, cum_dist_m=0.0),
+            provider="nws",
+            hours=self._nws_hours(),
+        )
+        assert site.at(datetime(2026, 9, 12, 19, 30)) is not None
+
+    def test_a_known_local_time_selects_the_hour_a_human_would_name(self) -> None:
+        """The round trip, stated in wall clocks rather than in arithmetic.
+
+        Noon in San Francisco on 12 September 2026 is 19:00 UTC. A runner told "24 C at
+        noon" must get the row NWS published for 12:00 Pacific — not the row numbered 12:00.
+        """
+        forecast = RouteForecast(
+            sites=[
+                SiteForecast(
+                    site=ForecastSite(index=0, route_index=0, lat=37.8, lon=-122.4, cum_dist_m=0.0),
+                    provider="nws",
+                    hours=self._nws_hours(),
+                )
+            ],
+            utc_offset_hours=-7.0,
+        )
+        at_noon_local = forecast.at_distance(0.0, datetime(2026, 9, 12, 12, 0))
+        assert at_noon_local is not None
+        assert at_noon_local.temp_c == 24.0
+
+        # And the row numbered 12:00 is the one it used to return: 05:00 Pacific, before
+        # the NWS block starts, which is outside the series entirely.
+        assert forecast.sites[0].at(datetime(2026, 9, 12, 12, 0)) is None
+
+    def test_an_eta_outside_the_fetched_window_is_absent_rather_than_clamped(self) -> None:
+        """`open_meteo_args` asks for one local calendar day of UTC hours (ADR 0045).
+
+        At UTC-7 that window ends at local 17:00, so `bay-urban`'s 17:30 start has no
+        forecast at all. Pinned here because it is a **known coverage gap** rather than an
+        accident: widening the request changes the cache key, and an air-quality cassette
+        for a past date can never be re-fetched.
+        """
+        hours = parse_open_meteo(
+            {
+                "hourly": {
+                    "time": [f"2026-09-12T{h:02d}:00" for h in range(24)],
+                    "temperature_2m": [17.0] * 24,
+                }
+            }
+        )
+        forecast = RouteForecast(
+            sites=[
+                SiteForecast(
+                    site=ForecastSite(index=0, route_index=0, lat=37.8, lon=-122.4, cum_dist_m=0.0),
+                    provider="open-meteo",
+                    hours=hours,
+                )
+            ],
+            utc_offset_hours=-7.0,
+        )
+        assert forecast.at_distance(0.0, datetime(2026, 9, 12, 16, 0)) is not None
+        assert forecast.at_distance(0.0, datetime(2026, 9, 12, 17, 30)) is None
+
+        entry = window_gap_entry(forecast, [None])
+        assert entry is not None and not entry.checked
+        assert "local 2026-09-11 17:00 to 16:00" in (entry.reason or "")
+
+    def test_no_resolved_offset_reads_as_absent_rather_than_as_utc(self) -> None:
+        """A defaulted zero would look well-formed and be seven hours wrong.
+
+        Absence is not zero (scope §12). `route_forecast` always fills the field, because
+        `utc_offset_for` always answers and says how (ADR 0008); this is what happens when
+        something else does not.
+        """
+        forecast = RouteForecast(sites=[_site_forecast()], utc_offset_hours=None)
+        assert forecast.at_distance(0.0, NOON) is None
+
+    def test_the_offset_is_subtracted_not_added(self) -> None:
+        """The sign, pinned on its own, because getting it backwards is a 14-hour error."""
+        assert to_utc(NOON, -7.0) == datetime(2026, 9, 12, 19, 0)
+        assert to_utc(NOON, 1.0) == datetime(2026, 9, 12, 11, 0)
 
 
 # --- fetching, offline ------------------------------------------------------
@@ -280,15 +407,9 @@ def test_offline_with_an_empty_cassette_reports_rather_than_raises(
     assert "not in the cassette" in (entries[-1].reason or "")
 
 
-def test_a_recorded_cassette_serves_the_forecast_offline(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The mechanism a golden route runs on, exercised the same way."""
-    monkeypatch.delenv(USER_AGENT_ENV_VAR, raising=False)
-    route = _route(points=6, step_m=500.0)
+def _record(path: Any, route: Route, times: list[str], temps: list[float]) -> int:
+    """A cassette of Open-Meteo hours for every site on a route. Times are UTC, as fetched."""
     sites = sample_points(route)
-
-    path = tmp_path / "cassette.sqlite"
     with SqliteCache(path) as recording:
         for site in sites:
             recording.put(
@@ -297,20 +418,45 @@ def test_a_recorded_cassette_serves_the_forecast_offline(
                 DAY.isoformat(),
                 {
                     "hourly": {
-                        "time": ["2026-09-12T12:00", "2026-09-12T13:00"],
-                        "temperature_2m": [24.0, 25.0],
-                        "cloud_cover": [20.0, 25.0],
+                        "time": times,
+                        "temperature_2m": temps,
+                        "cloud_cover": [20.0 + 5.0 * i for i in range(len(times))],
                     }
                 },
             )
+    return len(sites)
+
+
+def test_a_recorded_cassette_serves_the_forecast_offline(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mechanism a golden route runs on, exercised the same way.
+
+    The ETA is **local**, the cassette is **UTC**, and the route is in California, so the
+    row this selects is seven hours along from the one whose wall-clock number matches. It
+    read 12:00 UTC for a 12:00 local ETA until M15 (ADR 0045).
+    """
+    monkeypatch.delenv(USER_AGENT_ENV_VAR, raising=False)
+    route = _route(points=6, step_m=500.0)
+    path = tmp_path / "cassette.sqlite"
+    count = _record(
+        path,
+        route,
+        ["2026-09-12T18:00", "2026-09-12T19:00", "2026-09-12T20:00"],
+        [24.0, 25.0, 26.0],
+    )
 
     with SqliteCache(path, offline=True) as cache:
         forecast = route_forecast(route, _ctx(tmp_path, cache), DAY)
 
     assert forecast.answered
-    assert forecast.providers.get("open-meteo") == len(sites)
+    assert forecast.providers.get("open-meteo") == count
+    assert forecast.utc_offset_hours == -7.0
+    assert forecast.utc_offset_source == "zone America/Los_Angeles"
+
+    # 12:00 in San Francisco on 12 September is 19:00 UTC, which is the middle row.
     reading = forecast.at_distance(0.0, NOON)
-    assert reading is not None and reading.temp_c == 24.0
+    assert reading is not None and reading.temp_c == 25.0
 
 
 def test_without_a_contact_string_nws_is_not_called_at_all(
