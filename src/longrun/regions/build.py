@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from longrun.core.data.jurisdictions import from_padus_row, from_tiger_row
+from longrun.core.data.jurisdictions import PLACE_COUNTY_SHARE, from_padus_row, from_tiger_row
 from longrun.core.models.jurisdiction import Jurisdiction
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -555,6 +555,23 @@ def jurisdictions_in(ctx: BuildContext) -> list[Jurisdiction]:
     polygon = ctx.spec.shape().wkt
     found: dict[str, Jurisdiction] = {}
 
+    # A place's counties, by the same area-share rule `core.data.jurisdictions` applies to a
+    # route, so a county adapter covers the cities inside it in a region's coverage count
+    # exactly as it does in a plan. `statefp` in the join is an index hint, not a rule: a
+    # place never crosses a state line.
+    counties: dict[str, list[str]] = {}
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT p.geoid, c.geoid FROM tiger.boundaries p "
+            "JOIN tiger.boundaries c ON c.level = 'county' AND c.statefp = p.statefp "
+            "AND ST_Intersects(p.geom, c.geom) "
+            "WHERE p.level = 'place' AND ST_Intersects(p.geom, ST_GeomFromText(%s, 4326)) "
+            "AND ST_Area(ST_Intersection(p.geom, c.geom)) >= %s * ST_Area(p.geom)",
+            (polygon, PLACE_COUNTY_SHARE),
+        )
+        for place, county in cursor.fetchall():
+            counties.setdefault(place, []).append(county)
+
     with ctx.connection.cursor() as cursor:
         cursor.execute(
             "SELECT level, geoid, name, statefp FROM tiger.boundaries "
@@ -563,7 +580,8 @@ def jurisdictions_in(ctx: BuildContext) -> list[Jurisdiction]:
             (polygon,),
         )
         for level, geoid, name, statefp in cursor.fetchall():
-            record = from_tiger_row(level, geoid, name or geoid, statefp)
+            inside = tuple(sorted(counties.get(geoid, []))) if level == "place" else ()
+            record = from_tiger_row(level, geoid, name or geoid, statefp, inside)
             found.setdefault(record.id, record)
 
     states = sorted(j.id.rsplit(":", 1)[-1] for j in found.values() if j.level == "state")
