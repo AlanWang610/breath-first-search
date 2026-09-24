@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -118,6 +119,19 @@ class LoadFailure:
     reason: str
 
 
+def local_to_utc(local: datetime, zone: str) -> datetime:
+    """A publisher's naive local wall clock as the naive UTC instant it names (ADR 0046).
+
+    For feeds that publish local times with no offset. The zone is the *feed's* - an IANA
+    name the adapter declares - rather than the route's, so each timestamp is converted at
+    its own date and a window spanning a DST change is right at both ends. Ambiguous
+    instants inside a fall-back hour resolve to the first occurrence, `zoneinfo`'s default.
+    """
+    from zoneinfo import ZoneInfo
+
+    return local.replace(tzinfo=ZoneInfo(zone)).astimezone(UTC).replace(tzinfo=None)
+
+
 def describe(exc: BaseException) -> str:
     """A failure named for a coverage manifest.
 
@@ -142,5 +156,6 @@ __all__ = [
     "AdapterResult",
     "LoadFailure",
     "describe",
+    "local_to_utc",
     "valid_jurisdiction_id",
 ]

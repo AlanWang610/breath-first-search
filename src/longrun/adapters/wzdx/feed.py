@@ -29,7 +29,7 @@ losing every closure in a state over one bad record.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -92,10 +92,15 @@ def parse_timestamp(value: Any) -> datetime | None:
         parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
-    # Naive throughout `core/`: ETAs are naive local times and comparing them against an
-    # aware datetime raises. The offset is discarded rather than converted, which is the
-    # same simplification `forecast.py` makes for hourly series.
-    return parsed.replace(tzinfo=None)
+    # Naive UTC, converted rather than stripped (ADR 0046). This used to discard the offset
+    # "the same simplification `forecast.py` makes" - and ADR 0045 is the record of that
+    # simplification being a bug in `forecast.py` too. Stripping `-07:00` from a Maricopa
+    # timestamp and `Z` from a Missouri one produced two different clocks in one list, each
+    # compared against a local ETA as though it were local. A timestamp carrying no offset
+    # at all is taken as UTC, which is what the WZDx spec requires a publisher to send.
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
+    return parsed
 
 
 def _category(properties: dict[str, Any]) -> str:

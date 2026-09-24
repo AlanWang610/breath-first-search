@@ -8,10 +8,10 @@ marked unverified in the coverage manifest.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from longrun.core.models.coverage import Confidence, CoverageEntry, Tier
 
@@ -32,10 +32,26 @@ class Feature(BaseModel):
     tier: Tier
     confidence: Confidence
     jurisdiction: str | None = None
+    #: **Naive UTC, always** (ADR 0046): the window is an instant, and every instant this
+    #: project stores is naive UTC (ADR 0045). An ETA is naive *local*; read one against the
+    #: other through `core.data.features.RouteFeatures`, never directly.
     start: datetime | None = None
     end: datetime | None = None
     source_url: str | None = None
     detail: str | None = None
+
+    @field_validator("start", "end", mode="after")
+    @classmethod
+    def _naive_utc(cls, value: datetime | None) -> datetime | None:
+        """An aware stamp is converted, not refused and not stripped.
+
+        The backstop behind every adapter's own parsing. Stripping is the bug ADR 0045 and
+        ADR 0046 both record, and refusing would turn one publisher's offset into a feed
+        that answers nothing.
+        """
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(UTC).replace(tzinfo=None)
+        return value
 
     @model_validator(mode="after")
     def _check_extraction_confidence(self) -> Feature:
@@ -49,7 +65,10 @@ class Feature(BaseModel):
         return self
 
     def active_at(self, when: datetime) -> bool:
-        """Whether this record applies at a given instant. Open-ended bounds count."""
+        """Whether this record applies at a given naive-UTC instant. Open-ended bounds count.
+
+        A scorer holding a local ETA asks `RouteFeatures.active_at` instead, which converts.
+        """
         if self.start and when < self.start:
             return False
         if self.end and when > self.end:

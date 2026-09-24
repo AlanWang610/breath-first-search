@@ -123,8 +123,10 @@ TIDE_TIER: dict[str, Tier] = {"tidal": Tier.SAFETY, "beach": Tier.COMFORT}
 def shift_to_open(feature: Feature, arrival: datetime) -> float | None:
     """Minutes a start would have to move for this gate to be open on arrival.
 
-    `None` when the gate's window does not say - an open-ended `start` with no `end` is a
-    gate that has opened and not yet shut, which needs no shift at all.
+    `arrival` is a naive **UTC** instant, the frame the window is stored in (ADR 0046); a
+    shift is a difference, so it comes out the same in either frame once both operands are
+    in one. `None` when the gate's window does not say - an open-ended `start` with no `end`
+    is a gate that has opened and not yet shut, which needs no shift at all.
     """
     if feature.start is None or feature.active_at(arrival):
         return None
@@ -171,7 +173,7 @@ def _gates(
     early returns each used to call `_summarise` — so a second question could not be asked
     after any of them without being skipped on exactly the routes that took them.
     """
-    from longrun.core.geo.segments import corridor, corridor_polygon
+    from longrun.core.data.features import route_features
 
     scan = route_jurisdictions(route, ctx)
 
@@ -218,9 +220,8 @@ def _gates(
             )
         return len(agencies), None
 
-    found = ctx.features.fetch(
-        name, agencies, corridor_polygon(corridor(route)), ctx.clock.now().date()
-    )
+    clock = route_features(name, agencies, route, ctx)
+    found = clock.found
     for answer in found.answers:
         result.coverage.append(answer.coverage(name))
 
@@ -235,14 +236,16 @@ def _gates(
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
         arrival = _eta_for(segment, segments, etas)
+        open_now = clock.active_at(feature, arrival) if arrival is not None else None
+        instant = clock.to_utc(arrival) if arrival is not None else None
 
-        if arrival is None:
+        if open_now is None:
             code, severity = "gate_hours_unknown", UNKNOWN_TIME_SEVERITY
-        elif feature.active_at(arrival):
+        elif open_now:
             continue  # open when the runner gets there, which is the ordinary case
         else:
             code, severity = "gate_closed_at_eta", CLOSED_SEVERITY
-            shift = shift_to_open(feature, arrival)
+            shift = shift_to_open(feature, instant) if instant is not None else None
             if shift is not None:
                 shifts.append(shift)
 

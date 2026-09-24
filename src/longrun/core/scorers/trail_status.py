@@ -74,7 +74,7 @@ def trail_status(
     etas: list[datetime] | None = None,
 ) -> ScorerResult:
     """Park alerts and seasonal closures for the agencies managing this route's ground."""
-    from longrun.core.geo.segments import corridor, corridor_polygon
+    from longrun.core.data.features import route_features
 
     result = ScorerResult(name=name)
     scan = route_jurisdictions(route, ctx)
@@ -122,9 +122,8 @@ def trail_status(
             )
         return _summarise(result, segments, {}, agencies=len(agencies))
 
-    found = ctx.features.fetch(
-        name, agencies, corridor_polygon(corridor(route)), ctx.clock.now().date()
-    )
+    clock = route_features(name, agencies, route, ctx)
+    found = clock.found
     for answer in found.answers:
         result.coverage.append(answer.coverage(name))
 
@@ -139,7 +138,9 @@ def trail_status(
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
         when = etas[min(segments.index(segment), len(etas) - 1)] if etas and segment else None
-        if when is not None and not feature.active_at(when):
+        # `False` only: an alert whose timing cannot be read against the arrival is still
+        # an alert about ground the runner is on.
+        if when is not None and clock.active_at(feature, when) is False:
             continue
         code = (feature.category or "alert").strip().lower().replace(" ", "_")
         counts.setdefault(segment_id, {})
