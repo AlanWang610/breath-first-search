@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from longrun.core.data.jurisdictions import (
     JurisdictionScan,
+    jurisdictions_for,
     route_jurisdictions,
     unqualified_reason,
 )
@@ -87,7 +88,7 @@ def trail_status(
         result.coverage.append(
             CoverageEntry(source=name, kind=name, checked=False, reason=unqualified)
         )
-    agencies = [j for j in scan.jurisdictions if j.source == "padus"]
+    agencies = jurisdictions_for(name, scan)
 
     if not scan.parks_checked:
         for reason in scan.reasons or ["no parks layer: managing agencies not established"]:

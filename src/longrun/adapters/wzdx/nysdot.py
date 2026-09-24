@@ -47,6 +47,7 @@ class NysDotClosures:
     name = "wzdx.nysdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:36",)
     source = "wzdx_nysdot"
     vintage: str | None = None

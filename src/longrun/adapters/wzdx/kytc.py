@@ -39,6 +39,7 @@ class KytcClosures:
     name = "wzdx.kytc"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:21",)
     source = "wzdx_kytc"
     vintage: str | None = None

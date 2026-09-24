@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any
 
 from longrun.adapters.base import AdapterResult
 from longrun.adapters.keys import MASSDOT
-from longrun.adapters.wzdx.client import fetch_feed
+from longrun.adapters.wzdx.client import fetch_feed, replay_or_refuse
 
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import date
@@ -52,21 +52,23 @@ class MassDotClosures:
     name = "wzdx.massdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:25",)
     source = "wzdx_massdot"
+    key = MASSDOT
     vintage: str | None = None
 
     def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult:
-        key = MASSDOT.value()
-        if key is None:
-            return AdapterResult(reason=MASSDOT.missing_reason(), source_url=URL)
+        value = MASSDOT.value()
+        if value is None:
+            return replay_or_refuse(URL, self.name, day, ctx, MASSDOT)
         # Header rather than a query parameter, which is the shape the 401 body asks for.
         # Unverified against a live key — see the module docstring: this is written from the
         # unauthenticated response, and the first person with a key will find out whether
         # the header name is right. Written down here rather than implied, because an
         # adapter that fails with a *wrong* credential and one that fails with none look
         # identical on the sheet unless the reason says which.
-        return fetch_feed(URL, self.name, day, ctx, headers={"Authorization": f"Bearer {key}"})
+        return fetch_feed(URL, self.name, day, ctx, headers={"Authorization": f"Bearer {value}"})
 
 
 CLOSURES = MassDotClosures()

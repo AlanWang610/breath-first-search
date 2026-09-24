@@ -234,7 +234,7 @@
       "checked": false,
       "jurisdiction": "San Francisco County (tiger:county:06075)",
       "kind": "closures",
-      "reason": "LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token)",
+      "reason": "tier 1 wzdx.sfbay: LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token). Then tier 4 extraction: tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "closures",
       "tier": null,
       "vintage": null
@@ -243,7 +243,7 @@
       "checked": false,
       "jurisdiction": "San Francisco (tiger:place:0667000)",
       "kind": "closures",
-      "reason": "LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token)",
+      "reason": "tier 1 wzdx.sfbay: LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token). Then tier 4 extraction: tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "closures",
       "tier": null,
       "vintage": null

@@ -38,6 +38,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from geopandas import GeoDataFrame
 
     from longrun.core.models.context import ScorerContext
+    from longrun.core.models.features import FeatureKind
     from longrun.core.models.geometry import Route
 
 #: TIGER levels, coarsest first. Order matters twice: `within` is built by walking it, and
@@ -359,6 +360,28 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
         unattributed_parks=max(0, len(parks) - named) if parks is not None else 0,
         unqualified_agencies=unqualified,
     )
+
+
+#: The kinds a scorer asks at plan time. `speed_survey` is not one: it is merged into the
+#: road data at region build (M18), so a plan never fetches it and a cassette never needs it.
+SCORED_KINDS: tuple[FeatureKind, ...] = ("closures", "trail_status", "access_hours")
+
+
+def jurisdictions_for(kind: FeatureKind, scan: JurisdictionScan) -> list[Jurisdiction]:
+    """Which of a route's jurisdictions a kind is asked about - decided once, here (M17).
+
+    Closures are published by DOTs and cities, which register against census boundaries,
+    and by park agencies too, so every jurisdiction is asked. Trail status and access hours
+    are properties of managed land, so only park agencies are. Speed surveys are municipal
+    and state road data, so only census boundaries. The scorers, the region build and
+    `freeze-cassette` all ask through this, so a cassette records exactly the questions a
+    plan will put.
+    """
+    if kind in ("trail_status", "access_hours"):
+        return [j for j in scan.jurisdictions if j.source == "padus"]
+    if kind == "speed_survey":
+        return [j for j in scan.jurisdictions if j.source == "tiger"]
+    return list(scan.jurisdictions)
 
 
 def unqualified_reason(scan: JurisdictionScan) -> str | None:

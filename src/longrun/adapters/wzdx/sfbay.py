@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from longrun.adapters.base import AdapterResult
 from longrun.adapters.keys import SF_BAY_511
-from longrun.adapters.wzdx.client import fetch_feed
+from longrun.adapters.wzdx.client import fetch_feed, replay_or_refuse
 
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import date
@@ -54,15 +54,17 @@ class SfBay511Closures:
     name = "wzdx.sfbay"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = BAY_AREA_COUNTIES
     source = "wzdx_sfbay"
+    key = SF_BAY_511
     vintage: str | None = None
 
     def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult:
-        key = SF_BAY_511.value()
-        if key is None:
-            return AdapterResult(reason=SF_BAY_511.missing_reason(), source_url=URL)
-        return fetch_feed(URL, self.name, day, ctx, params={"api_key": key})
+        value = SF_BAY_511.value()
+        if value is None:
+            return replay_or_refuse(URL, self.name, day, ctx, SF_BAY_511)
+        return fetch_feed(URL, self.name, day, ctx, params={"api_key": value})
 
 
 CLOSURES = SfBay511Closures()

@@ -227,7 +227,9 @@ def test_a_cassette_miss_reads_as_a_cassette_miss(registry_factory: Any) -> None
         raises=CacheMiss("t", "abc123def456", "2026-09-15"),
     )
     found = registry_factory(broken).fetch("closures", [MISSOURI], None, DAY)
-    assert found.answers[0].reason == "not in the cassette"
+    reason = found.answers[0].reason or ""
+    assert reason.startswith("tier 1 m: not in the cassette. Then tier 4 extraction:")
+    assert "abc123" not in reason
 
 
 def test_a_budget_exception_is_named_as_one(registry_factory: Any) -> None:
@@ -235,7 +237,7 @@ def test_a_budget_exception_is_named_as_one(registry_factory: Any) -> None:
 
     broken = FakeAdapter(name="m", jurisdictions=("tiger:state:29",), raises=BudgetExceeded("x"))
     found = registry_factory(broken).fetch("closures", [MISSOURI], None, DAY)
-    assert found.answers[0].reason == "API call budget exhausted"
+    assert (found.answers[0].reason or "").startswith("tier 1 m: API call budget exhausted.")
 
 
 def test_a_declared_reason_is_not_a_checked_answer(registry_factory: Any) -> None:
@@ -249,7 +251,9 @@ def test_a_declared_reason_is_not_a_checked_answer(registry_factory: Any) -> Non
     arizona = Jurisdiction(id="tiger:state:04", level="state", name="Arizona")
     found = registry_factory(keyless).fetch("closures", [arizona], None, DAY)
     assert not found.answers[0].checked
-    assert found.answers[0].reason == "LONGRUN_AZ511_API_KEY is not set"
+    assert (found.answers[0].reason or "").startswith(
+        "tier 1 az511: LONGRUN_AZ511_API_KEY is not set. Then tier 4 extraction:"
+    )
 
 
 def test_one_adapter_failing_does_not_stop_another(registry_factory: Any) -> None:
@@ -468,3 +472,192 @@ def test_every_declared_entry_point_target_imports() -> None:
         assert not failures, [f"{f.name}: {f.reason}" for f in failures]
         names.extend(a.name for a in adapters)
     assert len(names) == len(set(names)), "two entry points register the same adapter name"
+
+
+# --- the ladder (M17, ADR 0047) ---------------------------------------------
+
+
+class _Key:
+    """An `ApiKey`-shaped credential whose value the test decides."""
+
+    def __init__(self, value: str | None) -> None:
+        self._value = value
+
+    def value(self) -> str | None:
+        return self._value
+
+
+def test_a_failed_tier_falls_through_to_the_next(registry_factory: Any) -> None:
+    """Until M17 only the best covering tier was asked, so a tier-1 feed that was down left
+    Missouri unchecked while a working tier-3 portal sat unasked."""
+    down = FakeAdapter(name="t.one", jurisdictions=("tiger:state:29",), raises=RuntimeError("503"))
+    portal = FakeAdapter(
+        name="t.three",
+        jurisdictions=("tiger:state:29",),
+        tier=3,
+        result=AdapterResult(features=[_feature(tier=3, confidence=0.7)]),
+    )
+    found = registry_factory(down, portal).fetch("closures", [MISSOURI], None, DAY)
+    answer = found.answers[0]
+    assert answer.checked and answer.tier == 3 and answer.adapter == "t.three"
+    assert answer.reason == "tier 1 t.one: RuntimeError: 503", "the failure is named, long-form"
+    assert [a.outcome for a in answer.attempts] == ["failed", "answered"]
+    assert len(found.features) == 1
+
+
+def test_an_empty_answer_stops_the_ladder(registry_factory: Any) -> None:
+    """A feed read with nothing in it is evidence, and the next tier is not asked."""
+    quiet = FakeAdapter(name="t.one", jurisdictions=("tiger:state:29",))
+    portal = FakeAdapter(name="t.three", jurisdictions=("tiger:state:29",), tier=3)
+    found = registry_factory(quiet, portal).fetch("closures", [MISSOURI], None, DAY)
+    assert found.answers[0].checked and found.answers[0].tier == 1
+    assert portal.calls == []
+
+
+def test_a_state_feed_does_not_pre_empt_a_city_portal(registry_factory: Any) -> None:
+    """Per claimant: Missouri's feed climbs Missouri's ladder and the city's portal climbs
+    the city's. With one ladder per jurisdiction the tier-1 state feed would answer for
+    Kansas City and its permit portal would never be asked."""
+    modot = FakeAdapter(name="wzdx.modot", jurisdictions=("tiger:state:29",))
+    permits = FakeAdapter(name="portal.kc", jurisdictions=("tiger:place:2938000",), tier=3)
+    found = registry_factory(modot, permits).fetch("closures", [KCMO], None, DAY)
+    assert len(modot.calls) == 1 and len(permits.calls) == 1
+    answer = found.answers[0]
+    assert answer.checked and answer.tier == 1
+    assert answer.adapter == "wzdx.modot; portal.kc"
+
+
+def test_an_incomplete_source_contributes_without_ending_its_ladder(
+    registry_factory: Any,
+) -> None:
+    """The Pennsylvania Turnpike claims Pennsylvania and publishes only its own road, so its
+    answer adds records and the statewide tier below it is still asked."""
+    pa = Jurisdiction(id="tiger:state:42", level="state", name="Pennsylvania")
+    turnpike = FakeAdapter(
+        name="wzdx.paturnpike",
+        jurisdictions=("tiger:state:42",),
+        result=AdapterResult(features=[_feature()]),
+    )
+    turnpike.complete = False  # type: ignore[attr-defined]
+    statewide = FakeAdapter(
+        name="state511.pa",
+        jurisdictions=("tiger:state:42",),
+        tier=2,
+        result=AdapterResult(features=[_feature(tier=2)]),
+    )
+    found = registry_factory(turnpike, statewide).fetch("closures", [pa], None, DAY)
+    assert len(statewide.calls) == 1
+    assert len(found.features) == 2 and found.answers[0].tier == 1
+
+
+def test_complementary_facets_are_all_asked(registry_factory: Any) -> None:
+    """Work zones and street-use permits describe different things; a facet is how a
+    source says it is a complement rather than a substitute."""
+    zones = FakeAdapter(name="wzdx.modot", jurisdictions=("tiger:state:29",))
+    permits = FakeAdapter(name="portal.mo", jurisdictions=("tiger:state:29",), tier=3)
+    permits.facet = "permits"  # type: ignore[attr-defined]
+    registry_factory(zones, permits).fetch("closures", [MISSOURI], None, DAY)
+    assert len(zones.calls) == 1 and len(permits.calls) == 1
+
+
+def test_a_missing_key_is_skipped_for_free_and_falls_through(registry_factory: Any) -> None:
+    """A keyed adapter is still asked so it can replay what was recorded; with nothing to
+    replay it reports `key_missing`, spends no slot, and the next tier is tried."""
+    keyed = FakeAdapter(
+        name="wzdx.keyed",
+        jurisdictions=("tiger:state:29",),
+        result=AdapterResult(reason="LONGRUN_X is not set", key_missing=True),
+    )
+    keyed.key = _Key(None)  # type: ignore[attr-defined]
+    portal = FakeAdapter(name="portal.mo", jurisdictions=("tiger:state:29",), tier=3)
+    registry = registry_factory(keyed, portal)
+    found = registry.fetch("closures", [MISSOURI], None, DAY)
+    assert found.answers[0].checked and found.answers[0].tier == 3
+    assert found.answers[0].attempts[0].outcome == "skipped"
+    assert registry._fetches == {"closures": 1}, "only the portal's fetch is counted"
+
+
+def test_a_ceiling_ends_a_ladder_and_says_so_in_the_manifest() -> None:
+    """A ceiling is a statement about this plan's budget, not the jurisdiction's sources,
+    so it never falls through to tier 4 - and it reaches the manifest as a degradation."""
+    budget = Budget()
+    modot = FakeAdapter(name="wzdx.modot", jurisdictions=("tiger:state:29",))
+    registry = AdapterRegistry(SqliteCache(), budget, adapters=[modot])
+    registry._fetches["closures"] = MAX_ADAPTER_FETCHES
+    found = registry.fetch("closures", [MISSOURI], None, DAY)
+    assert "ceiling" in (found.answers[0].reason or "")
+    assert "tier 4" not in (found.answers[0].reason or "")
+    assert modot.calls == []
+    assert any("ceiling" in line for line in budget.degradation)
+
+
+def test_the_same_question_twice_is_one_fetch(registry_factory: Any) -> None:
+    """The loop scores every candidate on one context. Before M17 each pass spent a fresh
+    slot on the same answer, and candidates scored later met the ceiling first."""
+    from shapely.geometry import box
+
+    feed = FakeAdapter(name="wzdx.modot", jurisdictions=("tiger:state:29",))
+    feed.scope = "feed"  # type: ignore[attr-defined]
+    portal = FakeAdapter(name="portal.mo", jurisdictions=("tiger:state:29",))
+    portal.facet = "permits"  # type: ignore[attr-defined]
+    registry = registry_factory(feed, portal)
+    for corridor in (box(0, 0, 1, 1), box(0, 0, 1, 1), box(5, 5, 6, 6)):
+        registry.fetch("closures", [MISSOURI], corridor, DAY)
+    assert len(feed.calls) == 1, "a statewide feed does not depend on the corridor"
+    assert len(portal.calls) == 2, "a bounding-box source does, and is asked per corridor"
+    assert registry._fetches == {"closures": 3}
+
+
+def test_one_kind_exhausting_its_ceiling_leaves_another_alone(registry_factory: Any) -> None:
+    registry = registry_factory(
+        FakeAdapter(name="portal.nps", jurisdictions=("tiger:state:29",), kind="trail_status")
+    )
+    registry._fetches["closures"] = MAX_ADAPTER_FETCHES
+    found = registry.fetch("trail_status", [MISSOURI], None, DAY)
+    assert found.answers[0].checked
+
+
+def test_the_null_extractor_spends_nothing(registry_factory: Any) -> None:
+    """It reads no page, so charging it a slot was charging for a sentence."""
+    js = [
+        Jurisdiction(id=f"tiger:county:{29000 + i}", level="county", name=f"C{i}")
+        for i in range(MAX_ADAPTER_FETCHES + 5)
+    ]
+    registry = registry_factory()
+    found = registry.fetch("closures", js, None, DAY)
+    assert not any("ceiling" in (a.reason or "") for a in found.answers)
+    assert registry._fetches == {}
+
+
+def test_an_extractor_that_raises_is_a_reason_not_a_crash(registry_factory: Any) -> None:
+    """Before M17 `_extracted` had no try/except, so one bad page date took down the whole
+    scorer - tier-1 answers included."""
+
+    class Exploding:
+        def extract(self, request: Any, ctx: Any) -> AdapterResult:
+            raise ValueError("feature end precedes its start")
+
+    found = registry_factory(extractor=Exploding()).fetch("closures", [WYANDOTTE], None, DAY)
+    assert not found.answers[0].checked
+    assert "feature end precedes its start" in (found.answers[0].reason or "")
+
+
+def test_a_failed_peer_is_named_on_an_answered_jurisdiction(registry_factory: Any) -> None:
+    """Phoenix: AZDOT answered and Maricopa's cassette was missing. The jurisdiction is
+    checked, and the sheet still says which of its two sources did not answer."""
+    phoenix = Jurisdiction(
+        id="tiger:place:0455000",
+        level="place",
+        name="Phoenix",
+        within=("tiger:state:04", "tiger:county:04013"),
+    )
+    azdot = FakeAdapter(name="wzdx.azdot", jurisdictions=("tiger:state:04",))
+    maricopa = FakeAdapter(
+        name="wzdx.maricopa",
+        jurisdictions=("tiger:county:04013",),
+        result=AdapterResult(reason="not in the cassette"),
+    )
+    found = registry_factory(azdot, maricopa).fetch("closures", [phoenix], None, DAY)
+    answer = found.answers[0]
+    assert answer.checked and answer.tier == 1
+    assert answer.reason == "tier 1 wzdx.maricopa: not in the cassette"

@@ -76,6 +76,52 @@ class Feature(BaseModel):
         return True
 
 
+#: What happened when the registry asked one adapter about one jurisdiction (M17).
+#: `skipped`: its key is not set and nothing was recorded to replay, so nothing was tried.
+#: `ceiling`: the plan's fetch ceiling for this kind was reached before it could be asked.
+AttemptOutcome = Literal["answered", "failed", "skipped", "ceiling"]
+
+
+class Attempt(BaseModel):
+    """One rung of a ladder, as climbed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tier: Tier
+    adapter: str
+    outcome: AttemptOutcome
+    reason: str | None = None
+
+
+def render_attempts(attempts: tuple[Attempt, ...], *, checked: bool) -> str | None:
+    """The one sentence a coverage entry carries about everything that did not answer.
+
+    **A single tier of failures reads exactly as it always has** - the reasons themselves,
+    deduplicated and joined - so a jurisdiction that was only ever asked one question
+    reports that question's answer and nothing more. More than one tier names each, in the
+    order climbed: `tier 1 wzdx.sfbay: <key reason>. Then tier 4 extraction: <reason>`.
+    ". Then " rather than "; " because a key reason already contains a semicolon.
+
+    A *checked* answer names its failures the long way even when there is one, because
+    there the failure is not the answer - "peer wzdx.maricopa: not in the cassette" on a
+    jurisdiction AZDOT answered is a different claim from the bare reason alone.
+    """
+    failed = [a for a in attempts if a.outcome != "answered"]
+    if not failed:
+        return None
+    tiers: dict[int, list[Attempt]] = {}
+    for attempt in failed:
+        tiers.setdefault(int(attempt.tier), []).append(attempt)
+    if len(tiers) == 1 and not checked:
+        return "; ".join(dict.fromkeys(a.reason or "no reason given" for a in failed))
+    parts = []
+    for tier, group in sorted(tiers.items()):
+        names = ", ".join(dict.fromkeys(a.adapter for a in group))
+        reasons = "; ".join(dict.fromkeys(a.reason or "no reason given" for a in group))
+        parts.append(f"tier {tier} {names}: {reasons}")
+    return ". Then ".join(parts)
+
+
 class JurisdictionAnswer(BaseModel):
     """What one jurisdiction, for one kind, actually answered (scope 7.6, 7.10).
 
@@ -103,6 +149,10 @@ class JurisdictionAnswer(BaseModel):
     reason: str | None = None
     vintage: str | None = None
     confidence: Confidence | None = None
+    #: Every adapter asked, in the order the ladder was climbed (M17). `reason` is rendered
+    #: from these by `render_attempts`; they are kept whole so a caller can tell a skipped
+    #: key from a failed feed without parsing the sentence.
+    attempts: tuple[Attempt, ...] = ()
 
     def label(self) -> str:
         """How this jurisdiction is named in the plan sheet.

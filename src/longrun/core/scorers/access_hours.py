@@ -63,6 +63,7 @@ from typing import TYPE_CHECKING
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.data.jurisdictions import (
     JurisdictionScan,
+    jurisdictions_for,
     route_jurisdictions,
     unqualified_reason,
 )
@@ -185,7 +186,7 @@ def _gates(
         result.coverage.append(
             CoverageEntry(source=name, kind=name, checked=False, reason=unqualified)
         )
-    agencies = [j for j in scan.jurisdictions if j.source == "padus"]
+    agencies = jurisdictions_for(name, scan)
 
     if not scan.parks_checked:
         result.coverage.append(
