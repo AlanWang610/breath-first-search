@@ -49,6 +49,8 @@ from longrun.core.models.jurisdiction import Jurisdiction
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
+    from longrun.core.models.features import FeatureKind
+
 WGS84 = 4326
 
 #: Why a region has no cell-coverage layer, in the one place a build says so.
@@ -465,6 +467,14 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
     counts["with_adapter"] = len(covered)
     for tier, n in sorted(by_tier.items()):
         counts[f"tier_{tier}"] = n
+    # The other three kinds, prefixed so the closure counts every existing build manifest
+    # carries keep their names. Each kind is asked of the jurisdictions its scorer asks.
+    for kind in ("trail_status", "access_hours", "speed_survey"):
+        asked = [j for j in found if (j.source == "tiger") == (kind == "speed_survey")]
+        kind_covered, kind_tiers = adapter_coverage(asked, kind)
+        counts[f"{kind}.with_adapter"] = len(kind_covered)
+        for tier, n in sorted(kind_tiers.items()):
+            counts[f"{kind}.tier_{tier}"] = n
 
     tiers = ", ".join(f"{n} at tier {tier}" for tier, n in sorted(by_tier.items()))
     adapters = (
@@ -481,8 +491,12 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
 
 def adapter_coverage(
     jurisdictions: list[Jurisdiction],
+    kind: FeatureKind = "closures",
 ) -> tuple[list[Jurisdiction], dict[int, int]]:
-    """Which jurisdictions have a closure adapter, and at what tier (§13 step 4).
+    """Which jurisdictions have an adapter for a kind, and at what tier (§13 step 4).
+
+    Closures only until M17, which left a region build silent about trail status, access
+    hours and speed surveys whatever was registered for them.
 
     The half of step 4 that has said "the registry is M4" since M3. It asks the registry
     through `adapters_for`, which performs no fetch and spends no budget - a region build has
@@ -501,7 +515,7 @@ def adapter_coverage(
         covered: list[Jurisdiction] = []
         by_tier: dict[int, int] = {}
         for jurisdiction in jurisdictions:
-            infos = registry.adapters_for("closures", jurisdiction)
+            infos = registry.adapters_for(kind, jurisdiction)
             if not infos:
                 continue
             covered.append(jurisdiction)
