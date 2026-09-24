@@ -161,6 +161,13 @@ def test_timestamps_survive_every_format_the_feeds_use() -> None:
     assert parse_timestamp(None) is None
 
 
+def test_every_parsed_record_keeps_its_publisher_id() -> None:
+    """`Feature.ref` traces a flag back to its row. WZDx requires an `id` on every feature."""
+    for short in ("kdot", "modot", "maricopa"):
+        features = parse_wzdx(_payload(short))
+        assert features and all(f.ref for f in features), short
+
+
 def test_a_parsed_time_is_naive_utc_so_two_feeds_share_one_clock() -> None:
     """ADR 0046. Naive, because comparing an aware datetime against a naive one raises;
     UTC, because Maricopa publishes `-07:00` and Missouri publishes `Z`, and stripping both

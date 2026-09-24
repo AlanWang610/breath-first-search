@@ -536,7 +536,7 @@ def test_an_incomplete_source_contributes_without_ending_its_ladder(
     turnpike = FakeAdapter(
         name="wzdx.paturnpike",
         jurisdictions=("tiger:state:42",),
-        result=AdapterResult(features=[_feature()]),
+        result=AdapterResult(features=[_feature(detail="turnpike", category="turnpike")]),
     )
     turnpike.complete = False  # type: ignore[attr-defined]
     statewide = FakeAdapter(
@@ -661,3 +661,63 @@ def test_a_failed_peer_is_named_on_an_answered_jurisdiction(registry_factory: An
     answer = found.answers[0]
     assert answer.checked and answer.tier == 1
     assert answer.reason == "tier 1 wzdx.maricopa: not in the cassette"
+
+
+# --- volume hygiene (M17) ---------------------------------------------------
+
+
+def _at(lon: float, lat: float) -> dict[str, Any]:
+    return {"type": "Point", "coordinates": [lon, lat]}
+
+
+def test_a_statewide_answer_is_clipped_to_the_corridor(registry_factory: Any) -> None:
+    """Jackson County used to "have" all of Missouri's work zones: the feed is statewide and
+    every jurisdiction it covered reported the state's total. A record with no geometry is
+    about its whole jurisdiction and is kept."""
+    from shapely.geometry import box
+
+    feed = FakeAdapter(
+        name="wzdx.modot",
+        jurisdictions=("tiger:state:29",),
+        result=AdapterResult(
+            features=[
+                _feature(geometry=_at(-94.5, 39.1)),  # Kansas City, in the corridor
+                _feature(geometry=_at(-90.2, 38.6)),  # St Louis, not
+                _feature(geometry={}, category="statewide notice"),
+            ]
+        ),
+    )
+    found = registry_factory(feed).fetch("closures", [JACKSON], box(-94.7, 38.9, -94.3, 39.3), DAY)
+    assert len(found.features) == 2
+    assert found.answers[0].count == 2
+    assert all(f.geometry.get("coordinates") != [-90.2, 38.6] for f in found.features)
+
+
+def test_one_record_published_by_two_peers_is_counted_once(registry_factory: Any) -> None:
+    """An aggregator republishing a state feed is two sources and one work zone."""
+    zone = _feature(geometry=_at(-112.07, 33.45), category="road-closure")
+    azdot = FakeAdapter(
+        name="wzdx.azdot", jurisdictions=("tiger:state:04",), result=AdapterResult([zone])
+    )
+    maricopa = FakeAdapter(
+        name="wzdx.maricopa",
+        jurisdictions=("tiger:county:04013",),
+        result=AdapterResult([zone.model_copy(update={"ref": "their-own-id"})]),
+    )
+    phoenix = Jurisdiction(
+        id="tiger:place:0455000",
+        level="place",
+        name="Phoenix",
+        within=("tiger:state:04", "tiger:county:04013"),
+    )
+    found = registry_factory(azdot, maricopa).fetch("closures", [phoenix], None, DAY)
+    assert len(found.features) == 1
+    assert found.answers[0].count == 1
+
+
+def test_who_covered_a_jurisdiction_reaches_the_coverage_entry(registry_factory: Any) -> None:
+    """`covered_by` stopped at `JurisdictionAnswer`, so the sheet could not say one fetch
+    had covered a dozen places."""
+    modot = FakeAdapter(name="wzdx.modot", jurisdictions=("tiger:state:29",))
+    found = registry_factory(modot).fetch("closures", [KCMO], None, DAY)
+    assert found.answers[0].coverage("closures").covered_by == "tiger:state:29"

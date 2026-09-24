@@ -103,6 +103,12 @@ def parse_timestamp(value: Any) -> datetime | None:
     return parsed
 
 
+def _ref(entry: dict[str, Any]) -> str | None:
+    """The feature's own `id`, which WZDx requires and publishers mostly supply."""
+    value = entry.get("id")
+    return str(value) if value not in (None, "") else None
+
+
 def _category(properties: dict[str, Any]) -> str:
     """The category `closures.blocks_pedestrians` tests.
 
@@ -207,6 +213,7 @@ def parse_wzdx(
                     end=parse_timestamp(properties.get("end_date")),
                     source_url=source_url,
                     detail=_describe(properties),
+                    ref=_ref(entry),
                 )
             )
         except ValueError:

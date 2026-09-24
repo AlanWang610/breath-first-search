@@ -39,6 +39,10 @@ class Feature(BaseModel):
     end: datetime | None = None
     source_url: str | None = None
     detail: str | None = None
+    #: The publisher's own id for the record, where it has one (a WZDx feature `id`). For
+    #: tracing a flag back to its source row; never used to match records across two
+    #: publishers, whose id spaces are their own.
+    ref: str | None = None
 
     @field_validator("start", "end", mode="after")
     @classmethod
@@ -175,6 +179,7 @@ class JurisdictionAnswer(BaseModel):
             reason=self.reason,
             confidence=self.confidence,
             vintage=self.vintage,
+            covered_by=self.covered_by,
         )
 
 

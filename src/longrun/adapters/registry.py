@@ -28,8 +28,10 @@ not become an ImportError traceback because somebody's third-party adapter is br
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from longrun.adapters.base import (
@@ -265,7 +267,14 @@ class AdapterRegistry:
         dropped = list(jurisdictions)[MAX_JURISDICTIONS:]
 
         ladders = {j.id: self._ladders(kind, j) for j in considered}
-        results = self._climb(kind, considered, ladders, polygon, day)
+        # Clipped here, after the memo, because a feed-scoped answer is shared by every
+        # corridor the plan asks about and each corridor is owed only its own records.
+        results = {
+            name: (adapter, _clipped(result, polygon))
+            for name, (adapter, result) in self._climb(
+                kind, considered, ladders, polygon, day
+            ).items()
+        }
 
         features: list[Feature] = []
         for _, result in results.values():
@@ -289,7 +298,7 @@ class AdapterRegistry:
             )
             for j in dropped
         )
-        return FeatureSet.from_answers(features, answers)
+        return FeatureSet.from_answers(_distinct(features), answers)
 
     # --- the ladder ----------------------------------------------------------
 
@@ -463,9 +472,16 @@ class AdapterRegistry:
                 )
             return self._extracted(kind, jurisdiction, day, polygon, attempts)
 
-        count = 0
-        for _, result in answered:
-            count += sum(1 for f in result.features if f.jurisdiction in (None, jurisdiction.id))
+        count = len(
+            _distinct(
+                [
+                    f
+                    for _, result in answered
+                    for f in result.features
+                    if f.jurisdiction in (None, jurisdiction.id)
+                ]
+            )
+        )
         # The id the first answering adapter reached this jurisdiction through: itself, or
         # the county or state whose one fetch covered it.
         through = next(
@@ -555,7 +571,7 @@ class AdapterRegistry:
                 checked=result.answered,
                 tier=4 if result.answered else None,
                 adapter="extraction" if result.answered else None,
-                count=len(result.features),
+                count=len(_distinct(list(result.features))),
                 reason=render_attempts(attempts, checked=result.answered),
                 confidence=(
                     round(sum(confidences) / len(confidences), EXTRACTION_CONFIDENCE_DP)
@@ -583,6 +599,81 @@ def build_registry(
     different questions, and a golden replays a cassette that answers none of the plan's.
     """
     return AdapterRegistry(cache, budget, offline=offline, extractor=extractor)
+
+
+def _clipped(result: AdapterResult, polygon: Any) -> AdapterResult:
+    """An answer with only the records whose extent meets the corridor's (M17).
+
+    A statewide feed returns the whole state, and every jurisdiction it covered used to
+    report the state's total as its own count - Jackson County "had" all 480 Missouri work
+    zones. A record with no geometry is about its whole jurisdiction and is kept: that is
+    how an agency alert or a tier-4 reading arrives. With no corridor (a test's `None`)
+    nothing can be clipped against, so nothing is.
+    """
+    if polygon is None or not result.features:
+        return result
+    try:
+        west, south, east, north = (float(v) for v in polygon.bounds)
+    except Exception:  # noqa: BLE001 - a corridor with no bounds clips nothing
+        return result
+    kept = []
+    for feature in result.features:
+        extent = _extent(feature.geometry)
+        if extent is None or (
+            extent[0] <= east and extent[2] >= west and extent[1] <= north and extent[3] >= south
+        ):
+            kept.append(feature)
+    if len(kept) == len(result.features):
+        return result
+    return replace(result, features=kept)
+
+
+def _extent(geometry: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """(west, south, east, north) of a GeoJSON geometry, or `None` if it has no points."""
+    xs: list[float] = []
+    ys: list[float] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            walk(node.get("coordinates"))
+            for child in node.get("geometries") or ():
+                walk(child)
+        elif isinstance(node, (list, tuple)):
+            if len(node) >= 2 and all(isinstance(v, (int, float)) for v in node[:2]):
+                xs.append(float(node[0]))
+                ys.append(float(node[1]))
+            else:
+                for child in node:
+                    walk(child)
+
+    walk(geometry)
+    return (min(xs), min(ys), max(xs), max(ys)) if xs else None
+
+
+def _distinct(features: list[Feature]) -> list[Feature]:
+    """Each record once, however many peers published it (M17).
+
+    Identity is the content - kind, category, geometry, window and description - rather
+    than `ref`, because two publishers' id spaces are their own: an aggregator republishing
+    a state feed may keep the ids or mint new ones, and two unrelated feeds may both have a
+    `1`. The description is in the key because two notices read off one page can share a
+    jurisdiction-wide geometry and have no window, and are still two notices.
+    """
+    seen: set[tuple[Any, ...]] = set()
+    out: list[Feature] = []
+    for feature in features:
+        key = (
+            feature.kind,
+            feature.category,
+            json.dumps(feature.geometry, sort_keys=True, default=str),
+            feature.start,
+            feature.end,
+            feature.detail,
+        )
+        if key not in seen:
+            seen.add(key)
+            out.append(feature)
+    return out
 
 
 def _ceiling_reason() -> str:
