@@ -172,7 +172,12 @@ def is_standing_condition(feature: Feature) -> bool:
 
 
 def is_hard(feature: Feature, parallel: bool, when: datetime | None) -> bool:
-    """All five of ADR 0013's gates, in one place so the rule is readable."""
+    """All five of ADR 0013's gates, in one place so the rule is readable.
+
+    `when` is the arrival as a naive **UTC** instant - the frame a feature's window is
+    stored in (ADR 0046) - or `None` when it cannot be established, which does not excuse a
+    closure: a runner whose arrival nobody can place may well meet it.
+    """
     return (
         blocks_pedestrians(feature)
         and parallel
@@ -190,7 +195,7 @@ def closures(
     etas: list[datetime] | None = None,
 ) -> ScorerResult:
     """Overlaps with active and planned closures, per jurisdiction crossed (scope 7.6)."""
-    from longrun.core.geo.segments import corridor, corridor_polygon
+    from longrun.core.data.features import route_features
 
     result = ScorerResult(name=name)
     scan = route_jurisdictions(route, ctx)
@@ -240,10 +245,8 @@ def closures(
         )
         return _summarise(result, segments, {}, jurisdictions=len(scan.jurisdictions))
 
-    day = ctx.clock.now().date()
-    found: FeatureSet = ctx.features.fetch(
-        name, scan.jurisdictions, corridor_polygon(corridor(route)), day
-    )
+    clock = route_features(name, scan.jurisdictions, route, ctx)
+    found: FeatureSet = clock.found
     for answer in found.answers:
         result.coverage.append(answer.coverage(name))
 
@@ -256,7 +259,8 @@ def closures(
             continue  # not on this route at all; the adapter answered about a polygon
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
-        when = _eta_for(segment, segments, etas)
+        arrival = _eta_for(segment, segments, etas)
+        when = clock.to_utc(arrival) if arrival is not None else None
         hard = is_hard(feature, parallel, when)
 
         counts.setdefault(segment_id, {})

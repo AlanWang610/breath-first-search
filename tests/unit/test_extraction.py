@@ -71,7 +71,7 @@ class FakeExtractor:
         return self.result
 
 
-def _extracted_feature(confidence: float) -> Feature:
+def _extracted_feature(confidence: float, what: str | None = None) -> Feature:
     return Feature(
         kind="closures",
         category="extracted",
@@ -79,6 +79,7 @@ def _extracted_feature(confidence: float) -> Feature:
         tier=4,
         confidence=confidence,
         jurisdiction=UNCOVERED.id,
+        detail=what,
     )
 
 
@@ -145,7 +146,12 @@ def test_an_extracted_record_reaches_the_feature_set_and_not_only_the_count() ->
     `count` and the set are asserted together because the two disagreeing is the whole bug.
     """
     extractor = FakeExtractor(
-        result=AdapterResult(features=[_extracted_feature(0.3), _extracted_feature(0.3)])
+        result=AdapterResult(
+            features=[
+                _extracted_feature(0.3, "Low-water crossing closed"),
+                _extracted_feature(0.3, "Campground road washed out"),
+            ]
+        )
     )
 
     found = _registry(extractor).fetch("closures", [UNCOVERED], CORRIDOR, DAY)
@@ -281,7 +287,12 @@ def test_a_tier_four_answer_reports_its_confidence_to_the_manifest() -> None:
     vague ones, and mean is how every other confidence in this project is summarised.
     """
     extractor = FakeExtractor(
-        result=AdapterResult(features=[_extracted_feature(0.2), _extracted_feature(0.4)])
+        result=AdapterResult(
+            features=[
+                _extracted_feature(0.2, "Trail muddy past mile 4"),
+                _extracted_feature(0.4, "Bridge out at Big Spring"),
+            ]
+        )
     )
 
     answer = _answer_from(extractor)

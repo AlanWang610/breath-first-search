@@ -360,7 +360,7 @@
       "checked": false,
       "jurisdiction": "San Francisco Maritime National Historical Park (padus:NPS)",
       "kind": "trail_status",
-      "reason": "LONGRUN_NPS_API_KEY is not set; the NPS data API needs a free key (https://www.nps.gov/subjects/developer/get-started.htm)",
+      "reason": "tier 3 portal.nps: LONGRUN_NPS_API_KEY is not set; the NPS data API needs a free key (https://www.nps.gov/subjects/developer/get-started.htm). Then tier 4 extraction: tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "trail_status",
       "tier": null,
       "vintage": null

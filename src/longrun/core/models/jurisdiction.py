@@ -36,9 +36,35 @@ JurisdictionLevel = Literal["state", "county", "place", "park"]
 #: PAD-US `Mang_Name` codes that identify one agency nationally. Everything else — `CITY`,
 #: `CNTY`, `SDOL`, `REG`, `NGO`, `PVT`, `UNK` — names a class of manager, and an id built
 #: from one of those has to carry the state or it claims the whole country.
+#:
+#: **Measured, not recalled** (M17, 2026-09-24): the distinct `Mang_Name` values where
+#: `Mang_Type = 'FED'` on USGS's `PADUS_Management_Areas` service. The list this replaced
+#: had `ACE` and `BOR`, neither of which PAD-US uses - the Army Corps is `USACE` and
+#: Reclamation is `USBR` - and lacked `ARS`, `DOE` and `NOAA`. So a Corps lake was being
+#: fragmented into one jurisdiction per state. It is now the *fallback* only: a row that
+#: carries `Mang_Type` is judged by it (`is_federal`), and a network contract test checks
+#: this set still covers what the service calls federal.
 FEDERAL_AGENCY_CODES = frozenset(
-    {"NPS", "USFS", "FWS", "BLM", "BOR", "DOD", "TVA", "ACE", "NRCS", "OTHF", "USBR"}
+    {
+        "ARS",
+        "BLM",
+        "DOD",
+        "DOE",
+        "FWS",
+        "NOAA",
+        "NPS",
+        "NRCS",
+        "OTHF",
+        "TVA",
+        "USACE",
+        "USBR",
+        "USFS",
+    }
 )
+
+#: PAD-US `Mang_Type` for a federal manager. The type is the source's own statement of
+#: federal-ness; the code list above is what is used when a row does not carry it.
+FEDERAL_AGENCY_TYPE = "FED"
 
 #: Agency codes that name nobody at all. PAD-US uses several spellings of "unknown", and a
 #: park managed by nobody-in-particular must not become a jurisdiction an adapter can claim.
@@ -84,20 +110,35 @@ class AdapterInfo(BaseModel):
     tier: Tier
     kind: FeatureKind
     source: str
+    #: Whether the adapter can actually be asked: `False` when it declares a key that is
+    #: not set (M17). A region with an adapter nobody can ask is not a covered region, and
+    #: counting it as one is the inflation `adapters/wzdx/__init__.py` warned about.
+    key_present: bool = True
 
 
 def tiger_id(level: str, geoid: str) -> str:
     return f"tiger:{level}:{geoid}"
 
 
-def padus_id(agency: str, statefp: str | None = None) -> str:
-    """A PAD-US agency's id, carrying the state unless the code is federal.
+def is_federal(agency: str | None, agency_type: str | None = None) -> bool:
+    """Whether a PAD-US manager is one agency nationally.
+
+    `Mang_Type` decides when the row carries it, because it is the source saying so; the
+    code list decides only for a fixture frozen before that column was loaded.
+    """
+    if agency_type is not None and agency_type.strip():
+        return agency_type.strip().upper() == FEDERAL_AGENCY_TYPE
+    return agency is not None and agency.strip().upper() in FEDERAL_AGENCY_CODES
+
+
+def padus_id(agency: str, statefp: str | None = None, agency_type: str | None = None) -> str:
+    """A PAD-US agency's id, carrying the state unless the manager is federal.
 
     A federal code with a state would fragment one agency into fifty — an adapter for the
     National Park Service covers Yosemite and Acadia alike.
     """
     code = agency.strip().upper()
-    if code in FEDERAL_AGENCY_CODES or statefp is None:
+    if is_federal(code, agency_type) or statefp is None:
         return f"padus:{code}"
     return f"padus:{code}:{statefp}"
 
@@ -109,10 +150,12 @@ def is_unknown_agency(agency: str | None) -> bool:
 
 __all__ = [
     "FEDERAL_AGENCY_CODES",
+    "FEDERAL_AGENCY_TYPE",
     "UNKNOWN_AGENCY_CODES",
     "AdapterInfo",
     "Jurisdiction",
     "JurisdictionLevel",
+    "is_federal",
     "is_unknown_agency",
     "padus_id",
     "tiger_id",

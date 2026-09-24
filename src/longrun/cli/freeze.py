@@ -433,19 +433,29 @@ def _record_adapters(route: Any, ctx: Any, when: datetime) -> list[str]:
     A WZDx feed for a past date can no more be re-fetched than a forecast can, so record
     before the pinned date arrives and treat the file as permanent.
     """
-    from longrun.adapters.registry import AdapterRegistry
-    from longrun.core.data.jurisdictions import route_jurisdictions
+    from longrun.adapters.registry import build_registry
+    from longrun.core.data.jurisdictions import (
+        SCORED_KINDS,
+        jurisdictions_for,
+        route_jurisdictions,
+    )
     from longrun.core.geo.segments import corridor, corridor_polygon
 
     scan = route_jurisdictions(route, ctx)
     if not scan.jurisdictions:
         return [f"adapters: nothing to ask - {'; '.join(scan.reasons) or 'no jurisdictions'}"]
 
-    registry = AdapterRegistry(ctx.cache, ctx.budget, offline=False)
+    registry = build_registry(ctx.cache, ctx.budget, offline=False)
     polygon = corridor_polygon(corridor(route))
     lines: list[str] = []
-    for kind in ("closures", "trail_status", "access_hours"):
-        found = registry.fetch(kind, scan.jurisdictions, polygon, when.date())
+    # The questions a plan will put, and only those: each kind asks the jurisdictions its
+    # scorer asks, so nothing is recorded that no replay will read.
+    for kind in SCORED_KINDS:
+        asked = jurisdictions_for(kind, scan)
+        if not asked:
+            lines.append(f"{kind}: no jurisdiction of this kind on the route")
+            continue
+        found = registry.fetch(kind, asked, polygon, when.date())
         answered = sum(1 for a in found.answers if a.checked)
         lines.append(
             f"{kind}: {answered} of {len(found.answers)} jurisdiction(s) answered, "

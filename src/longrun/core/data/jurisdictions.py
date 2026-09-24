@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from longrun.core.models.jurisdiction import (
-    FEDERAL_AGENCY_CODES,
     Jurisdiction,
+    is_federal,
     is_unknown_agency,
     padus_id,
     tiger_id,
@@ -38,6 +38,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from geopandas import GeoDataFrame
 
     from longrun.core.models.context import ScorerContext
+    from longrun.core.models.features import FeatureKind
     from longrun.core.models.geometry import Route
 
 #: TIGER levels, coarsest first. Order matters twice: `within` is built by walking it, and
@@ -48,17 +49,37 @@ LEVELS: tuple[str, ...] = ("state", "county", "place")
 #: purpose - a gate across the trail can sit a few hundred metres off the line.
 PARK_BUFFER_M = 500.0
 
+#: The share of a place's area a county must hold to count as containing it. TIGER places
+#: and counties are drawn from one topology, so two that merely share an edge intersect in
+#: zero area; this is only a guard against a frozen fixture's float noise. A real split -
+#: Kansas City lies in four counties - clears it by orders of magnitude.
+PLACE_COUNTY_SHARE = 1e-3
 
-def from_tiger_row(level: str, geoid: str, name: str, statefp: str | None = None) -> Jurisdiction:
+
+def from_tiger_row(
+    level: str,
+    geoid: str,
+    name: str,
+    statefp: str | None = None,
+    counties: tuple[str, ...] = (),
+) -> Jurisdiction:
     """One TIGER boundary as a jurisdiction.
 
     `statefp` is a column on every row of `tiger.boundaries`, so a place's state is read
     rather than sliced off the front of its GEOID. The slice would be a silent wrong
     answer often enough to matter: county `29095` is a lexical prefix of place `2909512`.
+
+    `counties` are the county GEOIDs a place overlaps, found by geometry (`_counties_of`),
+    never by prefix. Until M17 a place recorded only its state, so an adapter registered
+    against a *county* - `wzdx.maricopa`, `wzdx.sfbay` - never answered for a city inside
+    it: San Francisco the county reported 511 SF Bay while San Francisco the city fell to
+    tier 4, on the same ground.
     """
     within: list[str] = []
     if statefp and level != "state":
         within.append(tiger_id("state", statefp))
+    if level == "place":
+        within.extend(tiger_id("county", c) for c in counties)
     return Jurisdiction(
         id=tiger_id(level, geoid),
         level=level,  # type: ignore[arg-type]
@@ -86,7 +107,7 @@ def from_padus_row(
     code = agency.strip().upper()
     within = (tiger_id("state", statefp),) if statefp else ()
     return Jurisdiction(
-        id=padus_id(code, statefp),
+        id=padus_id(code, statefp, agency_type),
         level="park",
         name=name or code,
         within=within,
@@ -138,6 +159,45 @@ def _state_lookup(boundaries: Any) -> list[tuple[Any, str]]:
     return out
 
 
+def _county_lookup(boundaries: Any) -> list[tuple[Any, str]]:
+    """County polygons paired with their GEOID, for placing a place inside them."""
+    if boundaries is None or not len(boundaries):
+        return []
+    out: list[tuple[Any, str]] = []
+    for _, row in boundaries.iterrows():
+        geoid = _column(row, "geoid")
+        geometry = getattr(row, "geometry", None)
+        if _column(row, "level") == "county" and geoid and geometry is not None:
+            if not geometry.is_empty:
+                out.append((geometry, geoid))
+    return out
+
+
+def _counties_of(geometry: Any, lookup: list[tuple[Any, str]]) -> tuple[str, ...]:
+    """Every county holding a real share of a place, by area, in GEOID order.
+
+    By area rather than `intersects`, because a city that only *touches* the next county
+    along their shared edge is not in it, and `intersects` says it is. More than one is
+    ordinary and kept: a county adapter answers for the part of a city inside its county,
+    and the registry clips what it returns to the corridor anyway.
+    """
+    if geometry is None or geometry.is_empty or not lookup:
+        return ()
+    try:
+        area = geometry.area
+        if area <= 0:
+            return ()
+        found = {
+            geoid
+            for shape, geoid in lookup
+            if shape.intersects(geometry)
+            and shape.intersection(geometry).area / area >= PLACE_COUNTY_SHARE
+        }
+    except Exception:  # noqa: BLE001 - an invalid geometry is uncontained, never fatal
+        return ()
+    return tuple(sorted(found))
+
+
 def _state_of(geometry: Any, lookup: list[tuple[Any, str]]) -> str | None:
     """Which state a park sits in, by intersecting the boundaries already resolved.
 
@@ -170,6 +230,7 @@ def jurisdictions_from_frames(
     GEOID extends a county's.
     """
     found: dict[str, Jurisdiction] = {}
+    counties = _county_lookup(boundaries)
 
     if boundaries is not None and len(boundaries):
         for _, row in boundaries.iterrows():
@@ -178,7 +239,10 @@ def jurisdictions_from_frames(
             if level not in LEVELS or not geoid:
                 continue
             name = _column(row, "name") or geoid
-            record = from_tiger_row(level, geoid, name, _column(row, "statefp"))
+            inside = (
+                _counties_of(getattr(row, "geometry", None), counties) if level == "place" else ()
+            )
+            record = from_tiger_row(level, geoid, name, _column(row, "statefp"), inside)
             found.setdefault(record.id, record)
 
     # A park's state is resolved against the boundary polygons already fetched, because
@@ -206,11 +270,26 @@ def jurisdictions_from_frames(
                 statefp,
             )
             if park is not None:
-                found.setdefault(park.id, park)
+                found[park.id] = _merged(found.get(park.id), park)
 
     return sorted(
         found.values(), key=lambda j: (LEVELS.index(j.level) if j.level in LEVELS else 9, j.id)
     )
+
+
+def _merged(existing: Jurisdiction | None, park: Jurisdiction) -> Jurisdiction:
+    """Two park rows under one id, as one jurisdiction that sits in both of their states.
+
+    One record per id is right - `padus:NPS` is one agency however many units a route
+    passes - but the record used to keep only the *first* row's `within`. A route through
+    a Missouri and a Kansas NPS unit then carried `padus:NPS` inside Missouri alone, and
+    Kansas's feed was never asked about the Kansas one. The first name is kept, so the
+    label a sheet prints does not change with the order rows arrive in.
+    """
+    if existing is None:
+        return park
+    within = tuple(dict.fromkeys((*existing.within, *park.within)))
+    return existing if within == existing.within else existing.model_copy(update={"within": within})
 
 
 @dataclass(frozen=True)
@@ -269,7 +348,7 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
         {
             j.agency or j.id
             for j in found
-            if j.source == "padus" and not j.within and j.agency not in FEDERAL_AGENCY_CODES
+            if j.source == "padus" and not j.within and not is_federal(j.agency, j.agency_type)
         }
     )
     named = sum(1 for j in found if j.source == "padus")
@@ -281,6 +360,28 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
         unattributed_parks=max(0, len(parks) - named) if parks is not None else 0,
         unqualified_agencies=unqualified,
     )
+
+
+#: The kinds a scorer asks at plan time. `speed_survey` is not one: it is merged into the
+#: road data at region build (M18), so a plan never fetches it and a cassette never needs it.
+SCORED_KINDS: tuple[FeatureKind, ...] = ("closures", "trail_status", "access_hours")
+
+
+def jurisdictions_for(kind: FeatureKind, scan: JurisdictionScan) -> list[Jurisdiction]:
+    """Which of a route's jurisdictions a kind is asked about - decided once, here (M17).
+
+    Closures are published by DOTs and cities, which register against census boundaries,
+    and by park agencies too, so every jurisdiction is asked. Trail status and access hours
+    are properties of managed land, so only park agencies are. Speed surveys are municipal
+    and state road data, so only census boundaries. The scorers, the region build and
+    `freeze-cassette` all ask through this, so a cassette records exactly the questions a
+    plan will put.
+    """
+    if kind in ("trail_status", "access_hours"):
+        return [j for j in scan.jurisdictions if j.source == "padus"]
+    if kind == "speed_survey":
+        return [j for j in scan.jurisdictions if j.source == "tiger"]
+    return list(scan.jurisdictions)
 
 
 def unqualified_reason(scan: JurisdictionScan) -> str | None:

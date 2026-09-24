@@ -36,6 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from datetime import date
 
     from longrun.adapters.base import AdapterContext
+    from longrun.adapters.keys import ApiKey
     from longrun.core.models.features import FeatureKind
 
 #: Long enough for a state DOT's whole feed on a slow morning, short enough that a hung
@@ -90,7 +91,38 @@ def fetch_feed(
         payload = fetch(ctx.cache, f"adapter.{adapter}", wzdx_args(adapter, day), day, produce)
     except Exception as exc:  # noqa: BLE001 - a feed that is down is a reason, not a crash
         return AdapterResult(reason=describe(exc), source_url=url)
+    return _result(payload, url, kind)
 
+
+def replay_or_refuse(
+    url: str,
+    adapter: str,
+    day: date,
+    ctx: AdapterContext,
+    key: ApiKey,
+    *,
+    kind: FeatureKind = "closures",
+) -> AdapterResult:
+    """A keyed feed whose key is not set: what was recorded, or the key's own reason (M17).
+
+    Peeks under the same cache key `fetch_feed` writes, so a cassette recorded by somebody
+    with the key replays for everybody without it - which is every CI run. A miss is
+    `key_missing`, and the registry treats that as a rung nobody tried: no slot spent, and
+    the next tier asked.
+    """
+    from longrun.core.data.cache import peek
+
+    try:
+        payload = peek(ctx.cache, f"adapter.{adapter}", wzdx_args(adapter, day), day)
+    except Exception as exc:  # noqa: BLE001 - an unreadable cassette is a reason
+        return AdapterResult(reason=describe(exc), source_url=url)
+    if payload is None:
+        return AdapterResult(reason=key.missing_reason(), source_url=url, key_missing=True)
+    return _result(payload, url, kind)
+
+
+def _result(payload: Any, url: str, kind: FeatureKind) -> AdapterResult:
+    """A payload, fetched or replayed, as one adapter's answer."""
     version = feed_version(payload)
     features = parse_wzdx(payload, kind=kind, source_url=url)
     # "No envelope AND no features" is a feed that did not answer - a 200 carrying an error
@@ -106,4 +138,4 @@ def fetch_feed(
     )
 
 
-__all__ = ["HTTP_TIMEOUT_S", "fetch_feed", "wzdx_args"]
+__all__ = ["HTTP_TIMEOUT_S", "fetch_feed", "replay_or_refuse", "wzdx_args"]

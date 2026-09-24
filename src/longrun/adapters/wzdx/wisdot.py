@@ -42,6 +42,7 @@ class WisDotClosures:
     name = "wzdx.wisdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:55",)
     source = "wzdx_wisdot"
     vintage: str | None = None

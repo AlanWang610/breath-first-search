@@ -336,6 +336,34 @@ def test_a_closure_that_has_lifted_by_arrival_does_not_hard_flag(
     assert not [f for f in result.flags if f.kind is FlagKind.HARD]
 
 
+def test_a_closure_window_is_read_in_utc_against_a_local_eta(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    """ADR 0046. A work zone that lifted at 10:00Z has lifted for a runner arriving at
+    06:00 in San Francisco, which is 13:00Z. Before M17 the window's offset was dropped and
+    the 06:00 ETA compared as if it were UTC, so this closure hard-flagged a route it no
+    longer touched - and a closure ending at 14:00Z would have been missed an hour early in
+    the other direction."""
+    _write_boundaries(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    arrival = datetime(2026, 9, 15, 6, 0)  # local, PDT
+    lifted = _feature(
+        geometry=_along(),
+        start=datetime(2026, 9, 14, 20, 0),
+        end=datetime(2026, 9, 15, 10, 0),  # UTC: 03:00 PDT
+    )
+    still_on = _feature(
+        geometry=_along(),
+        start=datetime(2026, 9, 14, 20, 0),
+        end=datetime(2026, 9, 15, 14, 0),  # UTC: 07:00 PDT
+    )
+    gone = cl.closures(route, segments, ctx_factory([lifted]), [arrival] * len(segments))
+    here = cl.closures(route, segments, ctx_factory([still_on]), [arrival] * len(segments))
+    assert not [f for f in gone.flags if f.kind is FlagKind.HARD]
+    assert [f for f in here.flags if f.kind is FlagKind.HARD]
+
+
 def test_coverage_is_recorded_per_jurisdiction(ctx_factory: Any, tmp_path: Any) -> None:
     """What lets check 6 tell a route where every jurisdiction answered from one where two
     of four did - and the first use of `CoverageEntry.jurisdiction`, which has existed

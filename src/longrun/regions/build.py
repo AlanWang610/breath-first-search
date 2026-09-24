@@ -43,11 +43,13 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from longrun.core.data.jurisdictions import from_padus_row, from_tiger_row
+from longrun.core.data.jurisdictions import PLACE_COUNTY_SHARE, from_padus_row, from_tiger_row
 from longrun.core.models.jurisdiction import Jurisdiction
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
+
+    from longrun.core.models.features import FeatureKind
 
 WGS84 = 4326
 
@@ -461,14 +463,25 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
     names = ", ".join(f"{count} {level}" for level, count in sorted(by_level.items()))
 
     covered, by_tier = adapter_coverage(found)
+    keyless = keyless_coverage(covered)
     counts = dict(by_level)
     counts["with_adapter"] = len(covered)
+    counts["key_missing"] = len(keyless)
     for tier, n in sorted(by_tier.items()):
         counts[f"tier_{tier}"] = n
+    # The other three kinds, prefixed so the closure counts every existing build manifest
+    # carries keep their names. Each kind is asked of the jurisdictions its scorer asks.
+    for kind in ("trail_status", "access_hours", "speed_survey"):
+        asked = [j for j in found if (j.source == "tiger") == (kind == "speed_survey")]
+        kind_covered, kind_tiers = adapter_coverage(asked, kind)
+        counts[f"{kind}.with_adapter"] = len(kind_covered)
+        for tier, n in sorted(kind_tiers.items()):
+            counts[f"{kind}.tier_{tier}"] = n
 
     tiers = ", ".join(f"{n} at tier {tier}" for tier, n in sorted(by_tier.items()))
+    waiting = f"; {len(keyless)} of those wait on a key that is not set" if keyless else ""
     adapters = (
-        f"{len(covered)} of {len(found)} have a closure adapter ({tiers})"
+        f"{len(covered)} of {len(found)} have a closure adapter ({tiers}){waiting}"
         if covered
         else f"no closure adapter for any of {len(found)}"
     )
@@ -481,8 +494,12 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
 
 def adapter_coverage(
     jurisdictions: list[Jurisdiction],
+    kind: FeatureKind = "closures",
 ) -> tuple[list[Jurisdiction], dict[int, int]]:
-    """Which jurisdictions have a closure adapter, and at what tier (§13 step 4).
+    """Which jurisdictions have an adapter for a kind, and at what tier (§13 step 4).
+
+    Closures only until M17, which left a region build silent about trail status, access
+    hours and speed surveys whatever was registered for them.
 
     The half of step 4 that has said "the registry is M4" since M3. It asks the registry
     through `adapters_for`, which performs no fetch and spends no budget - a region build has
@@ -501,13 +518,37 @@ def adapter_coverage(
         covered: list[Jurisdiction] = []
         by_tier: dict[int, int] = {}
         for jurisdiction in jurisdictions:
-            infos = registry.adapters_for("closures", jurisdiction)
+            infos = registry.adapters_for(kind, jurisdiction)
             if not infos:
                 continue
             covered.append(jurisdiction)
             best = min(int(i.tier) for i in infos)
             by_tier[best] = by_tier.get(best, 0) + 1
     return covered, by_tier
+
+
+def keyless_coverage(
+    covered: list[Jurisdiction], kind: FeatureKind = "closures"
+) -> list[Jurisdiction]:
+    """The covered jurisdictions whose every best-tier claimant needs a key that is not set.
+
+    A Bay Area build covers 164 of 187 jurisdictions through 511 SF Bay's county claims,
+    and none of them can be asked without `LONGRUN_511SF_API_KEY`. Reporting 164 without
+    saying so is the inflation the WZDx survey refused ten keyed feeds to avoid.
+    """
+    from longrun.adapters.registry import AdapterRegistry
+    from longrun.core.data.cache import SqliteCache
+    from longrun.core.models.context import Budget
+
+    out: list[Jurisdiction] = []
+    with SqliteCache() as cache:
+        registry = AdapterRegistry(cache, Budget(), offline=True)
+        for jurisdiction in covered:
+            infos = registry.adapters_for(kind, jurisdiction)
+            best = min((int(i.tier) for i in infos), default=None)
+            if best is not None and not any(i.key_present for i in infos if int(i.tier) == best):
+                out.append(jurisdiction)
+    return out
 
 
 def step_coverage_report(ctx: BuildContext) -> StepRecord:
@@ -555,6 +596,23 @@ def jurisdictions_in(ctx: BuildContext) -> list[Jurisdiction]:
     polygon = ctx.spec.shape().wkt
     found: dict[str, Jurisdiction] = {}
 
+    # A place's counties, by the same area-share rule `core.data.jurisdictions` applies to a
+    # route, so a county adapter covers the cities inside it in a region's coverage count
+    # exactly as it does in a plan. `statefp` in the join is an index hint, not a rule: a
+    # place never crosses a state line.
+    counties: dict[str, list[str]] = {}
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT p.geoid, c.geoid FROM tiger.boundaries p "
+            "JOIN tiger.boundaries c ON c.level = 'county' AND c.statefp = p.statefp "
+            "AND ST_Intersects(p.geom, c.geom) "
+            "WHERE p.level = 'place' AND ST_Intersects(p.geom, ST_GeomFromText(%s, 4326)) "
+            "AND ST_Area(ST_Intersection(p.geom, c.geom)) >= %s * ST_Area(p.geom)",
+            (polygon, PLACE_COUNTY_SHARE),
+        )
+        for place, county in cursor.fetchall():
+            counties.setdefault(place, []).append(county)
+
     with ctx.connection.cursor() as cursor:
         cursor.execute(
             "SELECT level, geoid, name, statefp FROM tiger.boundaries "
@@ -563,7 +621,8 @@ def jurisdictions_in(ctx: BuildContext) -> list[Jurisdiction]:
             (polygon,),
         )
         for level, geoid, name, statefp in cursor.fetchall():
-            record = from_tiger_row(level, geoid, name or geoid, statefp)
+            inside = tuple(sorted(counties.get(geoid, []))) if level == "place" else ()
+            record = from_tiger_row(level, geoid, name or geoid, statefp, inside)
             found.setdefault(record.id, record)
 
     states = sorted(j.id.rsplit(":", 1)[-1] for j in found.values() if j.level == "state")

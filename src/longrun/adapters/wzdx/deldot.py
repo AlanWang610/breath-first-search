@@ -42,6 +42,7 @@ class DelDotClosures:
     name = "wzdx.deldot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:10",)
     source = "wzdx_deldot"
     vintage: str | None = None

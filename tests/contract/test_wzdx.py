@@ -18,7 +18,7 @@ the truth."* Each has a test here. The live-network check is separate and `netwo
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -161,11 +161,21 @@ def test_timestamps_survive_every_format_the_feeds_use() -> None:
     assert parse_timestamp(None) is None
 
 
-def test_a_parsed_time_is_naive_so_it_can_be_compared_with_an_eta() -> None:
-    """ETAs are naive local times throughout `core/`; comparing one against an aware
-    datetime raises, and `Feature.active_at` does exactly that comparison."""
+def test_every_parsed_record_keeps_its_publisher_id() -> None:
+    """`Feature.ref` traces a flag back to its row. WZDx requires an `id` on every feature."""
+    for short in ("kdot", "modot", "maricopa"):
+        features = parse_wzdx(_payload(short))
+        assert features and all(f.ref for f in features), short
+
+
+def test_a_parsed_time_is_naive_utc_so_two_feeds_share_one_clock() -> None:
+    """ADR 0046. Naive, because comparing an aware datetime against a naive one raises;
+    UTC, because Maricopa publishes `-07:00` and Missouri publishes `Z`, and stripping both
+    offsets put two clocks in one list. 06:59 at -07:00 is 13:59 UTC."""
     parsed = parse_timestamp("2024-10-22T06:59:00.0000000-07:00")
+    assert parsed == datetime(2024, 10, 22, 13, 59)
     assert parsed is not None and parsed.tzinfo is None
+    assert parse_timestamp("2026-09-15T12:00:00Z") == datetime(2026, 9, 15, 12, 0)
 
 
 # --- the failure cases the README names -------------------------------------

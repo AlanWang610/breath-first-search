@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import date
 
+    from longrun.adapters.keys import ApiKey
     from longrun.core.data.base import Cache
     from longrun.core.models.context import Budget
     from longrun.core.models.coverage import Tier
@@ -60,6 +62,10 @@ class AdapterContext:
     offline: bool = False
     #: The jurisdiction being asked about, when one adapter serves several.
     jurisdiction: Jurisdiction | None = None
+    #: Every jurisdiction this one fetch answers for (M17). `jurisdiction` is the first of
+    #: them and was all an adapter used to see, so an agency adapter asked on behalf of
+    #: three parks could only ever look up the first.
+    jurisdictions: tuple[Jurisdiction, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -76,6 +82,10 @@ class AdapterResult:
     reason: str | None = None
     vintage: str | None = None
     source_url: str | None = None
+    #: The adapter could not be asked because its key is not set *and* nothing was recorded
+    #: to replay (M17). Distinct from a failure because nothing was tried: the registry
+    #: records it as a skipped attempt, charges no fetch slot, and falls through.
+    key_missing: bool = False
 
     @property
     def answered(self) -> bool:
@@ -105,6 +115,53 @@ class Adapter(Protocol):
     def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult: ...
 
 
+#: How an adapter's answer may be reused within one plan (M17). The memo key is built from
+#: it, so it has to be true: a bounding-box portal memoized as if it were a whole-state feed
+#: would hand candidate route B the features it found for candidate route A.
+Scope = Literal["feed", "polygon", "jurisdictions"]
+
+
+def facet_of(adapter: Adapter) -> str:
+    """Which ladder an adapter climbs. Defaults to its kind.
+
+    Two sources of one kind are either substitutes - a worse tier asked only when a better
+    one fails - or complements that describe different things, like a state's work-zone
+    feed and a city's street-use permits. A facet is how an adapter says it is the second:
+    adapters with different facets climb separate ladders and are all asked.
+    """
+    return str(getattr(adapter, "facet", None) or adapter.kind)
+
+
+def is_complete(adapter: Adapter) -> bool:
+    """Whether an answer from this adapter ends its ladder.
+
+    `False` for a source covering part of the network it claims - the Pennsylvania Turnpike
+    claims Pennsylvania and publishes only its own road - so an answer contributes its
+    records and the next tier is still asked for the rest.
+    """
+    return bool(getattr(adapter, "complete", True))
+
+
+def scope_of(adapter: Adapter) -> Scope:
+    """What an adapter's answer depends on, for the registry's memo.
+
+    `feed`: the day alone - a whole statewide file, whatever the corridor. `polygon`, the
+    default because it is the safe one: the day and the corridor. `jurisdictions`: the day
+    and exactly which jurisdictions were asked about.
+    """
+    scope = getattr(adapter, "scope", "polygon")
+    if scope == "feed":
+        return "feed"
+    if scope == "jurisdictions":
+        return "jurisdictions"
+    return "polygon"
+
+
+def key_of(adapter: Adapter) -> ApiKey | None:
+    """The credential an adapter declares, for reporting whether it can be asked at all."""
+    return getattr(adapter, "key", None)
+
+
 @dataclass(frozen=True)
 class LoadFailure:
     """An entry point that would not load, reported rather than raised.
@@ -116,6 +173,19 @@ class LoadFailure:
 
     name: str
     reason: str
+
+
+def local_to_utc(local: datetime, zone: str) -> datetime:
+    """A publisher's naive local wall clock as the naive UTC instant it names (ADR 0046).
+
+    For feeds that publish local times with no offset. The zone is the *feed's* - an IANA
+    name the adapter declares - rather than the route's, so each timestamp is converted at
+    its own date and a window spanning a DST change is right at both ends. Ambiguous
+    instants inside a fall-back hour resolve to the first occurrence, `zoneinfo`'s default.
+    """
+    from zoneinfo import ZoneInfo
+
+    return local.replace(tzinfo=ZoneInfo(zone)).astimezone(UTC).replace(tzinfo=None)
 
 
 def describe(exc: BaseException) -> str:
@@ -141,6 +211,12 @@ __all__ = [
     "AdapterContext",
     "AdapterResult",
     "LoadFailure",
+    "Scope",
     "describe",
+    "facet_of",
+    "is_complete",
+    "key_of",
+    "scope_of",
+    "local_to_utc",
     "valid_jurisdiction_id",
 ]

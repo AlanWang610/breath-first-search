@@ -32,6 +32,7 @@ class MaricopaClosures:
     name = "wzdx.maricopa"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = (MARICOPA_COUNTY,)
     source = "wzdx_maricopa"
     vintage: str | None = None

@@ -224,6 +224,30 @@ def fetch(cache: Cache, tool: str, args: Any, day: date | str, producer: Callabl
     return value
 
 
+def peek(cache: Cache, tool: str, args: Any, day: date | str) -> Any | None:
+    """A recorded value, or `None`. Never the network, and never `CacheMiss`.
+
+    For a source that cannot be asked because its key is not set (M17). It may still hold a
+    recorded answer - a golden's cassette, a public-domain NPS payload - and refusing
+    before looking would make that cassette unreplayable in CI, which has no keys by
+    design. So a keyless adapter peeks: a hit replays exactly as `fetch` would have, and a
+    miss is `None`, for the adapter to turn into its key's own reason.
+
+    Offline or not, a miss is `None` rather than `CacheMiss`: the caller never meant to
+    fetch, so "not in the cassette" would misstate why nothing came back.
+    """
+    key = args_hash(args)
+    day_str = day.isoformat() if isinstance(day, date) else str(day)
+    started = time.perf_counter()
+    try:
+        hit = cache.get(tool, key, day_str)
+    except CacheMiss:
+        return None
+    if hit is not None:
+        _record(cache, tool, key, started, cached=True)
+    return hit
+
+
 def _record(cache: Cache, tool: str, key: str, started: float, *, cached: bool) -> None:
     """Log one trip through the door, hit or miss.
 

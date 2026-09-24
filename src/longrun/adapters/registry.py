@@ -12,11 +12,14 @@ grouped, fetched once each, and the result fanned back out - every jurisdiction 
 covered records `covered_by`, so the sheet can say a place was checked without implying a
 separate request. A Kansas City route crossing ~12 jurisdictions costs two fetches.
 
-**Ascending tiers, first success wins.** A jurisdiction with a tier-1 feed and a tier-3
-portal is asked tier 1 first and stops there. That is `route_forecast`'s NWS -> Open-Meteo
-ladder rather than a new policy, and it is why cache keys are scoped per adapter: a tier
-that was never reached is not a source that failed, and writing it to the manifest as one
-would be a lie of a subtle kind.
+**Ascending tiers, first success wins, per claimant** (ADR 0047). Every id a jurisdiction
+sits in - itself, its county, its state - is a ladder of whoever claims it, climbed from
+tier 1. An answer stops a ladder, including an empty one; a failure falls through to the
+next tier; a jurisdiction no ladder answered goes to tier 4. That is `route_forecast`'s NWS
+-> Open-Meteo ladder rather than a new policy, and it is why cache keys are scoped per
+adapter: a tier that was never reached is not a source that failed, and writing it to the
+manifest as one would be a lie of a subtle kind. Until M17 only the best covering tier was
+asked at all, so a feed that was down stopped the climb instead of starting it.
 
 **Nothing here raises.** `discover()` turns an unimportable entry point into a
 `LoadFailure`; a fetch that throws becomes a reason on the answer. `longrun repair` must
@@ -25,7 +28,10 @@ not become an ImportError traceback because somebody's third-party adapter is br
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from longrun.adapters.base import (
@@ -35,6 +41,10 @@ from longrun.adapters.base import (
     AdapterResult,
     LoadFailure,
     describe,
+    facet_of,
+    is_complete,
+    key_of,
+    scope_of,
     valid_jurisdiction_id,
 )
 from longrun.adapters.extraction.seam import ExtractionRequest, Extractor, NullExtractor
@@ -45,6 +55,8 @@ if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.data.base import Cache
     from longrun.core.models.context import Budget
     from longrun.core.models.features import (
+        Attempt,
+        AttemptOutcome,
         Feature,
         FeatureKind,
         FeatureSet,
@@ -52,15 +64,20 @@ if TYPE_CHECKING:  # pragma: no cover
     )
     from longrun.core.models.jurisdiction import AdapterInfo, Jurisdiction
 
-#: Adapter fetches one plan may make, across every kind. Named and reportable in the shape
-#: of `alerts.MAX_ALERT_SITES`: beyond it, remaining jurisdictions get a reason rather than
-#: a silently truncated answer. Fetches are ordered best-tier-first and most-specific-first,
-#: so what a ceiling drops is the least useful thing left.
+#: Adapter fetches one plan may make **per kind** (M17; it was 24 shared across kinds).
+#: Named and reportable in the shape of `alerts.MAX_ALERT_SITES`: beyond it, remaining
+#: jurisdictions get a reason rather than a silently truncated answer, and the budget gets
+#: a degradation line. Each tier's fetches run most-covering-first, so what a ceiling drops
+#: is the adapter that answers for least.
 #:
-#: **A tier-4 extraction is a fetch and spends this.** It did not until M13.5, which is the
-#: bug `_extracted` documents: tier 4 makes a model call per uncovered jurisdiction, and
-#: `Budget.model_calls_max` is 12 while `MAX_JURISDICTIONS` is 40.
-MAX_ADAPTER_FETCHES = 24
+#: Per kind because one pool let scorer order decide which kind starved - `closures` runs
+#: after `segment_hostility` and before `trail_status`, and with four kinds each adding
+#: sources a shared pool would ration closures by accident. Only live asks count: a
+#: memoized answer, a missing key's peek and `NullExtractor` cost nothing.
+#:
+#: **A live tier-4 extraction is a fetch and spends this.** It did not until M13.5, which is
+#: the bug `_extracted` documents: tier 4 makes a model call per uncovered jurisdiction.
+MAX_ADAPTER_FETCHES = 16
 
 #: Decimal places on the mean confidence a tier-4 answer reports. The coverage manifest goes
 #: verbatim into `expected.json`, so an unrounded mean is a golden that fails on a different
@@ -73,40 +90,101 @@ EXTRACTION_CONFIDENCE_DP = 3
 MAX_JURISDICTIONS = 40
 
 
+#: An adapter's name is its cache scope (`adapter.wzdx.modot`) and the key the registry
+#: groups by, so it has a grammar as load-bearing as a jurisdiction id's: dotted, lower
+#: case, stable. A catalog adapter's name is minted from data, which is why it is checked.
+_NAME_PATTERN = re.compile(r"^[a-z0-9_]+([.][a-z0-9_-]+)+$")
+
+
 def discover(group: str = ENTRY_POINT_GROUP) -> tuple[list[Adapter], list[LoadFailure]]:
     """Every registered adapter, and every entry point that would not become one.
 
-    Two kinds of failure are caught and neither raises: a module that will not import, and
-    an object that loads but does not satisfy the protocol or declares a malformed
-    jurisdiction id. The second is the one worth catching early - a typo in an id has no
-    symptom at all, because the adapter loads, matches nothing, and every jurisdiction
-    reports "no adapter" exactly as it did before anybody wrote it.
+    Three kinds of failure are caught and none raises: a module that will not import, an
+    object that loads but is not a usable adapter, and a **second adapter with a name
+    already taken**. The last used to be silent: `_plan` keyed by name, so the second one
+    was never fetched while its jurisdictions were reported covered. Entry points are
+    walked in name order, so which of two duplicates wins does not depend on install order.
     """
     from importlib.metadata import entry_points
 
     found: list[Adapter] = []
     failures: list[LoadFailure] = []
+    owners: dict[str, str] = {}
 
-    for point in entry_points(group=group):
+    for point in sorted(entry_points(group=group), key=lambda p: p.name):
         try:
             candidate = point.load()
         except Exception as exc:  # noqa: BLE001 - a broken adapter is not a broken plan
             failures.append(LoadFailure(name=point.name, reason=describe(exc)))
             continue
-        problem = _rejected(candidate)
-        if problem is not None:
-            failures.append(LoadFailure(name=point.name, reason=problem))
-            continue
-        found.append(candidate)
+        adapters, rejected = expand(point.name, candidate)
+        failures.extend(rejected)
+        for adapter in adapters:
+            if adapter.name in owners:
+                failures.append(
+                    LoadFailure(
+                        name=f"{point.name}:{adapter.name}",
+                        reason=(
+                            f"adapter name {adapter.name!r} is already registered by entry "
+                            f"point {owners[adapter.name]!r}"
+                        ),
+                    )
+                )
+                continue
+            owners[adapter.name] = point.name
+            found.append(adapter)
 
     found.sort(key=lambda a: (a.tier, a.name))
     return found, failures
 
 
+def expand(point_name: str, loaded: Any) -> tuple[list[Adapter], list[LoadFailure]]:
+    """One entry point's target as adapters: a single adapter, or a list or tuple of them.
+
+    The sequence form is for catalogs - fifty portal datasets described as data are one
+    module and one entry point, not fifty lines in `pyproject.toml`. Each element is judged
+    alone, so one bad catalog row is one `LoadFailure` naming it rather than a catalog that
+    vanishes. An element may already be a `LoadFailure`, which is how a catalog reports a
+    row it could not build. Strings, mappings and generators are refused: a string is a
+    sequence of characters, and a generator would be consumed by whoever looked first.
+    """
+    if not isinstance(loaded, (list, tuple)):
+        problem = _rejected(loaded)
+        if problem is not None:
+            return [], [LoadFailure(name=point_name, reason=problem)]
+        return [loaded], []
+    if not loaded:
+        return [], [LoadFailure(name=point_name, reason="declares an empty list of adapters")]
+
+    found: list[Adapter] = []
+    failures: list[LoadFailure] = []
+    for index, item in enumerate(loaded):
+        if isinstance(item, LoadFailure):
+            failures.append(item)
+            continue
+        label = f"{point_name}[{getattr(item, 'name', index)}]"
+        problem = _rejected(item)
+        if problem is not None:
+            failures.append(LoadFailure(name=label, reason=problem))
+            continue
+        found.append(item)
+    return found, failures
+
+
 def _rejected(candidate: Any) -> str | None:
     """Why an object is not usable as an adapter, or `None` if it is."""
+    from typing import get_args
+
+    from longrun.core.models.features import FeatureKind
+
     if not isinstance(candidate, Adapter):
         return f"does not satisfy the Adapter protocol (got {type(candidate).__name__})"
+    if not isinstance(candidate.name, str) or not _NAME_PATTERN.match(candidate.name):
+        return f"declares a malformed name {candidate.name!r}; expected e.g. 'wzdx.modot'"
+    if candidate.kind not in get_args(FeatureKind):
+        return f"declares an unknown kind {candidate.kind!r}"
+    if candidate.tier not in (1, 2, 3, 4):
+        return f"declares tier {candidate.tier!r}; tiers are 1-4"
     ids = tuple(candidate.jurisdictions)
     if not ids:
         return "declares no jurisdictions, so it can never match"
@@ -128,7 +206,7 @@ def matches(adapter: Adapter, kind: FeatureKind, jurisdiction: Jurisdiction) -> 
 
 
 class AdapterRegistry:
-    """The live `FeatureSource`: entry-point adapters, asked once each."""
+    """The live `FeatureSource`: entry-point adapters, climbed tier by tier, asked once each."""
 
     def __init__(
         self,
@@ -154,7 +232,15 @@ class AdapterRegistry:
             self._adapters, self.failures = discover()
         else:
             self._adapters, self.failures = sorted(adapters, key=lambda a: (a.tier, a.name)), []
-        self._fetches = 0
+        # Indexed once by (kind, claimed id), instead of scanning every adapter for every
+        # jurisdiction of every fetch - which was fine at 22 adapters and is not at 200.
+        self._claims: dict[tuple[str, str], list[Adapter]] = {}
+        for adapter in self._adapters:
+            for claimed in adapter.jurisdictions:
+                self._claims.setdefault((adapter.kind, claimed), []).append(adapter)
+        self._fetches: dict[str, int] = {}
+        self._memo: dict[tuple[Any, ...], AdapterResult] = {}
+        self._extracted_memo: dict[tuple[str, str, str], AdapterResult] = {}
 
     # --- FeatureSource -------------------------------------------------------
 
@@ -163,7 +249,13 @@ class AdapterRegistry:
         from longrun.core.models.jurisdiction import AdapterInfo
 
         return [
-            AdapterInfo(name=a.name, tier=a.tier, kind=a.kind, source=a.source)
+            AdapterInfo(
+                name=a.name,
+                tier=a.tier,
+                kind=a.kind,
+                source=a.source,
+                key_present=(key := key_of(a)) is None or key.value() is not None,
+            )
             for a in self._adapters
             if matches(a, kind, jurisdiction)
         ]
@@ -180,25 +272,26 @@ class AdapterRegistry:
         considered = list(jurisdictions)[:MAX_JURISDICTIONS]
         dropped = list(jurisdictions)[MAX_JURISDICTIONS:]
 
-        plan = self._plan(kind, considered)
-        features: list[Feature] = []
-        answers: list[JurisdictionAnswer] = []
-        results: dict[str, AdapterResult] = {}
+        ladders = {j.id: self._ladders(kind, j) for j in considered}
+        # Clipped here, after the memo, because a feed-scoped answer is shared by every
+        # corridor the plan asks about and each corridor is owed only its own records.
+        results = {
+            name: (adapter, _clipped(result, polygon))
+            for name, (adapter, result) in self._climb(
+                kind, considered, ladders, polygon, day
+            ).items()
+        }
 
-        for name, (adapter, covered) in plan.items():
-            result = self._ask(adapter, polygon, day, covered[0])
-            results[name] = result
+        features: list[Feature] = []
+        for _, result in results.values():
             if result.answered:
                 features.extend(result.features)
 
+        answers: list[JurisdictionAnswer] = []
         for jurisdiction in considered:
-            # Two values, because the loop above collects only what an *adapter* returned.
-            # A tier-4 extraction happens inside `_answer` - it has no entry in `plan` and
-            # no `AdapterResult` in `results` - so its records had nowhere to go and were
-            # dropped on the floor, while `JurisdictionAnswer.count` still counted them.
-            # See `_extracted`: this is the other half of M13.5's first bug, and the half
-            # that made the polygon fix necessary but not sufficient.
-            answer, extracted = self._answer(kind, jurisdiction, day, polygon, plan, results)
+            answer, extracted = self._answer(
+                kind, jurisdiction, ladders[jurisdiction.id], results, polygon, day
+            )
             answers.append(answer)
             features.extend(extracted)
 
@@ -211,200 +304,269 @@ class AdapterRegistry:
             )
             for j in dropped
         )
-        return FeatureSet.from_answers(features, answers)
+        return FeatureSet.from_answers(_distinct(features), answers)
 
-    # --- internals -----------------------------------------------------------
+    # --- the ladder ----------------------------------------------------------
 
-    def _plan(
-        self, kind: FeatureKind, jurisdictions: Sequence[Jurisdiction]
-    ) -> dict[str, tuple[Adapter, list[Jurisdiction]]]:
-        """Which adapter to ask, and which jurisdictions each answer covers.
+    def _ladders(self, kind: FeatureKind, jurisdiction: Jurisdiction) -> list[list[Adapter]]:
+        """Every ladder this jurisdiction has: one per (claimed id, facet), best tier first.
 
-        One entry per adapter, however many jurisdictions it serves.
-
-        **The ladder is between tiers, not within one.** A jurisdiction is asked at the best
-        tier that covers it and no worse - a tier never reached did not fail, and reporting
-        it as though it had would misstate what was consulted. But *every* adapter at that
-        best tier is asked, because two sources of the same kind are peers rather than a
-        fallback, and stopping at the first would pick between them by sort order.
-
-        Arizona is why this is not hypothetical. `wzdx.maricopa` (the county) and
-        `wzdx.azdot` (the state) are both tier-1 WZDx with **disjoint `data_sources`**, so
-        each carries work zones the other does not. Under a first-match rule Phoenix silently
-        got whichever name sorted first - and since MCDOT publishes
-        `vehicle_impact: "unknown"` on every feature while AZDOT states it properly, that
-        accident decided whether an Arizona closure could clear ADR 0013's gate 1 at all.
-
-        Keyed by `adapter.name` rather than by the adapter, because an adapter is any object
-        satisfying a protocol and **need not be hashable** - a plain mutable dataclass is the
-        natural way to write one, and requiring `__hash__` would be a constraint on
-        third-party code that nothing in scope 7.10 asks for. The name is already the unique
-        identifier and the cache scope, so it is the key that was always available.
+        **Per claimant, not per jurisdiction** (ADR 0047). Kansas City's ids are the city,
+        its counties and Missouri, and whoever claims each of those climbs a separate
+        ladder. With one ladder per jurisdiction a statewide tier-1 feed would pre-empt a
+        city's own tier-3 permit portal - the two describe different ground, and the city's
+        would never be asked. Arizona is the case that already exists: `wzdx.azdot` claims
+        the state and `wzdx.maricopa` the county, with disjoint data sources, and both are
+        asked.
         """
-        chosen: dict[str, tuple[Adapter, list[Jurisdiction]]] = {}
-        for jurisdiction in jurisdictions:
-            matching = [a for a in self._adapters if matches(a, kind, jurisdiction)]
-            if not matching:
-                continue
-            best = min(int(a.tier) for a in matching)
-            for adapter in matching:
-                if int(adapter.tier) == best:
-                    chosen.setdefault(adapter.name, (adapter, []))[1].append(jurisdiction)
-        return chosen
+        by_ladder: dict[tuple[str, str], list[Adapter]] = {}
+        for claimed in jurisdiction.ids:
+            for adapter in self._claims.get((kind, claimed), []):
+                ladder = by_ladder.setdefault((claimed, facet_of(adapter)), [])
+                if all(a.name != adapter.name for a in ladder):
+                    ladder.append(adapter)
+        return [
+            sorted(ladder, key=lambda a: (int(a.tier), a.name)) for ladder in by_ladder.values()
+        ]
+
+    def _climb(
+        self,
+        kind: FeatureKind,
+        jurisdictions: Sequence[Jurisdiction],
+        ladders: dict[str, list[list[Adapter]]],
+        polygon: Any,
+        day: date,
+    ) -> dict[str, tuple[Adapter, AdapterResult]]:
+        """Ask each ladder's rungs in ascending tier until one answers, fanning out by adapter.
+
+        **Falls through on failure, stops on an answer** (ADR 0047). An empty answer is an
+        answer - a feed read with nothing in it is evidence - and stops the ladder; a reason
+        does not. Until M17 only the best covering tier was ever asked, so a tier-1 feed that
+        was down left a jurisdiction unchecked while a working tier-3 portal sat unasked.
+
+        Tiers are walked globally rather than per jurisdiction so each adapter is still
+        asked once for everything it covers at that tier: a statewide feed on behalf of
+        twelve places is one fetch, which is the whole budget story in the module docstring.
+        """
+        results: dict[str, tuple[Adapter, AdapterResult]] = {}
+        by_id = {j.id: j for j in jurisdictions}
+        # Per jurisdiction, the ladders still climbing.
+        climbing = {j.id: [ladder for ladder in ladders[j.id] if ladder] for j in jurisdictions}
+
+        for tier in (1, 2, 3, 4):
+            asked: dict[str, tuple[Adapter, list[Jurisdiction]]] = {}
+            for jid, open_ladders in climbing.items():
+                for ladder in open_ladders:
+                    for adapter in ladder:
+                        if int(adapter.tier) != tier or adapter.name in results:
+                            continue
+                        covered = asked.setdefault(adapter.name, (adapter, []))[1]
+                        if by_id[jid] not in covered:
+                            covered.append(by_id[jid])
+            # The most useful fetch first: a ceiling should drop the adapter that covers
+            # least, not whichever sorted first.
+            order = sorted(asked.values(), key=lambda entry: (-len(entry[1]), entry[0].name))
+            for adapter, covered in order:
+                results[adapter.name] = (adapter, self._ask(kind, adapter, polygon, day, covered))
+
+            for jid, open_ladders in climbing.items():
+                still: list[list[Adapter]] = []
+                for ladder in open_ladders:
+                    rung = [a for a in ladder if int(a.tier) == tier and a.name in results]
+                    if any(results[a.name][1].answered and is_complete(a) for a in rung):
+                        continue  # answered: this ladder is done
+                    if any(_outcome(results[a.name][1]) == "ceiling" for a in rung):
+                        continue  # a ceiling ends the ladder; it never falls through
+                    if any(int(a.tier) > tier for a in ladder):
+                        still.append(ladder)
+                climbing[jid] = still
+        return results
 
     def _ask(
-        self, adapter: Adapter, polygon: Any, day: date, on_behalf_of: Jurisdiction
+        self,
+        kind: FeatureKind,
+        adapter: Adapter,
+        polygon: Any,
+        day: date,
+        covered: list[Jurisdiction],
     ) -> AdapterResult:
-        """One adapter, once. Every failure becomes a reason."""
-        if self._fetches >= MAX_ADAPTER_FETCHES:
-            return AdapterResult(reason=f"adapter fetch ceiling ({MAX_ADAPTER_FETCHES}) reached")
-        self._fetches += 1
+        """One adapter, once per plan for what its answer depends on. Failures are reasons.
+
+        **The memo is what makes the ceiling honest.** One registry serves every scorer and
+        every rescoring pass of a plan, and the loop scores each candidate route on the same
+        context. Before M17 each pass spent fresh slots on the same answers, so candidates
+        scored later saw "ceiling reached" where earlier ones saw closures - and looked
+        better in arbitration for it.
+        """
+        key = _memo_key(adapter, polygon, day, covered)
+        if key in self._memo:
+            return self._memo[key]
+
         ctx = AdapterContext(
             cache=self._cache,
             budget=self._budget,
             offline=self._offline,
-            jurisdiction=on_behalf_of,
+            jurisdiction=covered[0] if covered else None,
+            jurisdictions=tuple(covered),
         )
+        # An adapter whose key is not set may still replay what was recorded, so it is
+        # asked - but it can only peek, so it spends no slot and meets no ceiling.
+        credential = key_of(adapter)
+        if credential is None or credential.value() is not None:
+            spent = self._fetches.get(kind, 0)
+            if spent >= MAX_ADAPTER_FETCHES:
+                note = f"adapter fetch ceiling ({MAX_ADAPTER_FETCHES} per kind) reached for {kind}"
+                if note not in self._budget.degradation:
+                    self._budget.degradation.append(note)
+                return AdapterResult(reason=_ceiling_reason())
+            self._fetches[kind] = spent + 1
         try:
-            return adapter.fetch(polygon, day, ctx)
+            result = adapter.fetch(polygon, day, ctx)
         except Exception as exc:  # noqa: BLE001 - one feed's failure is not the route's
-            return AdapterResult(reason=describe(exc))
+            result = AdapterResult(reason=describe(exc))
+        self._memo[key] = result
+        return result
 
     def _answer(
         self,
         kind: FeatureKind,
         jurisdiction: Jurisdiction,
-        day: date,
+        ladders: list[list[Adapter]],
+        results: dict[str, tuple[Adapter, AdapterResult]],
         polygon: Any,
-        plan: dict[str, tuple[Adapter, list[Jurisdiction]]],
-        results: dict[str, AdapterResult],
+        day: date,
     ) -> tuple[JurisdictionAnswer, list[Feature]]:
         """One jurisdiction's answer, and any records only this call has seen.
 
-        The second value is empty for every jurisdiction an adapter covered, because
-        `fetch` collected those from the `AdapterResult` before this ran. It is non-empty
-        only on the tier-4 path, which performs its own fetch here and is otherwise the one
-        source whose records nothing downstream would ever receive.
+        The second value is empty unless the tier-4 path ran: `fetch` has already collected
+        every adapter's records, and tier 4 performs its own fetch here, so its records
+        would otherwise reach nothing downstream (M13.5).
         """
-        from longrun.core.models.features import JurisdictionAnswer
+        from longrun.core.models.features import Attempt, JurisdictionAnswer, render_attempts
 
-        asked = [
-            (adapter, covered, results[name])
-            for name, (adapter, covered) in plan.items()
-            if jurisdiction in covered
-        ]
-        if not asked:
-            return self._extracted(kind, jurisdiction, day, polygon)
-
-        answered = [entry for entry in asked if entry[2].answered]
-        if not answered:
-            # Every adapter covering this jurisdiction failed. Their reasons are different
-            # facts - one key missing, one feed down - so they are joined rather than
-            # reduced to the first, which is what a reader needs to act on either.
-            return (
-                JurisdictionAnswer(
-                    jurisdiction=jurisdiction.id,
-                    name=jurisdiction.name,
-                    kind=kind,
-                    checked=False,
-                    adapter="; ".join(a.name for a, _, _ in asked),
-                    reason="; ".join(
-                        dict.fromkeys(r.reason or "no reason given" for _, _, r in asked)
-                    ),
-                ),
-                [],
+        climbed: list[tuple[Adapter, AdapterResult]] = []
+        for ladder in ladders:
+            for adapter in ladder:
+                if adapter.name in results and all(a.name != adapter.name for a, _ in climbed):
+                    climbed.append(results[adapter.name])
+        climbed.sort(key=lambda entry: (int(entry[0].tier), entry[0].name))
+        attempts = tuple(
+            Attempt(
+                tier=adapter.tier,
+                adapter=adapter.name,
+                outcome=_outcome(result),
+                reason=result.reason,
             )
+            for adapter, result in climbed
+        )
+        answered = [(a, r) for a, r in climbed if r.answered]
 
-        count = 0
-        for _, _, result in answered:
-            count += sum(1 for f in result.features if f.jurisdiction in (None, jurisdiction.id))
-        first_covered = answered[0][1][0]
+        if not answered:
+            # Tier 4 when no ladder answered - but not past a ceiling, which is a statement
+            # about this plan's budget rather than about the jurisdiction's sources.
+            if any(a.outcome == "ceiling" for a in attempts):
+                return (
+                    JurisdictionAnswer(
+                        jurisdiction=jurisdiction.id,
+                        name=jurisdiction.name,
+                        kind=kind,
+                        adapter="; ".join(a.adapter for a in attempts),
+                        reason=render_attempts(attempts, checked=False),
+                        attempts=attempts,
+                    ),
+                    [],
+                )
+            return self._extracted(kind, jurisdiction, day, polygon, attempts)
+
+        count = len(
+            _distinct(
+                [
+                    f
+                    for _, result in answered
+                    for f in result.features
+                    if f.jurisdiction in (None, jurisdiction.id)
+                ]
+            )
+        )
+        # The id the first answering adapter reached this jurisdiction through: itself, or
+        # the county or state whose one fetch covered it.
+        through = next(
+            (i for i in jurisdiction.ids if i in answered[0][0].jurisdictions), jurisdiction.id
+        )
         return (
             JurisdictionAnswer(
                 jurisdiction=jurisdiction.id,
                 name=jurisdiction.name,
                 kind=kind,
                 checked=True,
-                tier=min(int(a.tier) for a, _, _ in answered),  # type: ignore[arg-type]
-                adapter="; ".join(a.name for a, _, _ in answered),
-                covered_by=first_covered.id if first_covered.id != jurisdiction.id else None,
+                tier=min(int(a.tier) for a, _ in answered),  # type: ignore[arg-type]
+                adapter="; ".join(a.name for a, _ in answered),
+                covered_by=through if through != jurisdiction.id else None,
                 count=count,
-                vintage="; ".join(dict.fromkeys(r.vintage for _, _, r in answered if r.vintage))
+                vintage="; ".join(dict.fromkeys(r.vintage for _, r in answered if r.vintage))
                 or None,
+                reason=render_attempts(attempts, checked=True),
+                attempts=attempts,
             ),
             [],
         )
 
     def _extracted(
-        self, kind: FeatureKind, jurisdiction: Jurisdiction, day: date, polygon: Any
+        self,
+        kind: FeatureKind,
+        jurisdiction: Jurisdiction,
+        day: date,
+        polygon: Any,
+        attempts: tuple[Attempt, ...] = (),
     ) -> tuple[JurisdictionAnswer, list[Feature]]:
-        """§7.10's fallback: no adapter means tier-4 search-and-extract.
+        """§7.10's fallback: no ladder answered, so tier-4 search-and-extract.
 
-        With `NullExtractor` this is always an honest `checked=False`, which is what the
-        jurisdiction would have reported anyway - but it is reported *through* the tier-4
-        path, so wiring a real extractor in M5 changes one constructor argument and not the
-        shape of a single coverage entry.
+        With `NullExtractor` this is always an honest `checked=False`, reported *through*
+        the tier-4 path so wiring a real extractor changes one constructor argument and not
+        the shape of a coverage entry. What M13.5 fixed here stays fixed: the records are
+        returned (they have no `AdapterResult` in `fetch`'s loop), the corridor is passed,
+        and the confidence is the rounded **mean** over the records - one confident line
+        must not speak for a page of vague ones.
 
-        **Everything this passes on was wrong while the path was inert** (M13.5). None of it
-        had a symptom, because `ModelExtractor` had no instantiation anywhere and
-        `NullExtractor` reaches none of it - which is exactly why it was worth fixing before
-        a live extractor made it visible as bad output rather than as a bug.
-
-        *The records themselves.* This returns them now. `fetch` collects features from the
-        `AdapterResult`s in its `plan` loop, and a tier-4 extraction has no entry in `plan`
-        and no `AdapterResult` in `results` - so its records went nowhere at all, while
-        `count` below still counted them. That is the *actual* mechanism behind "tier 4
-        answered, 3 records, zero flags": not a geometry that `closures` rejected, but
-        records `closures` never received. Worth stating plainly, because the geometry bug
-        below looks like a sufficient explanation and is not.
-
-        *The corridor polygon.* This used to pass `polygon=None`. A tier-4 record has no
-        geometry of its own, so `model._geometry` falls back to the shape it is handed, and
-        `None` produces an empty `GeometryCollection`: `runs_along` then returns `inf` and
-        `closures.py` drops the feature for being off-route. So the records that now escape
-        would have been discarded on arrival. Two bugs, one symptom, and fixing either alone
-        would have left the symptom exactly where it was.
-
-        *The fetch ceiling.* `_ask` checks and increments `MAX_ADAPTER_FETCHES`; this did
-        neither, so tier 4 ran outside the budget `Budget.model_calls_max`'s own comment
-        claims it lives behind ("tier-4 extraction is capped separately, by the adapter
-        fetch limits it already lives behind"). A route crossing forty uncovered
-        jurisdictions would have made up to forty model calls against a twelve-call
-        ceiling, and `ask` returns `None` on `BudgetExceeded` rather than raising - so calls
-        thirteen onward read as "extraction returned nothing", which is a sentence about the
-        page rather than about the budget. Checked before the call and reported by name,
-        the same way `_ask` does it, and counted on the same counter because they are the
-        same budget.
-
-        *The confidence.* §7.10 asks for "a manifest entry marked unverified" and this
-        conveyed it by `tier=4` alone, leaving `JurisdictionAnswer.confidence` - which
-        `CoverageEntry` carries and the plan sheet prints - empty on every tier-4 answer.
-        It is the **mean** over the records rather than the maximum: one confident line must
-        not speak for a page of vague ones, and mean is how every other confidence in this
-        project is summarised. Rounded, because the coverage manifest is serialized verbatim
-        into a golden expectation and an unrounded mean is cross-platform float noise.
-
-        An answer that carries no records keeps `confidence=None`, and that is not an
-        oversight. "The page states no closure" is a checked answer with nothing to attach a
-        number to, and a confidence invented for it would be a number about nothing - the
-        tier still says the reading is unverified.
+        **Since M17 this also runs after every ladder failed**, not only when none existed,
+        and its attempt joins theirs in the reason. It is memoized per (jurisdiction, kind,
+        day) - never per corridor, which differs by candidate while the page does not - and
+        it spends a fetch slot only when the extractor is live: `NullExtractor` reads
+        nothing, so charging it was charging for a sentence. A raising extractor is a
+        reason, exactly as a raising adapter is in `_ask`.
         """
-        from longrun.core.models.features import JurisdictionAnswer
+        from longrun.core.models.features import Attempt, JurisdictionAnswer, render_attempts
 
-        if self._fetches >= MAX_ADAPTER_FETCHES:
-            return (
-                JurisdictionAnswer(
-                    jurisdiction=jurisdiction.id,
-                    name=jurisdiction.name,
-                    kind=kind,
-                    reason=f"adapter fetch ceiling ({MAX_ADAPTER_FETCHES}) reached",
-                ),
-                [],
-            )
-        self._fetches += 1
-        result = self._extractor.extract(
-            ExtractionRequest(jurisdiction=jurisdiction, kind=kind, polygon=polygon, day=day),
-            AdapterContext(cache=self._cache, budget=self._budget, offline=self._offline),
+        memo = (jurisdiction.id, kind, day.isoformat())
+        result = self._extracted_memo.get(memo)
+        if result is None:
+            live = bool(getattr(self._extractor, "live", True))
+            spent = self._fetches.get(kind, 0)
+            if live and spent >= MAX_ADAPTER_FETCHES:
+                result = AdapterResult(reason=_ceiling_reason())
+            else:
+                if live:
+                    self._fetches[kind] = spent + 1
+                try:
+                    result = self._extractor.extract(
+                        ExtractionRequest(
+                            jurisdiction=jurisdiction, kind=kind, polygon=polygon, day=day
+                        ),
+                        AdapterContext(
+                            cache=self._cache,
+                            budget=self._budget,
+                            offline=self._offline,
+                            jurisdiction=jurisdiction,
+                            jurisdictions=(jurisdiction,),
+                        ),
+                    )
+                except Exception as exc:  # noqa: BLE001 - a model is an enrichment
+                    result = AdapterResult(reason=describe(exc))
+                self._extracted_memo[memo] = result
+
+        attempts = (
+            *attempts,
+            Attempt(tier=4, adapter="extraction", outcome=_outcome(result), reason=result.reason),
         )
         confidences = [float(f.confidence) for f in result.features]
         return (
@@ -415,22 +577,154 @@ class AdapterRegistry:
                 checked=result.answered,
                 tier=4 if result.answered else None,
                 adapter="extraction" if result.answered else None,
-                count=len(result.features),
-                reason=result.reason,
+                count=len(_distinct(list(result.features))),
+                reason=render_attempts(attempts, checked=result.answered),
                 confidence=(
                     round(sum(confidences) / len(confidences), EXTRACTION_CONFIDENCE_DP)
                     if confidences
                     else None
                 ),
+                attempts=attempts,
             ),
             list(result.features) if result.answered else [],
         )
+
+
+def build_registry(
+    cache: Cache,
+    budget: Budget,
+    *,
+    offline: bool = False,
+    extractor: Extractor | None = None,
+) -> AdapterRegistry:
+    """The registry a plan asks and the registry a cassette is recorded through - one
+    constructor for both (M17).
+
+    `runtime.open_context` and `freeze-cassette` each built their own, identically for now.
+    The day tier 4 is wired into one and not the other, recording and planning ask
+    different questions, and a golden replays a cassette that answers none of the plan's.
+    """
+    return AdapterRegistry(cache, budget, offline=offline, extractor=extractor)
+
+
+def _clipped(result: AdapterResult, polygon: Any) -> AdapterResult:
+    """An answer with only the records whose extent meets the corridor's (M17).
+
+    A statewide feed returns the whole state, and every jurisdiction it covered used to
+    report the state's total as its own count - Jackson County "had" all 480 Missouri work
+    zones. A record with no geometry is about its whole jurisdiction and is kept: that is
+    how an agency alert or a tier-4 reading arrives. With no corridor (a test's `None`)
+    nothing can be clipped against, so nothing is.
+    """
+    if polygon is None or not result.features:
+        return result
+    try:
+        west, south, east, north = (float(v) for v in polygon.bounds)
+    except Exception:  # noqa: BLE001 - a corridor with no bounds clips nothing
+        return result
+    kept = []
+    for feature in result.features:
+        extent = _extent(feature.geometry)
+        if extent is None or (
+            extent[0] <= east and extent[2] >= west and extent[1] <= north and extent[3] >= south
+        ):
+            kept.append(feature)
+    if len(kept) == len(result.features):
+        return result
+    return replace(result, features=kept)
+
+
+def _extent(geometry: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """(west, south, east, north) of a GeoJSON geometry, or `None` if it has no points."""
+    xs: list[float] = []
+    ys: list[float] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            walk(node.get("coordinates"))
+            for child in node.get("geometries") or ():
+                walk(child)
+        elif isinstance(node, (list, tuple)):
+            if len(node) >= 2 and all(isinstance(v, (int, float)) for v in node[:2]):
+                xs.append(float(node[0]))
+                ys.append(float(node[1]))
+            else:
+                for child in node:
+                    walk(child)
+
+    walk(geometry)
+    return (min(xs), min(ys), max(xs), max(ys)) if xs else None
+
+
+def _distinct(features: list[Feature]) -> list[Feature]:
+    """Each record once, however many peers published it (M17).
+
+    Identity is the content - kind, category, geometry, window and description - rather
+    than `ref`, because two publishers' id spaces are their own: an aggregator republishing
+    a state feed may keep the ids or mint new ones, and two unrelated feeds may both have a
+    `1`. The description is in the key because two notices read off one page can share a
+    jurisdiction-wide geometry and have no window, and are still two notices.
+    """
+    seen: set[tuple[Any, ...]] = set()
+    out: list[Feature] = []
+    for feature in features:
+        key = (
+            feature.kind,
+            feature.category,
+            json.dumps(feature.geometry, sort_keys=True, default=str),
+            feature.start,
+            feature.end,
+            feature.detail,
+        )
+        if key not in seen:
+            seen.add(key)
+            out.append(feature)
+    return out
+
+
+def _ceiling_reason() -> str:
+    return f"adapter fetch ceiling ({MAX_ADAPTER_FETCHES}) reached"
+
+
+def _outcome(result: AdapterResult) -> AttemptOutcome:
+    """How an `AdapterResult` reads as a rung of a ladder."""
+    if result.answered:
+        return "answered"
+    if result.key_missing:
+        return "skipped"
+    if result.reason == _ceiling_reason():
+        return "ceiling"
+    return "failed"
+
+
+def _memo_key(
+    adapter: Adapter, polygon: Any, day: date, covered: list[Jurisdiction]
+) -> tuple[Any, ...]:
+    """What an adapter's answer depends on, per its declared scope (`base.scope_of`)."""
+    scope = scope_of(adapter)
+    if scope == "feed":
+        return (adapter.name, day.isoformat())
+    if scope == "jurisdictions":
+        return (adapter.name, day.isoformat(), tuple(sorted(j.id for j in covered)))
+    return (adapter.name, day.isoformat(), _bounds(polygon))
+
+
+def _bounds(polygon: Any) -> tuple[float, ...] | None:
+    """A corridor as a hashable key, at the cache's own coordinate precision."""
+    if polygon is None:
+        return None
+    try:
+        return tuple(round(float(v), 4) for v in polygon.bounds)
+    except Exception:  # noqa: BLE001 - a shape with no bounds is its own key
+        return (float(id(polygon)),)
 
 
 __all__ = [
     "MAX_ADAPTER_FETCHES",
     "MAX_JURISDICTIONS",
     "AdapterRegistry",
+    "build_registry",
     "discover",
+    "expand",
     "matches",
 ]
