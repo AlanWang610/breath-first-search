@@ -25,6 +25,7 @@ not become an ImportError traceback because somebody's third-party adapter is br
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -73,40 +74,101 @@ EXTRACTION_CONFIDENCE_DP = 3
 MAX_JURISDICTIONS = 40
 
 
+#: An adapter's name is its cache scope (`adapter.wzdx.modot`) and the key the registry
+#: groups by, so it has a grammar as load-bearing as a jurisdiction id's: dotted, lower
+#: case, stable. A catalog adapter's name is minted from data, which is why it is checked.
+_NAME_PATTERN = re.compile(r"^[a-z0-9_]+([.][a-z0-9_-]+)+$")
+
+
 def discover(group: str = ENTRY_POINT_GROUP) -> tuple[list[Adapter], list[LoadFailure]]:
     """Every registered adapter, and every entry point that would not become one.
 
-    Two kinds of failure are caught and neither raises: a module that will not import, and
-    an object that loads but does not satisfy the protocol or declares a malformed
-    jurisdiction id. The second is the one worth catching early - a typo in an id has no
-    symptom at all, because the adapter loads, matches nothing, and every jurisdiction
-    reports "no adapter" exactly as it did before anybody wrote it.
+    Three kinds of failure are caught and none raises: a module that will not import, an
+    object that loads but is not a usable adapter, and a **second adapter with a name
+    already taken**. The last used to be silent: `_plan` keyed by name, so the second one
+    was never fetched while its jurisdictions were reported covered. Entry points are
+    walked in name order, so which of two duplicates wins does not depend on install order.
     """
     from importlib.metadata import entry_points
 
     found: list[Adapter] = []
     failures: list[LoadFailure] = []
+    owners: dict[str, str] = {}
 
-    for point in entry_points(group=group):
+    for point in sorted(entry_points(group=group), key=lambda p: p.name):
         try:
             candidate = point.load()
         except Exception as exc:  # noqa: BLE001 - a broken adapter is not a broken plan
             failures.append(LoadFailure(name=point.name, reason=describe(exc)))
             continue
-        problem = _rejected(candidate)
-        if problem is not None:
-            failures.append(LoadFailure(name=point.name, reason=problem))
-            continue
-        found.append(candidate)
+        adapters, rejected = expand(point.name, candidate)
+        failures.extend(rejected)
+        for adapter in adapters:
+            if adapter.name in owners:
+                failures.append(
+                    LoadFailure(
+                        name=f"{point.name}:{adapter.name}",
+                        reason=(
+                            f"adapter name {adapter.name!r} is already registered by entry "
+                            f"point {owners[adapter.name]!r}"
+                        ),
+                    )
+                )
+                continue
+            owners[adapter.name] = point.name
+            found.append(adapter)
 
     found.sort(key=lambda a: (a.tier, a.name))
     return found, failures
 
 
+def expand(point_name: str, loaded: Any) -> tuple[list[Adapter], list[LoadFailure]]:
+    """One entry point's target as adapters: a single adapter, or a list or tuple of them.
+
+    The sequence form is for catalogs - fifty portal datasets described as data are one
+    module and one entry point, not fifty lines in `pyproject.toml`. Each element is judged
+    alone, so one bad catalog row is one `LoadFailure` naming it rather than a catalog that
+    vanishes. An element may already be a `LoadFailure`, which is how a catalog reports a
+    row it could not build. Strings, mappings and generators are refused: a string is a
+    sequence of characters, and a generator would be consumed by whoever looked first.
+    """
+    if not isinstance(loaded, (list, tuple)):
+        problem = _rejected(loaded)
+        if problem is not None:
+            return [], [LoadFailure(name=point_name, reason=problem)]
+        return [loaded], []
+    if not loaded:
+        return [], [LoadFailure(name=point_name, reason="declares an empty list of adapters")]
+
+    found: list[Adapter] = []
+    failures: list[LoadFailure] = []
+    for index, item in enumerate(loaded):
+        if isinstance(item, LoadFailure):
+            failures.append(item)
+            continue
+        label = f"{point_name}[{getattr(item, 'name', index)}]"
+        problem = _rejected(item)
+        if problem is not None:
+            failures.append(LoadFailure(name=label, reason=problem))
+            continue
+        found.append(item)
+    return found, failures
+
+
 def _rejected(candidate: Any) -> str | None:
     """Why an object is not usable as an adapter, or `None` if it is."""
+    from typing import get_args
+
+    from longrun.core.models.features import FeatureKind
+
     if not isinstance(candidate, Adapter):
         return f"does not satisfy the Adapter protocol (got {type(candidate).__name__})"
+    if not isinstance(candidate.name, str) or not _NAME_PATTERN.match(candidate.name):
+        return f"declares a malformed name {candidate.name!r}; expected e.g. 'wzdx.modot'"
+    if candidate.kind not in get_args(FeatureKind):
+        return f"declares an unknown kind {candidate.kind!r}"
+    if candidate.tier not in (1, 2, 3, 4):
+        return f"declares tier {candidate.tier!r}; tiers are 1-4"
     ids = tuple(candidate.jurisdictions)
     if not ids:
         return "declares no jurisdictions, so it can never match"
@@ -432,5 +494,6 @@ __all__ = [
     "MAX_JURISDICTIONS",
     "AdapterRegistry",
     "discover",
+    "expand",
     "matches",
 ]

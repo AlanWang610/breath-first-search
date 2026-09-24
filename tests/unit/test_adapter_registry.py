@@ -348,10 +348,71 @@ def test_an_adapter_declaring_a_malformed_id_is_rejected_with_a_reason() -> None
     jurisdiction reports "no adapter" exactly as it did before the adapter existed."""
     from longrun.adapters.registry import _rejected
 
-    assert _rejected(FakeAdapter(name="x", jurisdictions=("state:29",))) is not None
-    assert _rejected(FakeAdapter(name="x", jurisdictions=("tiger:state:TWENTYNINE",))) is not None
-    assert _rejected(FakeAdapter(name="x", jurisdictions=())) is not None
-    assert _rejected(FakeAdapter(name="x", jurisdictions=("tiger:state:29",))) is None
+    assert _rejected(FakeAdapter(name="fake.x", jurisdictions=("state:29",))) is not None
+    assert (
+        _rejected(FakeAdapter(name="fake.x", jurisdictions=("tiger:state:TWENTYNINE",))) is not None
+    )
+    assert _rejected(FakeAdapter(name="fake.x", jurisdictions=())) is not None
+    assert _rejected(FakeAdapter(name="fake.x", jurisdictions=("tiger:state:29",))) is None
+
+
+def test_an_adapter_is_rejected_for_a_name_kind_or_tier_it_cannot_have() -> None:
+    """The name is the cache scope and the registry's grouping key, so a catalog that
+    mints one from data must mint a well-formed one."""
+    from longrun.adapters.registry import _rejected
+
+    ok = ("tiger:state:29",)
+    assert "name" in (_rejected(FakeAdapter(name="Not Dotted", jurisdictions=ok)) or "")
+    assert "kind" in (_rejected(FakeAdapter(name="fake.x", jurisdictions=ok, kind="x")) or "")
+    assert "tier" in (_rejected(FakeAdapter(name="fake.x", jurisdictions=ok, tier=5)) or "")
+
+
+def test_one_entry_point_may_register_a_list_and_one_bad_row_fails_alone() -> None:
+    """The catalog shape (M21): fifty datasets are one module and one entry point, and a
+    broken row is one named failure rather than a catalog that vanishes."""
+    from longrun.adapters.base import LoadFailure
+    from longrun.adapters.registry import expand
+
+    good = FakeAdapter(name="portal.a", jurisdictions=("tiger:state:29",))
+    bad = FakeAdapter(name="portal.b", jurisdictions=("nope",))
+    reported = LoadFailure(name="catalog[c]", reason="row c has no dataset")
+    found, failures = expand("catalog", [good, bad, reported])
+    assert found == [good]
+    assert [f.name for f in failures] == ["catalog[portal.b]", "catalog[c]"]
+
+    assert expand("one", good) == ([good], [])
+    assert expand("empty", [])[1][0].reason.startswith("declares an empty")
+    assert expand("text", "wzdx.modot")[0] == []
+
+
+def test_a_second_adapter_with_a_taken_name_is_a_failure_not_a_silent_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Before M17 `_plan` keyed by name, so the second of two same-named adapters was never
+    fetched while its jurisdictions were reported covered. Entry points are walked in name
+    order, so the first by *entry-point* name wins regardless of install order."""
+    import importlib.metadata
+
+    first = FakeAdapter(name="wzdx.same", jurisdictions=("tiger:state:29",))
+    second = FakeAdapter(name="wzdx.same", jurisdictions=("tiger:state:20",))
+
+    class Point:
+        def __init__(self, name: str, target: Any) -> None:
+            self.name, self._target = name, target
+
+        def load(self) -> Any:
+            return self._target
+
+    monkeypatch.setattr(
+        importlib.metadata,
+        "entry_points",
+        lambda group: [Point("b-point", second), Point("a-point", first)],
+    )
+    found, failures = discover()
+    assert found == [first]
+    assert (
+        len(failures) == 1 and "already registered by entry point 'a-point'" in failures[0].reason
+    )
 
 
 def test_something_that_is_not_an_adapter_is_rejected_with_a_reason() -> None:
@@ -393,13 +454,17 @@ def test_every_declared_entry_point_target_imports() -> None:
     config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     declared = config["project"].get("entry-points", {}).get("longrun.adapters", {})
 
+    from longrun.adapters.registry import expand
+
+    names: list[str] = []
     for name, target in declared.items():
         module_path, _, attribute = target.partition(":")
         module = importlib.import_module(module_path)
         assert attribute, f"{name} declares no attribute: {target}"
-        adapter = getattr(module, attribute, None)
-        assert adapter is not None, f"{name} points at {target}, which does not exist"
-        assert isinstance(adapter, Adapter), f"{name} is not an Adapter"
-        assert all(valid_jurisdiction_id(i) for i in adapter.jurisdictions), (
-            f"{name} declares a malformed jurisdiction id: {adapter.jurisdictions}"
-        )
+        loaded = getattr(module, attribute, None)
+        assert loaded is not None, f"{name} points at {target}, which does not exist"
+        # The same judgement `discover()` makes, so the two cannot disagree about a target.
+        adapters, failures = expand(name, loaded)
+        assert not failures, [f"{f.name}: {f.reason}" for f in failures]
+        names.extend(a.name for a in adapters)
+    assert len(names) == len(set(names)), "two entry points register the same adapter name"
