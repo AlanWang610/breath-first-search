@@ -463,8 +463,10 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
     names = ", ".join(f"{count} {level}" for level, count in sorted(by_level.items()))
 
     covered, by_tier = adapter_coverage(found)
+    keyless = keyless_coverage(covered)
     counts = dict(by_level)
     counts["with_adapter"] = len(covered)
+    counts["key_missing"] = len(keyless)
     for tier, n in sorted(by_tier.items()):
         counts[f"tier_{tier}"] = n
     # The other three kinds, prefixed so the closure counts every existing build manifest
@@ -477,8 +479,9 @@ def step_jurisdictions(ctx: BuildContext) -> StepRecord:
             counts[f"{kind}.tier_{tier}"] = n
 
     tiers = ", ".join(f"{n} at tier {tier}" for tier, n in sorted(by_tier.items()))
+    waiting = f"; {len(keyless)} of those wait on a key that is not set" if keyless else ""
     adapters = (
-        f"{len(covered)} of {len(found)} have a closure adapter ({tiers})"
+        f"{len(covered)} of {len(found)} have a closure adapter ({tiers}){waiting}"
         if covered
         else f"no closure adapter for any of {len(found)}"
     )
@@ -522,6 +525,30 @@ def adapter_coverage(
             best = min(int(i.tier) for i in infos)
             by_tier[best] = by_tier.get(best, 0) + 1
     return covered, by_tier
+
+
+def keyless_coverage(
+    covered: list[Jurisdiction], kind: FeatureKind = "closures"
+) -> list[Jurisdiction]:
+    """The covered jurisdictions whose every best-tier claimant needs a key that is not set.
+
+    A Bay Area build covers 164 of 187 jurisdictions through 511 SF Bay's county claims,
+    and none of them can be asked without `LONGRUN_511SF_API_KEY`. Reporting 164 without
+    saying so is the inflation the WZDx survey refused ten keyed feeds to avoid.
+    """
+    from longrun.adapters.registry import AdapterRegistry
+    from longrun.core.data.cache import SqliteCache
+    from longrun.core.models.context import Budget
+
+    out: list[Jurisdiction] = []
+    with SqliteCache() as cache:
+        registry = AdapterRegistry(cache, Budget(), offline=True)
+        for jurisdiction in covered:
+            infos = registry.adapters_for(kind, jurisdiction)
+            best = min((int(i.tier) for i in infos), default=None)
+            if best is not None and not any(i.key_present for i in infos if int(i.tier) == best):
+                out.append(jurisdiction)
+    return out
 
 
 def step_coverage_report(ctx: BuildContext) -> StepRecord:

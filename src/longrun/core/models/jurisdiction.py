@@ -110,6 +110,10 @@ class AdapterInfo(BaseModel):
     tier: Tier
     kind: FeatureKind
     source: str
+    #: Whether the adapter can actually be asked: `False` when it declares a key that is
+    #: not set (M17). A region with an adapter nobody can ask is not a covered region, and
+    #: counting it as one is the inflation `adapters/wzdx/__init__.py` warned about.
+    key_present: bool = True
 
 
 def tiger_id(level: str, geoid: str) -> str:

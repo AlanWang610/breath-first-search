@@ -721,3 +721,12 @@ def test_who_covered_a_jurisdiction_reaches_the_coverage_entry(registry_factory:
     modot = FakeAdapter(name="wzdx.modot", jurisdictions=("tiger:state:29",))
     found = registry_factory(modot).fetch("closures", [KCMO], None, DAY)
     assert found.answers[0].coverage("closures").covered_by == "tiger:state:29"
+
+
+def test_adapters_for_says_whether_a_claimant_can_be_asked(registry_factory: Any) -> None:
+    keyed = FakeAdapter(name="wzdx.keyed", jurisdictions=("tiger:state:29",))
+    keyed.key = _Key(None)  # type: ignore[attr-defined]
+    open_feed = FakeAdapter(name="wzdx.open", jurisdictions=("tiger:state:29",))
+    infos = {i.name: i for i in registry_factory(keyed, open_feed).adapters_for("closures", KCMO)}
+    assert not infos["wzdx.keyed"].key_present
+    assert infos["wzdx.open"].key_present

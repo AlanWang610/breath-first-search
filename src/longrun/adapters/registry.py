@@ -249,7 +249,13 @@ class AdapterRegistry:
         from longrun.core.models.jurisdiction import AdapterInfo
 
         return [
-            AdapterInfo(name=a.name, tier=a.tier, kind=a.kind, source=a.source)
+            AdapterInfo(
+                name=a.name,
+                tier=a.tier,
+                kind=a.kind,
+                source=a.source,
+                key_present=(key := key_of(a)) is None or key.value() is not None,
+            )
             for a in self._adapters
             if matches(a, kind, jurisdiction)
         ]
