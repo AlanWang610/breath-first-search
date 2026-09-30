@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -80,7 +80,7 @@ def _verdict(**overrides: Any) -> Verdict:
         "bounds": {"fraction_lts3_plus_max": 0.15},
         "measured": MEASURED,
         "labeler": "runner-1",
-        "labelled_at": datetime(2026, 9, 29, 7, 30),
+        "labelled_at": datetime(2026, 9, 29, 7, 30, tzinfo=UTC),
         "via": "cli",
     }
     fields.update(overrides)
@@ -285,3 +285,10 @@ def test_a_pair_file_holds_numbers_and_no_coordinates() -> None:
     text = dump_pairs([PreferencePair(a=a, b=a, preferred="a", source="judged")])
 
     assert "lat" not in text and "lon" not in text and "coordinates" not in text
+
+
+def test_a_verdict_says_which_clock_it_was_labelled_on() -> None:
+    """A naive time beside an aware one does not sort, and the ledger sorts by it - found
+    when a test recorded one of each and `publish` raised instead of choosing the later."""
+    with pytest.raises(ValidationError):
+        _verdict(labelled_at=datetime(2026, 9, 29, 7, 30))

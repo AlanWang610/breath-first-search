@@ -20,9 +20,11 @@ and the Ozarks — each with a GraphHopper graph carrying LTS as an encoded valu
 What is **not** here, stated because a status line that only lists successes is the same
 failure in a new costume:
 
-- **No human has labelled anything.** Every eval label is `by: claude` and every preference
-  pair is synthetic, so the shipped custom model is neutral and says so (ADR 0021, 0022).
-  The suite prints the count of human labels on every run. It is 0 of 5.
+- **No human has labelled anything yet.** Every eval label is `by: claude` or `synthetic` and
+  no preference pair is a person's, so the shipped custom model is neutral and says so (ADR
+  0021, 0022). The suite prints the count of human labels on every run; it is 0 of 5. The
+  door a person labels through now exists - `longrun label show`, `verdict` and `publish`,
+  recording to `~/.longrun/labels/` first (ADR 0048) - and an agent never walks through it.
 - **Three sources are absent for three different reasons**: HPMS has no reachable endpoint
   (ADR 0012), FCC mobile coverage is a manual download nobody has made (`deploy/README.md`),
   and Overture buildings load per corridor rather than per region (ADR 0009).

@@ -17,21 +17,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import yaml
 from typer.testing import CliRunner
 
 from longrun.cli.main import app
 from longrun.core.models.plan import Plan
 from longrun.core.plan.scratchpad import Scratchpad
+from longrun.goldens import UNREACHABLE_ROUTER, golden_args, load_request
 
 ROUTES_DIR = Path(__file__).parent / "routes"
 
-#: A port nothing listens on. A loop golden must replay its router answers, and pointing at
-#: the default would let it succeed against whatever a developer happens to have running -
-#: which is the difference between a hermetic test and one that passes on one machine.
-UNREACHABLE_ROUTER = "http://127.0.0.1:9"
+# `UNREACHABLE_ROUTER` and `load_request` are re-exported: they moved to `longrun.goldens`
+# in M23.2, when `longrun label show` became a second runner of these directories.
+__all__ = ["UNREACHABLE_ROUTER", "load_request"]
 
 #: Every file a golden route directory must carry. `route.gpx` is the geometry,
 #: `request.yaml` the pinned request, `profile.yaml` the preferences in force,
@@ -110,10 +108,6 @@ def route_names() -> list[str]:
     return sorted(d.name for d in ROUTES_DIR.iterdir() if (d / "request.yaml").exists())
 
 
-def load_request(directory: Path) -> dict[str, Any]:
-    return dict(yaml.safe_load((directory / "request.yaml").read_text(encoding="utf-8")) or {})
-
-
 def run(directory: Path, out_dir: Path) -> GoldenRun:
     """Invoke the CLI over a route directory and read back what it wrote.
 
@@ -122,82 +116,18 @@ def run(directory: Path, out_dir: Path) -> GoldenRun:
     CLI with `LONGRUN_OFFLINE=1` and **no model in the loop**, which is what makes the loop
     golden-testable at all (ADR 0015): every call site has a deterministic path, so the
     only thing a missing model changes is how terse a trade-off line reads.
-    """
-    request = load_request(directory)
-    if request.get("from"):
-        return _run_loop(directory, out_dir, request)
-    args = [
-        "repair",
-        str(directory / "route.gpx"),
-        "--date",
-        str(request["date"]),
-        "--start",
-        str(request["start"]),
-        "--fixtures",
-        str(directory / "fixtures"),
-        "--profile",
-        str(directory / "profile.yaml"),
-        "--snapshot",
-        str(directory / "snapshot.json"),
-        "--cache",
-        str(directory / "cache.sqlite"),
-        "--out",
-        str(out_dir),
-    ]
-    if request.get("target_km") is not None:
-        args += ["--target-km", str(request["target_km"])]
-    if request.get("utc_offset_hours") is not None:
-        args += ["--utc-offset", str(request["utc_offset_hours"])]
 
+    The argv is `longrun.goldens.golden_args`, shared with `longrun label show` so the plan
+    a person judges is the plan `expected.json` was written from (ADR 0048). A loop golden's
+    router is `UNREACHABLE_ROUTER`: every route, detour and match it needs is in the
+    cassette, so a request that is *not* recorded fails as a loud `CacheMiss` rather than
+    quietly reaching a GraphHopper somebody happens to be running.
+    """
+    args = golden_args(directory, out_dir)
     result = CliRunner().invoke(app, args, env={"LONGRUN_OFFLINE": "1"})
     if result.exit_code != 0:
         raise GoldenError(
-            f"`longrun repair` exited {result.exit_code} on {directory.name}:\n"
-            f"{result.output}\n{result.exception!r}"
-        )
-
-    return _read_back(directory, out_dir)
-
-
-def _run_loop(directory: Path, out_dir: Path, request: dict[str, Any]) -> GoldenRun:
-    """`longrun plan`, through the loop, replaying recorded router answers.
-
-    The router is pointed at a port nothing is listening on. Every route, detour and match
-    this needs is in the cassette, so a request that is *not* recorded fails as a loud
-    `CacheMiss` rather than quietly reaching a GraphHopper somebody happens to be running.
-    """
-    args = [
-        "plan",
-        "--from",
-        str(request["from"]),
-        "--to",
-        str(request["to"]),
-        "--date",
-        str(request["date"]),
-        "--start",
-        str(request["start"]),
-        "--rounds",
-        str(request.get("rounds", 5)),
-        "--fixtures",
-        str(directory / "fixtures"),
-        "--profile",
-        str(directory / "profile.yaml"),
-        "--snapshot",
-        str(directory / "snapshot.json"),
-        "--cache",
-        str(directory / "cache.sqlite"),
-        "--router",
-        UNREACHABLE_ROUTER,
-        "--out",
-        str(out_dir),
-    ]
-    if request.get("utc_offset_hours") is not None:
-        args += ["--utc-offset", str(request["utc_offset_hours"])]
-
-    result = CliRunner().invoke(app, args, env={"LONGRUN_OFFLINE": "1"})
-    if result.exit_code != 0:
-        raise GoldenError(
-            f"`longrun plan` exited {result.exit_code} on {directory.name}:\n"
+            f"`longrun {args[0]}` exited {result.exit_code} on {directory.name}:\n"
             f"{result.output}\n{result.exception!r}"
         )
     return _read_back(directory, out_dir)

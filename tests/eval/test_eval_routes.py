@@ -106,6 +106,10 @@ def test_every_case_names_its_author_and_its_reason(name: str) -> None:
     assert len(str(label.get("reason", "")).split()) >= MIN_REASON_WORDS, (
         "a reason must be a sentence"
     )
+    if label["by"] == "human":
+        # ADR 0022, amended: a person's label says which person, because ADR 0021 fits a
+        # vector for one runner and never for everybody.
+        assert label.get("labeler"), f"{name} is a human label that does not say whose"
 
 
 @pytest.mark.parametrize("name", CASE_NAMES)

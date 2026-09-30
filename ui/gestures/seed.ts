@@ -11,7 +11,7 @@
  *
  * So it is produced the way the golden suite produces one: `longrun repair` over
  * `tests/golden/routes/synthetic-hazards`, with `LONGRUN_OFFLINE=1` and every input pinned
- * in the route directory. `tests/golden/harness.py` owns that argv and this mirrors it
+ * in the route directory. `src/longrun/goldens.py` owns that argv and this mirrors it
  * exactly, down to `--target-km` and `--utc-offset`, so a change to how a golden is entered
  * shows up here as a failure rather than as a quiet divergence.
  *

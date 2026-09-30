@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 #: A labeler is an identifier: it names a published file and it is what `longrun tune
 #: --labeler` fits on. Kept to characters that are safe in both, so a name never has to be
@@ -52,8 +51,10 @@ class Verdict(BaseModel):
 
     by: Literal["human"] = "human"
     labeler: str
-    #: Passed in by the door that recorded it: `core/` reads no clock (scope 3.3).
-    labelled_at: datetime
+    #: Passed in by the door that recorded it: `core/` reads no clock (scope 3.3). Aware,
+    #: never naive: a naive time is a guess about which clock it was read off (ADR 0045),
+    #: and the ledger orders verdicts by it - a naive one beside an aware one does not sort.
+    labelled_at: AwareDatetime
     via: Via
 
     @field_validator("labeler")
