@@ -292,11 +292,29 @@ def publish(
 @label_app.command("status")
 def status() -> None:
     """What is in your ledger, and what of it could be published."""
+    from longrun.core.labels.answers import probe_agreement
+
     ledger = _ledger()
     verdicts = ledger.verdicts()
     typer.echo(f"ledger: {ledger.root}")
+
+    tasks, answers = ledger.tasks(), ledger.answers()
+    counts = {
+        kind: sum(1 for a in answers if a.prefer == kind) for kind in ("a", "b", "none", "cant")
+    }
+    agreeing, probed = probe_agreement(tasks, answers)
+    typer.echo(
+        f"pairs: {len(tasks)} queued, {len(answers)} answered - {counts['a'] + counts['b']} "
+        f"chose a line, {counts['none']} no preference, {counts['cant']} could not judge; "
+        f"probes {agreeing} of {probed} agree"
+    )
+    if answers:
+        # docs/tuning.md: in dense grids the parameters barely move the line. A high rate of
+        # "no preference" on pairs that were distinct by construction is evidence of that.
+        typer.echo(f"  no-preference rate {counts['none'] / len(answers):.0%} of answered pairs")
+
     if not verdicts:
-        typer.echo("no verdicts yet; start with `longrun label show --golden NAME`")
+        typer.echo("verdicts: none yet; start with `longrun label show --golden NAME`")
         return
     latest: dict[str, Verdict] = {}
     for record in verdicts:
@@ -309,6 +327,215 @@ def status() -> None:
             f"  {subject:<24} {record.would_run:<6}{gap} {record.labelled_at.date()} "
             f"by {record.labeler} - {where}"
         )
+
+
+# --- preference pairs (ADR 0049) -----------------------------------------------------
+
+
+def _new_id() -> str:
+    """Random, so nothing about a task's id - or which line is A - follows from how it was
+    drawn. Twelve hex characters: a file name in three directories and a URL segment."""
+    import secrets
+
+    return secrets.token_hex(6)
+
+
+def _parse_bbox(text: str) -> tuple[float, float, float, float]:
+    try:
+        west, south, east, north = (float(part) for part in text.split(","))
+    except ValueError:
+        raise _fail(f"--bbox {text!r}: write it as WEST,SOUTH,EAST,NORTH") from None
+    if not (west < east and south < north):
+        raise _fail(f"--bbox {text!r}: west must be below east and south below north")
+    return west, south, east, north
+
+
+def _parse_km(text: str) -> tuple[float, float]:
+    low, sep, high = text.partition("-")
+    try:
+        bounds = (float(low), float(high) if sep else float(low))
+    except ValueError:
+        raise _fail(f"--km {text!r}: write it as MIN-MAX, e.g. 3-9") from None
+    if not 0 < bounds[0] <= bounds[1]:
+        raise _fail(f"--km {text!r}: need 0 < MIN <= MAX")
+    return bounds
+
+
+def _sampled_ends(
+    rng: Any, bbox: tuple[float, float, float, float], km: tuple[float, float]
+) -> tuple[Any, Any] | None:
+    """Two ends inside the box, a sampled distance apart; `None` if the box will not hold one."""
+    import math
+
+    from longrun.core.models.geometry import LatLon
+
+    west, south, east, north = bbox
+    for _ in range(50):
+        lat, lon = rng.uniform(south, north), rng.uniform(west, east)
+        metres, bearing = rng.uniform(*km) * 1000.0, rng.uniform(0.0, 2 * math.pi)
+        to_lat = lat + metres * math.cos(bearing) / 110_540.0
+        to_lon = lon + metres * math.sin(bearing) / (111_320.0 * math.cos(math.radians(lat)))
+        if south <= to_lat <= north and west <= to_lon <= east:
+            return LatLon(lat=lat, lon=lon), LatLon(lat=to_lat, lon=to_lon)
+    return None
+
+
+def _requested_ends(path: Path) -> list[tuple[Any, Any]]:
+    from longrun.core.models.geometry import LatLon
+
+    def point(text: str) -> LatLon:
+        lat, _, lon = text.partition(",")
+        return LatLon(lat=float(lat), lon=float(lon))
+
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    try:
+        return [(point(str(entry["from"])), point(str(entry["to"]))) for entry in data]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise _fail(f"{path}: each entry needs from: 'lat,lon' and to: 'lat,lon' ({exc})") from None
+
+
+@label_app.command("seed")
+def seed(
+    bbox: str | None = typer.Option(None, "--bbox", help="WEST,SOUTH,EAST,NORTH to sample in."),
+    sample: int = typer.Option(20, "--sample", help="How many pairs of ends to try."),
+    km: str = typer.Option("3-9", "--km", help="Distance between the ends, MIN-MAX km."),
+    seed_value: int = typer.Option(1, "--seed", help="Sampling seed, so a box is repeatable."),
+    requests: Path | None = typer.Option(
+        None, "--requests", help="YAML list of {from: 'lat,lon', to: 'lat,lon'} instead."
+    ),
+    repeat: int = typer.Option(2, "--repeat", help="Test-retest probes: tasks asked twice."),
+    router: str | None = typer.Option(None, "--router", help="GraphHopper URL; default by region."),
+    region: str | None = typer.Option(None, "--region", help="Region, when the ends cannot say."),
+    per_request: int = typer.Option(2, "--per-request", help="Questions per pair of ends."),
+) -> None:
+    """Draw lines between ends you might run between, and queue the pairs worth asking.
+
+    Asks the router, which must be running for the region (`./deploy/graphhopper/run.ps1
+    -Region bayarea`). Records questions, never answers: what you prefer is `label pair`, or
+    the Review tab.
+    """
+    import random
+
+    import httpx
+
+    from longrun.core.labels.pairs import probe
+    from longrun.core.labels.seeding import seed_request
+    from longrun.core.routing.graphhopper import GraphHopperRouter
+    from longrun.regions.routers import resolve
+
+    if (bbox is None) == (requests is None):
+        raise _fail("say where: --bbox WEST,SOUTH,EAST,NORTH, or --requests FILE")
+    if requests is not None:
+        ends_list = _requested_ends(requests)
+    else:
+        assert bbox is not None
+        box, span, rng = _parse_bbox(bbox), _parse_km(km), random.Random(seed_value)
+        sampled = [_sampled_ends(rng, box, span) for _ in range(sample)]
+        ends_list = [ends for ends in sampled if ends is not None]
+        if not ends_list:
+            raise _fail(f"no two points {km} km apart fit inside {bbox}")
+
+    ledger = _ledger()
+    now = datetime.now(UTC).replace(microsecond=0)
+    checked: set[str] = set()
+    made = []
+    for index, ends in enumerate(ends_list, 1):
+        resolved = resolve(list(ends), region=region, explicit=router)
+        if resolved.url not in checked:
+            try:
+                httpx.get(f"{resolved.url}/health", timeout=5.0).raise_for_status()
+            except httpx.HTTPError as exc:
+                raise _fail(
+                    f"no router answering at {resolved.url} ({exc}); start it with "
+                    f"`./deploy/graphhopper/run.ps1 -Region {resolved.region or 'bayarea'}`"
+                ) from None
+            checked.add(resolved.url)
+        outcome = seed_request(
+            GraphHopperRouter(resolved.url),
+            ends,
+            region=resolved.region,
+            new_id=_new_id,
+            created_at=now,
+            per_request=per_request,
+        )
+        for task in outcome.tasks:
+            ledger.add_task(task)
+        made.extend(outcome.tasks)
+        detail = (
+            "; ".join(outcome.notes)
+            if not outcome.tasks
+            else ", ".join(t.stratum for t in outcome.tasks)
+        )
+        typer.echo(
+            f"  {index:>3}/{len(ends_list)} {resolved.region or '?':<8} {outcome.lines} lines, "
+            f"{outcome.distinct_lines} distinct, {len(outcome.tasks)} question(s): {detail}"
+        )
+
+    probes = [probe(task, _new_id(), now) for task in made[: max(repeat, 0)]]
+    for task in probes:
+        ledger.add_task(task)
+
+    strata: dict[str, int] = {}
+    for task in made:
+        strata[task.stratum] = strata.get(task.stratum, 0) + 1
+    typer.echo(
+        f"queued {len(made)} question(s) from {len(ends_list)} pair(s) of ends, plus "
+        f"{len(probes)} probe(s); by what differs: "
+        + (", ".join(f"{name} {count}" for name, count in sorted(strata.items())) or "nothing")
+    )
+    typer.echo("answer them in the web UI's Review tab, or with `longrun label pair TASK ...`")
+
+
+@label_app.command("queue")
+def queue() -> None:
+    """The unanswered questions, in the order a session asks them."""
+    from longrun.core.labels.pairs import order
+
+    ledger = _ledger()
+    answered = {answer.task_id for answer in ledger.answers()}
+    pending = order(task for task in ledger.tasks() if task.id not in answered)
+    typer.echo(f"{len(pending)} unanswered, {len(answered)} answered")
+    for task in pending:
+        probe_note = f" (probe of {task.repeat_of})" if task.repeat_of else ""
+        typer.echo(
+            f"  {task.id}  {task.region or '?':<8} {task.stratum:<16} "
+            f"A {task.a.length_m / 1000:.2f} km / B {task.b.length_m / 1000:.2f} km{probe_note}"
+        )
+
+
+@label_app.command("pair")
+def pair(
+    task_id: str = typer.Argument(..., help="The task, from `label queue`."),
+    prefer: str = typer.Option(..., "--prefer", help="a, b, none (no preference) or cant."),
+    strength: str | None = typer.Option(None, "--strength", help="slight or clear, with a or b."),
+    reason: str | None = typer.Option(None, "--reason", help="Why, if you want to say."),
+) -> None:
+    """Record which of a task's two lines you would rather run."""
+    from longrun.core.labels.answers import AnswerRefused, record_pair_answer
+    from longrun.core.labels.ledger import AlreadyAnswered
+
+    labeler = labeler_from_env()
+    if labeler is None:
+        raise _fail(f"set {LABELER_ENV_VAR} to the name your labels go under")
+    try:
+        answer = record_pair_answer(
+            _ledger(),
+            task_id,
+            prefer=prefer,
+            strength=strength,
+            reason=reason,
+            labeler=labeler,
+            labelled_at=datetime.now(UTC).replace(microsecond=0),
+            via="cli",
+        )
+    except AnswerRefused as refused:
+        for problem in refused.problems:
+            typer.echo(f"  - {problem}", err=True)
+        raise _fail("not recorded; nothing was written") from None
+    except AlreadyAnswered as exc:
+        raise _fail(f"{exc}; a first answer stands") from None
+    counted = "a pair `tune` will read" if answer.prefer in ("a", "b") else "kept, not a pair"
+    typer.echo(f"recorded {answer.prefer} on {task_id} (by {labeler}): {counted}")
 
 
 def register(app: typer.Typer) -> None:

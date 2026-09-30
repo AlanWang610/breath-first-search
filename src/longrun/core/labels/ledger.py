@@ -18,9 +18,12 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 
+from longrun.core.labels.pairs import PairAnswer, PairTask, pair_from
+from longrun.core.labels.pairs_io import dump_pairs
 from longrun.core.labels.records import Verdict
 
 LABELS_DIR_ENV_VAR = "LONGRUN_LABELS_DIR"
@@ -28,6 +31,15 @@ LABELER_ENV_VAR = "LONGRUN_LABELER"
 
 #: Where the ledger lives when nothing says otherwise.
 DEFAULT_LABELS_DIR = Path.home() / ".longrun" / "labels"
+
+
+#: A task id is a file name in three directories, so it is held to characters that are one.
+TASK_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+class AlreadyAnswered(ValueError):
+    """A task keeps its first answer. A second look is a probe (`pairs.probe`), not an edit:
+    an answer that could be overwritten would let a later mood quietly replace a judgement."""
 
 
 def labels_dir_from_env(env: Mapping[str, str] | None = None) -> Path:
@@ -86,8 +98,84 @@ class Ledger:
         ]
         return sorted(found, key=lambda v: (v.labelled_at, v.id))
 
+    # --- preference pairs -------------------------------------------------------------
+
+    @property
+    def queue_dir(self) -> Path:
+        return self.root / "queue"
+
+    @property
+    def answers_dir(self) -> Path:
+        return self.root / "answers"
+
+    @property
+    def pairs_dir(self) -> Path:
+        """Tune-format YAML, one file per answered task: `longrun tune --pairs` reads it."""
+        return self.root / "pairs"
+
+    def add_task(self, task: PairTask) -> Path:
+        _check_task_id(task.id)
+        self.queue_dir.mkdir(parents=True, exist_ok=True)
+        path = self.queue_dir / f"{task.id}.json"
+        path.write_text(task.model_dump_json() + "\n", encoding="utf-8")
+        return path
+
+    def task(self, task_id: str) -> PairTask | None:
+        if not TASK_ID_PATTERN.fullmatch(task_id):
+            return None
+        path = self.queue_dir / f"{task_id}.json"
+        return PairTask.model_validate_json(path.read_text("utf-8")) if path.is_file() else None
+
+    def tasks(self) -> list[PairTask]:
+        """Every task, oldest first."""
+        if not self.queue_dir.is_dir():
+            return []
+        found = [
+            PairTask.model_validate_json(path.read_text("utf-8"))
+            for path in self.queue_dir.glob("*.json")
+        ]
+        return sorted(found, key=lambda t: (t.created_at, t.id))
+
+    def answer(self, task_id: str) -> PairAnswer | None:
+        if not TASK_ID_PATTERN.fullmatch(task_id):
+            return None
+        path = self.answers_dir / f"{task_id}.json"
+        return PairAnswer.model_validate_json(path.read_text("utf-8")) if path.is_file() else None
+
+    def answers(self) -> list[PairAnswer]:
+        if not self.answers_dir.is_dir():
+            return []
+        found = [
+            PairAnswer.model_validate_json(path.read_text("utf-8"))
+            for path in self.answers_dir.glob("*.json")
+        ]
+        return sorted(found, key=lambda a: (a.labelled_at, a.task_id))
+
+    def record_answer(self, task: PairTask, answer: PairAnswer) -> PairAnswer:
+        """Keep an answer, and the tune-format pair it is evidence for when it names a line."""
+        _check_task_id(task.id)
+        if answer.task_id != task.id or (answer.a_id, answer.b_id) != (task.a.id, task.b.id):
+            raise ValueError(f"the answer is about {answer.task_id}, not the task it was given")
+        path = self.answers_dir / f"{task.id}.json"
+        if path.exists():
+            raise AlreadyAnswered(f"task {task.id} was answered already")
+        self.answers_dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(answer.model_dump_json() + "\n", encoding="utf-8")
+        pair = pair_from(task, answer)
+        if pair is not None:
+            self.pairs_dir.mkdir(parents=True, exist_ok=True)
+            (self.pairs_dir / f"{task.id}.yaml").write_text(dump_pairs([pair]), encoding="utf-8")
+        return answer
+
+
+def _check_task_id(task_id: str) -> None:
+    if not TASK_ID_PATTERN.fullmatch(task_id):
+        raise ValueError(f"{task_id!r} is not a task id")
+
 
 __all__ = [
+    "TASK_ID_PATTERN",
+    "AlreadyAnswered",
     "DEFAULT_LABELS_DIR",
     "LABELER_ENV_VAR",
     "LABELS_DIR_ENV_VAR",
