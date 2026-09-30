@@ -6,12 +6,14 @@ the route unrunnable", and M5's loop is what made that failure reachable - it ca
 a candidate, lock a span and park on a question, and until this suite existed nothing
 measured whether the route it produced was worth running.
 
-**No case here carries a human label.** `test_the_suite_reports_how_many_labels_a_person_
-wrote` prints the count, which is zero, and that is the honest state rather than an
-oversight: a milestone that generates its own ground truth and then passes against it has
-tested nothing (ADR 0022). What these cases *can* do without a person is hold the published
-acceptance metrics inside bounds that a judgement was written against, and refuse a label
-that no number supports.
+**A human label arrives only through `longrun label`** (ADR 0048), which records it in the
+runner's own ledger and publishes it here. `test_the_suite_reports_how_many_labels_a_person_
+wrote` prints the count; it was zero for eleven milestones, and that was the honest state
+rather than an oversight: a milestone that generates its own ground truth and then passes
+against it has tested nothing (ADR 0022). What a case *can* do without a person is hold the
+published acceptance metrics inside bounds that a judgement was written against, and refuse
+a label that no number supports. The rules live in `core.labels.bounds`, because the door a
+person writes through has to refuse the same labels this suite would.
 
 Metrics are read from each golden's `expected.json` rather than re-derived. Those files are
 the published record of what the scorers say, the goldens are already scope 7.1's reference
@@ -28,27 +30,17 @@ from typing import Any
 import pytest
 import yaml
 
+from longrun.core.labels.bounds import (
+    BOUND_NAMES,
+    MIN_REASON_WORDS,
+    Measured,
+    breaches,
+    measured_from_digest,
+    unmeasured,
+)
+
 CASES_DIR = Path(__file__).parent / "cases"
 GOLDEN_DIR = Path(__file__).resolve().parents[1] / "golden" / "routes"
-
-#: Bound names a case may state. A typo in a bound key would otherwise be a bound that
-#: silently never ran, which is the one failure a suite of assertions cannot survive.
-#:
-#: **A bound is always the acceptable envelope**, never a description of what is wrong with
-#: a route. A case labelled `would_run: no` is one whose measurements fall *outside* these.
-#: Stating an unrunnable route's bounds the other way round - "this route has at least 15%
-#: at LTS 3" - reads naturally and makes the breach test pass without checking anything,
-#: which is how the first version of these labels was written and how it was caught.
-BOUND_NAMES = frozenset(
-    {
-        "fraction_lts3_plus_max",
-        "fraction_lts3_plus_min",
-        "lts4_count_max",
-        "lts4_count_min",
-        "detour_ratio_max",
-        "hard_flags_max",
-    }
-)
 
 CASE_NAMES = sorted(path.name for path in CASES_DIR.iterdir() if (path / "label.yaml").is_file())
 
@@ -59,37 +51,20 @@ def _label(name: str) -> dict[str, Any]:
     return data
 
 
-def _measured(label: dict[str, Any]) -> dict[str, Any]:
-    """The published metrics for the route a case names."""
-    digest = json.loads(
-        (GOLDEN_DIR / label["golden"] / "expected.json").read_text(encoding="utf-8")
+def _measured(label: dict[str, Any]) -> Measured:
+    """The published metrics for the route a case names.
+
+    Read by the same function the label door uses on a live plan
+    (`core.labels.bounds`), so a verdict accepted when it was written is checked here
+    against the same numbers rather than a second reading of them.
+    """
+    return measured_from_digest(
+        json.loads((GOLDEN_DIR / label["golden"] / "expected.json").read_text(encoding="utf-8"))
     )
-    summary = digest.get("scorers", {}).get("segment_hostility", {}).get("summary", {})
-    hard = sum(
-        scorer.get("flags", {}).get("hard", 0) for scorer in digest.get("scorers", {}).values()
-    )
-    return {
-        "fraction_lts3_plus": summary.get("fraction_lts3_plus"),
-        "lts4_count": summary.get("lts4_count"),
-        "hard_flags": hard,
-        "detour_ratio": None,
-        "residual_flags": digest.get("residual_flags"),
-    }
 
 
-def _breaches(label: dict[str, Any], measured: dict[str, Any]) -> list[str]:
-    """Which of a case's stated bounds the measurements fall outside."""
-    out: list[str] = []
-    for bound, limit in (label.get("bounds") or {}).items():
-        metric, _, direction = bound.rpartition("_")
-        value = measured.get(metric)
-        if value is None:
-            continue
-        if direction == "max" and value > limit:
-            out.append(f"{metric} {value} > {limit}")
-        if direction == "min" and value < limit:
-            out.append(f"{metric} {value} < {limit}")
-    return out
+def _breaches(label: dict[str, Any], measured: Measured) -> list[str]:
+    return breaches(label.get("bounds") or {}, measured)
 
 
 # --- the suite is not empty --------------------------------------------------
@@ -128,17 +103,33 @@ def test_every_case_names_its_author_and_its_reason(name: str) -> None:
 
     assert label.get("would_run") in ("yes", "no", "unsure")
     assert label.get("by") in ("human", "claude", "synthetic")
-    assert len(str(label.get("reason", "")).split()) >= 12, "a reason must be a sentence"
+    assert len(str(label.get("reason", "")).split()) >= MIN_REASON_WORDS, (
+        "a reason must be a sentence"
+    )
 
 
 @pytest.mark.parametrize("name", CASE_NAMES)
 def test_every_bound_is_one_the_suite_actually_checks(name: str) -> None:
     """A misspelled bound is a bound that silently never runs - the one failure mode a
     suite of assertions cannot detect from inside itself."""
-    stated = set((_label(name).get("bounds") or {}).keys())
+    label = _label(name)
+    stated = set((label.get("bounds") or {}).keys())
 
-    assert stated, f"{name} states no bounds, so its label rests on nothing"
+    if not label.get("gap"):
+        assert stated, f"{name} states no bounds and no gap:, so its label rests on nothing"
     assert stated <= BOUND_NAMES, f"{name}: unknown bound(s) {sorted(stated - BOUND_NAMES)}"
+
+
+@pytest.mark.parametrize("name", CASE_NAMES)
+def test_no_bound_names_a_number_its_route_does_not_have(name: str) -> None:
+    """A bound on an unmeasured metric was skipped rather than failed until M23, which is
+    the silent-bound failure `BOUND_NAMES` exists to prevent arriving by a second route:
+    loop-bayarea stated `detour_ratio_max: 1.15` from M6 on, and no golden digest has ever
+    carried a detour ratio for it to be checked against."""
+    label = _label(name)
+    missing = unmeasured(label.get("bounds") or {}, _measured(label))
+
+    assert not missing, f"{name}: {missing} can never be checked; its route has no such value"
 
 
 @pytest.mark.parametrize("name", CASE_NAMES)
@@ -170,9 +161,32 @@ def test_a_route_nobody_would_run_fails_a_bound_that_says_why(name: str) -> None
     label = _label(name)
     if label["would_run"] != "no":
         pytest.skip("only routes labelled 'no' owe a breach")
+    if label.get("gap"):
+        pytest.skip("a gap: label says no number captures why; the test below checks it")
 
     assert _breaches(label, _measured(label)), (
         f"{name} is labelled unrunnable and no stated bound says why"
+    )
+
+
+@pytest.mark.parametrize("name", CASE_NAMES)
+def test_a_gap_stays_a_gap_until_a_number_says_why(name: str) -> None:
+    """Property 1's exception, and the reason it is not a hole in it.
+
+    A person's `no` that no measured number captures is recorded rather than refused -
+    that is a finding about the scorers, and refusing it would throw the finding away. But
+    the exception has to close itself: once a bound the label states breaches, a number
+    does say why, and the case should stop claiming otherwise. So this fails exactly when
+    property 1 would start to pass.
+    """
+    label = _label(name)
+    if not label.get("gap"):
+        pytest.skip("only a gap: label owes this")
+
+    assert label["would_run"] == "no", f"{name}: gap: is only for a 'no'"
+    assert not _breaches(label, _measured(label)), (
+        f"{name}: a stated bound now breaches ({_breaches(label, _measured(label))}), so a "
+        "number says why this route is a 'no' - drop gap: and let property 1 check it"
     )
 
 

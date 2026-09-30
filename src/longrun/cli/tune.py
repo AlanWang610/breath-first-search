@@ -15,66 +15,14 @@ from pathlib import Path
 from typing import Any
 
 import typer
-import yaml
 
-from longrun.core.routing.tuning import PreferencePair, RouteSummary, fit
+from longrun.core.labels.pairs_io import dump_pairs, read_pairs
+from longrun.core.routing.tuning import fit
 
 #: Where a labelled set lives by default. Under `tests/` rather than in the package,
 #: because a preference set is evidence about a person and belongs beside the eval cases
 #: that read the same rule about authorship (ADR 0022).
 DEFAULT_PAIRS_DIR = Path("tests/eval/pairs")
-
-
-def _summary_from(data: dict[str, Any]) -> RouteSummary:
-    """A stored summary back into a `RouteSummary`.
-
-    The class key is a four-part string on disk rather than a tuple, because YAML has no
-    tuple and a list key is not hashable. `"3|false|false|true"` is LTS 3, paved, not a
-    path, a collector - and `"none"` is an LTS nobody could determine, which must survive
-    the round trip as `None` rather than becoming the string.
-    """
-    buckets: dict[tuple[int | None, bool, bool, bool], float] = {}
-    for key, metres in (data.get("metres_by_class") or {}).items():
-        lts_text, unpaved, is_path, is_collector = str(key).split("|")
-        buckets[
-            (
-                None if lts_text == "none" else int(lts_text),
-                unpaved == "true",
-                is_path == "true",
-                is_collector == "true",
-            )
-        ] = float(metres)
-    return RouteSummary(
-        name=str(data.get("name", "route")),
-        length_m=float(data.get("length_m", sum(buckets.values()))),
-        metres_by_class=buckets,
-    )
-
-
-def _pairs_in(directory: Path) -> list[PreferencePair]:
-    pairs: list[PreferencePair] = []
-    if not directory.is_dir():
-        return pairs
-    for path in sorted(directory.glob("*.yaml")):
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for entry in data.get("pairs", []):
-            pairs.append(
-                PreferencePair(
-                    a=_summary_from(entry["a"]),
-                    b=_summary_from(entry["b"]),
-                    preferred=str(entry["preferred"]),
-                    source=str(entry.get("source", "synthetic")),
-                    weight=float(entry.get("weight", 1.0)),
-                )
-            )
-    return pairs
-
-
-def _class_key(key: tuple[int | None, bool, bool, bool]) -> str:
-    """A way class as a YAML-safe string. The inverse of `_summary_from`'s split."""
-    lts, unpaved, is_path, is_collector = key
-    flags = "|".join("true" if flag else "false" for flag in (unpaved, is_path, is_collector))
-    return f"{'none' if lts is None else lts}|{flags}"
 
 
 def _summarise_gpx(path: Path, name: str, root: Path, snapshot_path: Path | None) -> Any:
@@ -157,41 +105,10 @@ def tune(
             raise typer.Exit(code=0)
         pairs_dir.mkdir(parents=True, exist_ok=True)
         out = pairs_dir / f"{edited.stem}.yaml"
-        out.write_text(
-            yaml.safe_dump(
-                {
-                    "pairs": [
-                        {
-                            "source": pair.source,
-                            "preferred": pair.preferred,
-                            "weight": pair.weight,
-                            "a": {
-                                "name": pair.a.name,
-                                "length_m": round(pair.a.length_m, 1),
-                                "metres_by_class": {
-                                    _class_key(key): round(metres, 1)
-                                    for key, metres in pair.a.metres_by_class.items()
-                                },
-                            },
-                            "b": {
-                                "name": pair.b.name,
-                                "length_m": round(pair.b.length_m, 1),
-                                "metres_by_class": {
-                                    _class_key(key): round(metres, 1)
-                                    for key, metres in pair.b.metres_by_class.items()
-                                },
-                            },
-                        }
-                        for pair in recorded
-                    ]
-                },
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
+        out.write_text(dump_pairs(recorded), encoding="utf-8")
         typer.echo(f"recorded {len(recorded)} pair(s) to {out}")
 
-    pairs = _pairs_in(pairs_dir)
+    pairs = read_pairs(pairs_dir)
     result = fit(pairs, profile=load_profile(profile_path))
 
     if as_json:

@@ -164,6 +164,9 @@ class PreferencePair:
     preferred: str
     source: str = "synthetic"
     weight: float = 1.0
+    #: Who made the choice, when a person did. ADR 0021 fits a vector "for the runner it
+    #: was fitted for - never globally", which needs pairs to say whose they are.
+    labeler: str | None = None
 
     def __post_init__(self) -> None:
         if self.preferred not in ("a", "b"):

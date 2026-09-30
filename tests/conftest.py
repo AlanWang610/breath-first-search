@@ -103,6 +103,21 @@ def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureR
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _labels_stay_out_of_home(
+    _clear_longrun_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Point the label ledger at this test's own directory (ADR 0048).
+
+    Clearing `LONGRUN_*` alone is not enough here: with nothing set, the ledger falls back
+    to `~/.longrun/labels`, which is where a runner's real labels are. A test that recorded
+    a verdict would add a label nobody gave to the ledger `longrun tune` fits on - the exact
+    failure the ledger exists to prevent, caused by the suite that is meant to catch it.
+    Depends on `_clear_longrun_env` so it runs after it rather than being cleared by it.
+    """
+    monkeypatch.setenv("LONGRUN_LABELS_DIR", str(tmp_path / "labels"))
+
+
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent

@@ -366,7 +366,7 @@ def test_a_stored_pair_survives_the_round_trip_through_yaml(tmp_path: Path) -> N
     a level the fitter charges a multiplier for."""
     import yaml as yaml_module
 
-    from longrun.cli.tune import _class_key, _pairs_in
+    from longrun.core.labels.pairs_io import class_key, read_pairs
 
     summary = RouteSummary.from_ways("r", [(WayClass(), 400.0), (WayClass(lts=3), 600.0)])
     (tmp_path / "p.yaml").write_text(
@@ -380,7 +380,7 @@ def test_a_stored_pair_survives_the_round_trip_through_yaml(tmp_path: Path) -> N
                             "name": "a",
                             "length_m": summary.length_m,
                             "metres_by_class": {
-                                _class_key(key): value
+                                class_key(key): value
                                 for key, value in summary.metres_by_class.items()
                             },
                         },
@@ -396,7 +396,7 @@ def test_a_stored_pair_survives_the_round_trip_through_yaml(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    restored = _pairs_in(tmp_path)
+    restored = read_pairs(tmp_path)
 
     assert len(restored) == 1
     assert restored[0].a.metres_by_class == summary.metres_by_class
