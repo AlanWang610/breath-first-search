@@ -279,3 +279,20 @@ def test_every_unpaved_surface_is_a_name_the_server_accepts(router: GraphHopperR
     )
 
     assert route.length_m > 0
+
+
+def test_a_vector_that_seeks_is_a_route_and_moves_toward_what_it_seeks(
+    router: GraphHopperRouter,
+) -> None:
+    """GraphHopper refuses a priority above 1 outright, so until M23 every seek vector was a
+    request that came back "no route". `to_custom_model` now writes a seek as an avoid on
+    the complement; this is the server accepting it and the line going where it was told."""
+    from longrun.core.routing.custom_model import NEUTRAL, CustomModelParams, to_custom_model
+
+    def path_share(params: CustomModelParams) -> float:
+        _, summary = router.route_summaries([FERRY, DEYOUNG], custom_model=to_custom_model(params))[
+            0
+        ]
+        return sum(m for key, m in summary.metres_by_class.items() if key[2]) / summary.length_m
+
+    assert path_share(CustomModelParams(path_bonus=4.0)) > path_share(NEUTRAL)

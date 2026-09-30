@@ -183,9 +183,33 @@ def _lts_terms(params: CustomModelParams) -> list[dict[str, str]]:
     """
     terms: list[dict[str, str]] = []
     for level, value in ((2, params.lts2), (3, params.lts3), (4, params.lts4)):
-        if value != 1.0:
-            terms.append({"if": f"lts == {level}", "multiply_by": _number(value)})
+        terms.extend(_term(f"lts == {level}", value))
     return terms
+
+
+def _term(condition: str, value: float) -> list[dict[str, str]]:
+    """One rule saying "ways matching `condition` are worth `value` times the rest".
+
+    **GraphHopper refuses a priority above 1** - "maximum of value '4' cannot be larger than
+    1" - and it refuses the whole request, which reaches a caller as "no pedestrian route".
+    Until M23 a seek (`value > 1`) was emitted as `multiply_by: "4"`, so every vector that
+    sought anything, and every profile saying `surface: dirt`, was a request the router
+    turned down; found the first time one was sent to a live graph. It had never been sent
+    because nothing but the fitter's grid produces one and nothing consumes a fitted vector.
+
+    So a seek is written as an avoid on the complement: "paths are worth 4x the rest" is
+    `!(paths) * 0.25`. Every ratio between two ways is the same, which is all a priority
+    means and all `tuning.cost` reasons about, and no way's priority exceeds the server's
+    own. What is not identical is the ratio to `distance_influence`, which scales the other
+    way - the cost of a route is a priority-weighted time plus a distance term, and making
+    the rest dearer is not the same as making paths cheaper. That is the only form the
+    server accepts, and the direction it errs in is towards the runner's preference.
+    """
+    if value == 1.0:
+        return []
+    if value < 1.0:
+        return [{"if": condition, "multiply_by": _number(value)}]
+    return [{"if": f"!({condition})", "multiply_by": _number(1.0 / value)}]
 
 
 def _number(value: float) -> str:
@@ -224,14 +248,10 @@ def _surface_terms(
     unpaved = min(unpaved, MAX_MULTIPLIER)
     path_bonus = min(path_bonus, MAX_MULTIPLIER)
 
-    terms: list[dict[str, str]] = []
-    if unpaved != 1.0:
-        terms.append({"if": _any_of("surface", UNPAVED_SURFACES), "multiply_by": _number(unpaved)})
-    if path_bonus != 1.0:
-        terms.append(
-            {"if": _any_of("road_class", PATH_ROAD_CLASSES), "multiply_by": _number(path_bonus)}
-        )
-    return terms
+    return [
+        *_term(_any_of("surface", UNPAVED_SURFACES), unpaved),
+        *_term(_any_of("road_class", PATH_ROAD_CLASSES), path_bonus),
+    ]
 
 
 def _sidewalk_terms(params: CustomModelParams) -> list[dict[str, str]]:
@@ -243,14 +263,7 @@ def _sidewalk_terms(params: CustomModelParams) -> list[dict[str, str]]:
     router gets the class-level approximation and the plan sheet gets the real one. That is
     the LTS-scoring / LTS-routing split ADR 0001 drew, for the same reason.
     """
-    if params.missing_sidewalk == 1.0:
-        return []
-    return [
-        {
-            "if": _any_of("road_class", COLLECTOR_ROAD_CLASSES),
-            "multiply_by": _number(params.missing_sidewalk),
-        }
-    ]
+    return _term(_any_of("road_class", COLLECTOR_ROAD_CLASSES), params.missing_sidewalk)
 
 
 def to_custom_model(
