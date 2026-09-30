@@ -13,6 +13,7 @@
  * keep unknown and absent apart (scope 3.6), so `null` is threaded all the way to the
  * label.
  */
+import type { MetricRow, VerdictBody } from "./lib/verdict";
 
 export interface Health {
   ok: boolean;
@@ -175,6 +176,33 @@ export interface Region {
   steps?: Record<string, boolean>;
 }
 
+/**
+ * What a verdict's bounds can name and this plan's value for each (ADR 0048).
+ *
+ * `value: null` is a metric this plan has no number for, and the panel offers no bound on
+ * it: the server would refuse one, because a bound that can never be checked is the silent
+ * bound ADR 0022 exists to prevent.
+ */
+export interface Measured {
+  metrics: MetricRow[];
+  residual_flags: number | null;
+  goldens: string[];
+  /** Who the server records verdicts under, or `null` when it was started without one. */
+  labeler: string | null;
+  /** Verdicts on these exact bytes: an edit makes it a plan nobody has judged. */
+  judged: { id: string; would_run: string; labelled_at: string; via: string; golden: string | null }[];
+}
+
+export interface VerdictReceipt {
+  id: string;
+  subject: string;
+  would_run: string;
+  golden: string | null;
+  labeler: string;
+  /** Whether `longrun label publish` can take it into `tests/eval` — only with a golden. */
+  publishable: boolean;
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { "content-type": "application/json" },
@@ -211,6 +239,18 @@ export const api = {
     call<JobView>(`/api/jobs/${encodeURIComponent(id)}/resume`, {
       method: "POST",
       body: JSON.stringify({ choice }),
+    }),
+  /** The HTML sheet of the plan as it stands, for reading before judging it. */
+  sheetUrl: (id: string) => `/api/plans/${encodeURIComponent(id)}/sheet`,
+  measured: (id: string) => call<Measured>(`/api/plans/${encodeURIComponent(id)}/measured`),
+  /**
+   * A person's verdict. Not a job: it changes no plan, and its refusal — every sentence
+   * `check_verdict` has about it, one per line — belongs in the answer to the click.
+   */
+  verdict: (id: string, body: VerdictBody) =>
+    call<VerdictReceipt>(`/api/plans/${encodeURIComponent(id)}/verdict`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   /**
    * The five gestures (scope 10.3), each one a POST to a plan **id**.

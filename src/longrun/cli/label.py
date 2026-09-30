@@ -18,7 +18,6 @@ one otherwise is cheaper than finding out later that a label describes a route n
 
 from __future__ import annotations
 
-import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,7 +27,6 @@ import yaml
 
 from longrun.core.labels.bounds import (
     METRICS,
-    check_verdict,
     measured_from_digest,
     measured_from_plan,
 )
@@ -40,7 +38,13 @@ from longrun.core.labels.ledger import (
 )
 from longrun.core.labels.publish import case_yaml, differences, latest_by_golden
 from longrun.core.labels.records import Verdict
-from longrun.goldens import DEFAULT_GOLDENS_DIR, golden_args, is_golden
+from longrun.goldens import (
+    DEFAULT_GOLDENS_DIR,
+    find_golden,
+    golden_args,
+    golden_names,
+    is_golden,
+)
 
 #: Where published verdicts go, relative to the repository root.
 DEFAULT_CASES_DIR = Path("tests/eval/cases")
@@ -61,18 +65,10 @@ def _fail(message: str, code: int = 2) -> typer.Exit:
 
 
 def _golden_dir(goldens: Path, name: str) -> Path:
-    """A golden by name, never by path: a name that reaches outside the directory is refused,
-    for the reason ADR 0036 gives for plan ids."""
-    if not name or name != Path(name).name or name.startswith("."):
-        raise _fail(f"{name!r} is not a golden's name")
-    directory = goldens / name
-    if not is_golden(directory):
-        known = (
-            sorted(d.name for d in goldens.iterdir() if is_golden(d)) if goldens.is_dir() else []
-        )
-        raise _fail(
-            f"no golden named {name!r} under {goldens}; known: {', '.join(known) or 'none'}"
-        )
+    directory = find_golden(goldens, name)
+    if directory is None:
+        known = ", ".join(golden_names(goldens)) or "none"
+        raise _fail(f"{name!r} is not a golden under {goldens}; known: {known}")
     return directory
 
 
@@ -163,9 +159,11 @@ def _current_case(cases: Path, golden: str) -> dict[str, Any] | None:
 
 @label_app.command("verdict")
 def verdict(
-    golden: str | None = typer.Option(None, "--golden", help="A golden you ran `show` on."),
+    golden: str | None = typer.Option(
+        None, "--golden", help="The golden you ran `show` on, or the golden --plan was seeded from."
+    ),
     plan_path: Path | None = typer.Option(
-        None, "--plan", help="A stored plan.json instead; stays in the ledger (no golden)."
+        None, "--plan", help="A stored plan.json. With no --golden it stays in the ledger."
     ),
     would_run: str = typer.Option(..., "--would-run", help="yes, no or unsure."),
     reason: str = typer.Option(..., "--reason", help="Why, in a sentence of 12+ words."),
@@ -175,61 +173,56 @@ def verdict(
     gap: str | None = typer.Option(None, "--gap", help="For a 'no' no number captures: what."),
     note: str | None = typer.Option(None, "--note", help="Anything else worth keeping."),
     cases: Path = typer.Option(DEFAULT_CASES_DIR, "--cases", help="tests/eval cases."),
+    goldens: Path = typer.Option(DEFAULT_GOLDENS_DIR, "--goldens", help="Golden routes."),
 ) -> None:
-    """Record whether you would run a route, and the bounds that say why."""
-    from longrun.core.models.plan import Plan
+    """Record whether you would run a route, and the bounds that say why.
+
+    `--golden NAME` alone judges the plan `label show` last wrote for it. `--plan PATH`
+    judges a stored plan; add `--golden NAME` when that plan was seeded from a golden, and
+    `publish` will check that its numbers are still the golden's before writing anything.
+    """
+    from longrun.core.labels.verdicts import VerdictRefused, record_verdict
 
     labeler = labeler_from_env()
     if labeler is None:
         raise _fail(f"set {LABELER_ENV_VAR} to the name your labels go under")
-    if (golden is None) == (plan_path is None):
+    if golden is None and plan_path is None:
         raise _fail("say which plan: --golden NAME (after `label show`) or --plan PATH")
 
     ledger = _ledger()
-    if golden is not None:
+    if plan_path is not None:
+        if not plan_path.is_file():
+            raise _fail(f"no such plan: {plan_path}")
+        if golden is not None:
+            _golden_dir(goldens, golden)
+        source = plan_path
+    else:
+        assert golden is not None
         source = _shown_dir(ledger, golden) / "plan.json"
         if not source.is_file():
             raise _fail(
                 f"{golden} has not been shown; run `longrun label show --golden {golden}` and "
                 "read its sheet first"
             )
-    else:
-        assert plan_path is not None
-        if not plan_path.is_file():
-            raise _fail(f"no such plan: {plan_path}")
-        source = plan_path
-
-    plan_json = source.read_text(encoding="utf-8")
-    plan = Plan.model_validate_json(plan_json)
-    measured = measured_from_plan(plan)
-    bounds = _bounds(bound)
-
-    problems = check_verdict(
-        would_run=would_run, reason=reason, bounds=bounds, gap=gap, measured=measured
-    )
-    if problems:
-        for problem in problems:
-            typer.echo(f"  - {problem}", err=True)
-        raise _fail("not recorded; nothing was written")
 
     try:
-        record = Verdict(
-            subject=golden or plan.id,
+        record = record_verdict(
+            ledger,
+            source.read_text(encoding="utf-8"),
             golden=golden,
-            would_run=would_run,  # type: ignore[arg-type]  # checked by check_verdict
+            would_run=would_run,
             reason=reason,
-            bounds=bounds,
+            bounds=_bounds(bound),
             gap=gap,
             note=note,
-            measured=measured,
-            plan_sha256=hashlib.sha256(plan_json.encode("utf-8")).hexdigest(),
             labeler=labeler,
             labelled_at=datetime.now(UTC).replace(microsecond=0),
             via="cli",
         )
-    except ValueError as exc:
-        raise _fail(str(exc)) from None
-    ledger.record_verdict(record, plan_json)
+    except VerdictRefused as refused:
+        for problem in refused.problems:
+            typer.echo(f"  - {problem}", err=True)
+        raise _fail("not recorded; nothing was written") from None
     typer.echo(f"recorded verdict {record.id}: {record.subject} - {would_run} (by {labeler})")
 
     if golden is None:

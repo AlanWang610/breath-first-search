@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapView, type DrawMode, type Selection } from "./components/MapView";
 import { Timeline } from "./components/Timeline";
+import { JudgePanel } from "./components/JudgePanel";
 import {
   CoveragePanel,
   MetricsPanel,
@@ -38,7 +39,7 @@ import {
   WarningsPanel,
 } from "./components/Panels";
 import { api } from "./api";
-import type { Health, JobView, Plan, PlanSummary, Region } from "./api";
+import type { Health, JobView, Measured, Plan, PlanSummary, Region } from "./api";
 import { lineFromVertices, polygonFromVertices, type Vertex } from "./lib/plan";
 
 const POLL_MS = 1500;
@@ -66,6 +67,9 @@ export default function App() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
+  // What a verdict's bounds can name for the plan on screen (ADR 0048). Re-read whenever the
+  // plan is: an edit rewrites the stored plan, which makes it a plan nobody has judged.
+  const [measured, setMeasured] = useState<Measured | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -115,6 +119,17 @@ export default function App() {
       .then(setPlan)
       .catch((e: Error) => setError(e.message));
   }, []);
+
+  useEffect(() => {
+    if (!plan || !planId) {
+      setMeasured(null);
+      return;
+    }
+    api
+      .measured(planId)
+      .then(setMeasured)
+      .catch(() => setMeasured(null));
+  }, [plan, planId]);
 
   const poll = useCallback(
     (jobId: string) => {
@@ -368,6 +383,19 @@ export default function App() {
               {/* Said at the button, not only in the event log the server writes. */}
               <p className="muted small">{FROZEN_POLICY_NOTE}</p>
             </section>
+          )}
+
+          {plan && planId && measured && (
+            <JudgePanel
+              planId={planId}
+              measured={measured}
+              onRecorded={() => {
+                api
+                  .measured(planId)
+                  .then(setMeasured)
+                  .catch(() => undefined);
+              }}
+            />
           )}
 
           {job && (

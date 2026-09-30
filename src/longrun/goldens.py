@@ -39,6 +39,26 @@ def is_golden(directory: Path) -> bool:
     return (directory / "request.yaml").is_file()
 
 
+def golden_names(goldens: Path) -> list[str]:
+    """Every golden under `goldens`, in a stable order."""
+    if not goldens.is_dir():
+        return []
+    return sorted(d.name for d in goldens.iterdir() if is_golden(d))
+
+
+def find_golden(goldens: Path, name: str) -> Path | None:
+    """A golden by name, never by path, or `None`.
+
+    A name arrives from a command line or a request body, and one that reaches outside the
+    directory is refused for the reason ADR 0036 gives for plan ids: the read is a
+    disclosure today and would be a write the day somebody adds one.
+    """
+    if not name or name != Path(name).name or name.startswith(".") or ":" in name:
+        return None
+    directory = goldens / name
+    return directory if is_golden(directory) else None
+
+
 def golden_args(directory: Path, out_dir: Path) -> list[str]:
     """The `longrun` argv that runs one golden into `out_dir`.
 
@@ -88,7 +108,9 @@ def golden_args(directory: Path, out_dir: Path) -> list[str]:
 __all__ = [
     "DEFAULT_GOLDENS_DIR",
     "UNREACHABLE_ROUTER",
+    "find_golden",
     "golden_args",
+    "golden_names",
     "is_golden",
     "load_request",
 ]

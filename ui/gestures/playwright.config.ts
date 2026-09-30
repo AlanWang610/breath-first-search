@@ -40,6 +40,13 @@ export const WORK_DIR = path.join(os.tmpdir(), "longrun-gestures");
 /** Where the server reads stored plans from. One per run, many plan ids inside it. */
 export const PLANS_DIR = path.join(WORK_DIR, "plans");
 
+/**
+ * The label ledger the server records verdicts into (ADR 0048). Here, and never the runner's
+ * `~/.longrun/labels`: a gesture test that judged a plan into a real ledger would add a label
+ * nobody gave, which is the one thing the ledger exists to prevent. `seed.ts` empties it.
+ */
+export const LABELS_DIR = path.join(WORK_DIR, "labels");
+
 export const PORT = 8123;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 
@@ -105,6 +112,9 @@ export default defineConfig({
       LONGRUN_OFFLINE: "1",
       LONGRUN_FIXTURES: path.join(GOLDEN, "fixtures"),
       LONGRUN_CACHE_DIR: WORK_DIR,
+      // A labeler of the suite's own, so the Judge panel can record — into `LABELS_DIR`.
+      LONGRUN_LABELER: "gesture-suite",
+      LONGRUN_LABELS_DIR: LABELS_DIR,
     },
   },
 

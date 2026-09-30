@@ -67,6 +67,26 @@ different one; patching an area into the policy the first half of a line was dra
 would buy a line that is half one thing and half another. The honest option is a whole
 re-route, which is a routing call — `longrun edit reroute`, from a shell with a router.
 
+## What it records about you (M23)
+
+The **Judge** panel records whether you would run the plan on screen — a verdict, into your
+own ledger at `~/.longrun/labels/` (ADR 0048). It is the one panel that records something
+about a *person* rather than a route, and three rules follow:
+
+- **The server decides whether a verdict stands.** `POST /api/plans/{id}/verdict` answers
+  with `check_verdict`'s own sentences, one per line — "a 'no' has to breach one of its own
+  bounds" arrives while the route is still on the screen. `lib/verdict.ts` checks only what
+  was typed.
+- **A limit starts empty.** Each metric's value for this plan is shown beside the box and
+  never copied into it: a limit pre-filled from the plan makes a `no` breach itself.
+- **It is not a job.** A verdict changes no plan and has no scratchpad to return, so it is a
+  synchronous `201` — an addendum to ADR 0036, which is otherwise unchanged.
+
+"Read the plan sheet" opens `GET /api/plans/{id}/sheet`, rendered from the plan as it stands.
+The server records under `LONGRUN_LABELER`, and without it the panel says so and does not
+submit. A verdict with no golden stays in the ledger; `longrun label publish` is the only way
+anything reaches `tests/eval`, and you run it.
+
 ## Two decisions worth knowing
 
 **The basemap is USGS The National Map, drawn as a layer under the route** (ADR 0023).

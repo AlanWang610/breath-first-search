@@ -137,11 +137,45 @@ def test_a_verdict_is_about_a_plan_somebody_was_shown(monkeypatch: pytest.Monkey
     assert "has not been shown" in result.output
 
 
-def test_a_verdict_names_exactly_one_plan(ledger: Ledger, tmp_path: Path) -> None:
-    both = _verdict("--plan", str(tmp_path / "plan.json"))
+def test_a_verdict_names_a_plan(ledger: Ledger, tmp_path: Path) -> None:
+    missing = _verdict("--plan", str(tmp_path / "plan.json"))
     neither = _invoke("verdict", "--would-run", "no", "--reason", REASON)
 
-    assert both.exit_code == 2 and neither.exit_code == 2
+    assert missing.exit_code == 2 and "no such plan" in missing.output
+    assert neither.exit_code == 2 and "say which plan" in neither.output
+    assert ledger.verdicts() == []
+
+
+def test_a_stored_plan_seeded_from_a_golden_can_say_so(ledger: Ledger) -> None:
+    """The UI judges a stored plan, not the one `show` wrote; `--golden` beside `--plan` is
+    how it says which golden that plan came from, and `publish` checks the claim."""
+    plan_path = ledger.root / "shown" / GOLDEN / "plan.json"
+
+    result = _verdict("--plan", str(plan_path))
+
+    assert result.exit_code == 0, result.output
+    (record,) = ledger.verdicts()
+    assert record.golden == GOLDEN
+
+
+def test_a_stored_plan_cannot_claim_a_golden_that_does_not_exist(ledger: Ledger) -> None:
+    plan_path = ledger.root / "shown" / GOLDEN / "plan.json"
+
+    result = _invoke(
+        "verdict",
+        "--plan",
+        str(plan_path),
+        "--golden",
+        "no-such-route",
+        "--would-run",
+        "no",
+        "--reason",
+        REASON,
+        "--goldens",
+        str(GOLDENS),
+    )
+
+    assert result.exit_code == 2
     assert ledger.verdicts() == []
 
 

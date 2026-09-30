@@ -46,7 +46,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLANS_DIR, WORK_DIR } from "./playwright.config";
+import { LABELS_DIR, PLANS_DIR, WORK_DIR } from "./playwright.config";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -110,6 +110,10 @@ export default async function globalSetup(): Promise<void> {
     if (entry === "jobs") continue;
     fs.rmSync(path.join(PLANS_DIR, entry), { recursive: true, force: true });
   }
+
+  // Verdicts from an earlier run: the server writes this directory only when a test judges
+  // something, so emptying it under a live server removes nothing the server is holding.
+  fs.rmSync(LABELS_DIR, { recursive: true, force: true });
 
   fs.rmSync(SEED_DIR, { recursive: true, force: true });
   fs.mkdirSync(SEED_DIR, { recursive: true });

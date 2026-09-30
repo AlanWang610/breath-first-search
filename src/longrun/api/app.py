@@ -161,6 +161,26 @@ class ChooseEdit(RangeEdit):
     )
 
 
+class VerdictSubmission(BaseModel):
+    """What the Judge panel sends: the fields `longrun label verdict` takes, and no others.
+
+    `golden` is the CLI's `--plan PATH --golden NAME`: this stored plan was seeded from that
+    golden. It is a claim, not a fact, and `longrun label publish` checks it against the
+    golden's numbers before anything reaches `tests/eval` (ADR 0048). `bounds` stays
+    untyped here so that the one rule about what a bound may be - `check_verdict` - is the
+    one that answers, in its own words, rather than a 422 from a type coercion.
+    """
+
+    would_run: str = Field(description="yes, no or unsure.")
+    reason: str = Field(description="Why, in a sentence.")
+    bounds: dict[str, Any] = Field(
+        default_factory=dict, description="METRIC_max / METRIC_min: the envelope you'd accept."
+    )
+    gap: str | None = Field(default=None, description="For a 'no' no number captures: what.")
+    note: str | None = None
+    golden: str | None = Field(default=None, description="The golden this plan was seeded from.")
+
+
 class JobView(BaseModel):
     """A job as the UI sees it. A pause is `needs_input`, which is a status, not an error."""
 
@@ -183,6 +203,7 @@ def create_app(
     *,
     plans_dir: Path | None = None,
     ui_dir: Path | None = None,
+    goldens_dir: Path | None = None,
 ) -> FastAPI:
     """Build the app.
 
@@ -195,9 +216,11 @@ def create_app(
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import JSONResponse
 
+    from longrun.goldens import DEFAULT_GOLDENS_DIR
     from longrun.jobs.runner import JobRunner, JobStore
 
     plans = plans_dir or DEFAULT_PLANS_DIR
+    goldens = goldens_dir or DEFAULT_GOLDENS_DIR
     jobs = runner or JobRunner(JobStore(plans / "jobs"))
 
     app = FastAPI(
@@ -279,6 +302,70 @@ def create_app(
         if path is None:
             raise HTTPException(status_code=404, detail=f"no stored plan {plan_id!r}")
         return JSONResponse(content=_read_json(path))
+
+    @app.get("/api/plans/{plan_id}/sheet")
+    async def read_sheet(plan_id: str) -> Any:
+        """The HTML plan sheet (scope 9), rendered from the stored plan when asked.
+
+        What a person reads before judging a plan: heat, water gaps and ways out laid out
+        along the route. Rendered rather than stored, so it is the sheet of the plan as it
+        stands after every edit, which is the plan a verdict will be recorded against.
+        """
+        import anyio
+        from fastapi.responses import HTMLResponse
+
+        path = _plan_path(plans, plan_id)
+        if path is None:
+            raise HTTPException(status_code=404, detail=f"no stored plan {plan_id!r}")
+        return HTMLResponse(await anyio.to_thread.run_sync(_sheet_html, path))
+
+    @app.get("/api/plans/{plan_id}/measured")
+    async def read_measured(plan_id: str) -> dict[str, Any]:
+        """What a verdict's bounds can name, this plan's value for each, and who is judging.
+
+        The numbers are `core.labels.bounds.measured_from_plan`, the reading the verdict
+        will be checked against - not a second one assembled for the panel.
+        """
+        import anyio
+
+        path = _plan_path(plans, plan_id)
+        if path is None:
+            raise HTTPException(status_code=404, detail=f"no stored plan {plan_id!r}")
+        return await anyio.to_thread.run_sync(_measured_view, path, goldens)
+
+    @app.post("/api/plans/{plan_id}/verdict", status_code=201)
+    async def post_verdict(plan_id: str, submission: VerdictSubmission) -> dict[str, Any]:
+        """Record whether the person looking at this plan would run it (ADR 0048).
+
+        **Synchronous, and not a job.** Every other write here is a job because it changes a
+        plan and returns the scratchpad that did it; a verdict changes no plan and has no
+        scratchpad to return, and the refusal a person can act on - "a 'no' has to breach
+        one of its own bounds" - belongs in the response to the click, not in an event log.
+        """
+        import anyio
+
+        from longrun.core.labels.ledger import LABELER_ENV_VAR, labeler_from_env
+        from longrun.core.labels.verdicts import VerdictRefused
+        from longrun.goldens import find_golden
+
+        path = _plan_path(plans, plan_id)
+        if path is None:
+            raise HTTPException(status_code=404, detail=f"no stored plan {plan_id!r}")
+        labeler = labeler_from_env()
+        if labeler is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"this server was started without {LABELER_ENV_VAR}, so it cannot say "
+                "whose verdict this is; set it and restart `longrun api`",
+            )
+        if submission.golden is not None and find_golden(goldens, submission.golden) is None:
+            raise HTTPException(
+                status_code=422, detail=f"{submission.golden!r} is not a golden route"
+            )
+        try:
+            return await anyio.to_thread.run_sync(_record_verdict, path, submission, labeler)
+        except VerdictRefused as refused:
+            raise HTTPException(status_code=422, detail="\n".join(refused.problems)) from None
 
     @app.post("/api/plans", status_code=202)
     async def submit_plan(submission: PlanSubmission) -> JobView:
@@ -917,6 +1004,74 @@ def _job_view(jobs: JobRunner, job_id: str, status: str) -> JobView:
             question = pad.question.model_dump(mode="json")
         plan_id = getattr(pad, "plan_id", None)
     return JobView(job_id=job_id, status=status, events=events, question=question, plan_id=plan_id)
+
+
+def _sheet_html(path: Path) -> str:
+    from longrun.core.export.sheet_html import render_html
+    from longrun.core.models.plan import Plan
+
+    return render_html(Plan.model_validate_json(path.read_text(encoding="utf-8")))
+
+
+def _measured_view(path: Path, goldens: Path) -> dict[str, Any]:
+    from longrun.core.labels.bounds import METRICS, measured_from_plan
+    from longrun.core.labels.ledger import Ledger, labeler_from_env, labels_dir_from_env
+    from longrun.core.labels.verdicts import verdicts_on
+    from longrun.core.models.plan import Plan
+    from longrun.goldens import golden_names
+
+    plan_json = path.read_text(encoding="utf-8")
+    measured = measured_from_plan(Plan.model_validate_json(plan_json))
+    return {
+        "metrics": [
+            {"name": name, "meaning": meaning, "value": measured.get(name)}
+            for name, meaning in METRICS.items()
+        ],
+        "residual_flags": measured.get("residual_flags"),
+        "goldens": golden_names(goldens),
+        "labeler": labeler_from_env(),
+        # Verdicts on these exact bytes. A stored plan keeps its id through every edit, so
+        # "you judged this before" is only true of the content that was judged.
+        "judged": [
+            {
+                "id": v.id,
+                "would_run": v.would_run,
+                "labelled_at": v.labelled_at.isoformat(),
+                "via": v.via,
+                "golden": v.golden,
+            }
+            for v in verdicts_on(Ledger(labels_dir_from_env()), plan_json)
+        ],
+    }
+
+
+def _record_verdict(path: Path, submission: VerdictSubmission, labeler: str) -> dict[str, Any]:
+    from datetime import UTC, datetime
+
+    from longrun.core.labels.ledger import Ledger, labels_dir_from_env
+    from longrun.core.labels.verdicts import record_verdict
+
+    verdict = record_verdict(
+        Ledger(labels_dir_from_env()),
+        path.read_text(encoding="utf-8"),
+        golden=submission.golden,
+        would_run=submission.would_run,
+        reason=submission.reason,
+        bounds=submission.bounds,
+        gap=submission.gap,
+        note=submission.note,
+        labeler=labeler,
+        labelled_at=datetime.now(UTC).replace(microsecond=0),
+        via="ui",
+    )
+    return {
+        "id": verdict.id,
+        "subject": verdict.subject,
+        "would_run": verdict.would_run,
+        "golden": verdict.golden,
+        "labeler": verdict.labeler,
+        "publishable": verdict.golden is not None,
+    }
 
 
 def _version() -> str:
