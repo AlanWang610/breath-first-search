@@ -222,6 +222,36 @@ def _number(value: float) -> str:
     return f"{round(value, 4):g}"
 
 
+def effective_params(
+    params: CustomModelParams, profile: PreferenceProfile | None
+) -> CustomModelParams:
+    """The multipliers the router actually applies: the fitted ones, with the profile's
+    stated surface term multiplied on (scope 7.1 splits them; see `_surface_terms`).
+
+    One function because two readers need the same answer. `_surface_terms` emits these,
+    and `tuning.fit` has to cost pairs with them too: a runner who stated "dirt" already has
+    unpaved ways rewarded at query time, and a fit that ignored that would learn the same
+    preference again and have it applied twice. Clamped to the multiplier bounds, which the
+    emitted terms were not below `MIN_MULTIPLIER` until M23 - a stated "paved" on a fitted
+    0.01 wrote 0.0001, an exclusion wearing a preference's clothes.
+    """
+    unpaved, path_bonus = params.unpaved, params.path_bonus
+    if profile is not None:
+        surface, weight = profile.surface.value, profile.surface.weight
+        if surface == "dirt":
+            unpaved *= 1.0 + weight
+            path_bonus *= 1.0 + weight
+        elif surface == "paved":
+            unpaved *= max(MIN_MULTIPLIER, 1.0 - weight)
+
+    def bounded(value: float) -> float:
+        return min(max(value, MIN_MULTIPLIER), MAX_MULTIPLIER)
+
+    return params.model_copy(
+        update={"unpaved": bounded(unpaved), "path_bonus": bounded(path_bonus)}
+    )
+
+
 def _surface_terms(
     params: CustomModelParams, profile: PreferenceProfile | None
 ) -> list[dict[str, str]]:
@@ -233,20 +263,8 @@ def _surface_terms(
     replacing it - and a profile that says nothing leaves the fitted value exactly as it
     was, which is what keeps a neutral vector emitting no term at all.
     """
-    unpaved = params.unpaved
-    path_bonus = params.path_bonus
-
-    if profile is not None:
-        surface = profile.surface.value
-        weight = profile.surface.weight
-        if surface == "dirt":
-            unpaved *= 1.0 + weight
-            path_bonus *= 1.0 + weight
-        elif surface == "paved":
-            unpaved *= max(MIN_MULTIPLIER, 1.0 - weight)
-
-    unpaved = min(unpaved, MAX_MULTIPLIER)
-    path_bonus = min(path_bonus, MAX_MULTIPLIER)
+    applied = effective_params(params, profile)
+    unpaved, path_bonus = applied.unpaved, applied.path_bonus
 
     return [
         *_term(_any_of("surface", UNPAVED_SURFACES), unpaved),
@@ -316,6 +334,7 @@ __all__: list[str] = [
     "PATH_ROAD_CLASSES",
     "COLLECTOR_ROAD_CLASSES",
     "osm_unpaved_surfaces",
+    "effective_params",
     "CustomModelParams",
     "describe",
     "to_custom_model",

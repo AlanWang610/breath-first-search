@@ -256,7 +256,16 @@ def test_a_stored_plan_with_no_golden_stays_in_the_ledger(ledger: Ledger) -> Non
 
 
 def _publish(cases: Path, *extra: str) -> Any:
-    return _invoke("publish", "--cases", str(cases), "--goldens", str(GOLDENS), *extra)
+    return _invoke(
+        "publish",
+        "--cases",
+        str(cases),
+        "--pairs",
+        str(cases.parent / "pairs"),
+        "--goldens",
+        str(GOLDENS),
+        *extra,
+    )
 
 
 def test_a_dry_run_prints_the_case_and_writes_nothing(ledger: Ledger, tmp_path: Path) -> None:

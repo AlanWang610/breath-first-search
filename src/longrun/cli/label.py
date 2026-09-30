@@ -46,8 +46,10 @@ from longrun.goldens import (
     is_golden,
 )
 
-#: Where published verdicts go, relative to the repository root.
+#: Where published verdicts and pairs go, relative to the repository root. The pairs
+#: directory is `tune`'s default, so a published pair is one `longrun tune` reads unasked.
 DEFAULT_CASES_DIR = Path("tests/eval/cases")
+DEFAULT_PAIRS_DIR = Path("tests/eval/pairs")
 
 label_app = typer.Typer(
     help="Record what you think of a route: verdicts and preferences (ADR 0048).",
@@ -245,12 +247,20 @@ def verdict(
 def publish(
     cases: Path = typer.Option(DEFAULT_CASES_DIR, "--cases", help="tests/eval cases."),
     goldens: Path = typer.Option(DEFAULT_GOLDENS_DIR, "--goldens", help="Golden routes."),
+    pairs: Path = typer.Option(DEFAULT_PAIRS_DIR, "--pairs", help="tests/eval pairs."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print what would be written."),
 ) -> None:
-    """Write your latest verdict on each golden into tests/eval, for you to review and commit."""
+    """Write your verdicts on goldens, and your pairs, into tests/eval to review and commit.
+
+    A verdict goes in only when it names a golden whose numbers it was judged on. A pair goes
+    in as two route summaries named by random candidate id - metres per way class, never a
+    coordinate, never a place - because the repository is public and the lines are where you
+    run (ADR 0048). "No preference", "can't judge" and asked-twice probes stay in the ledger.
+    """
     import json
 
-    verdicts = _ledger().verdicts()
+    ledger = _ledger()
+    verdicts = ledger.verdicts()
     latest = latest_by_golden(verdicts)
     unpublishable = len({v.subject for v in verdicts if v.golden is None})
 
@@ -281,12 +291,47 @@ def publish(
             typer.echo(f"wrote {target}")
         written += 1
 
+    pairs_written = _publish_pairs(ledger, pairs, dry_run=dry_run)
+
     verb = "would write" if dry_run else "wrote"
-    typer.echo(f"{verb} {written} case(s); review with `git diff tests/eval` before committing")
+    typer.echo(
+        f"{verb} {written} case(s) and {pairs_written} pair(s); review with "
+        "`git diff tests/eval` before committing"
+    )
     if unpublishable:
         typer.echo(
             f"{unpublishable} plan(s) with no golden keep their verdicts in the ledger (ADR 0048)"
         )
+
+
+def _publish_pairs(ledger: Ledger, directory: Path, *, dry_run: bool) -> int:
+    """Each answered, non-probe choice as `judged-<labeler>-<task>.yaml`, rebuilt from the
+    ledger's task and answer rather than copied, so what is published is exactly what
+    `pairs.pair_from` says the answer is evidence for."""
+    from longrun.core.labels.pairs import pair_from
+    from longrun.core.labels.pairs_io import dump_pairs
+
+    written = 0
+    for answer in ledger.answers():
+        task = ledger.task(answer.task_id)
+        if task is None or task.repeat_of is not None:
+            continue
+        pair = pair_from(task, answer)
+        if pair is None:
+            continue
+        text = dump_pairs([pair])
+        target = directory / f"judged-{answer.labeler}-{task.id}.yaml"
+        if target.is_file() and target.read_text(encoding="utf-8") == text:
+            continue
+        if dry_run:
+            typer.echo(f"--- would write {target}")
+            typer.echo(text)
+        else:
+            directory.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8", newline="\n")
+            typer.echo(f"wrote {target}")
+        written += 1
+    return written
 
 
 @label_app.command("status")

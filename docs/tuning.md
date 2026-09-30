@@ -131,6 +131,12 @@ numbers anyway. Both sources §7.1 names are empty:
   produces the set from map-matched `osm_way_id`s (ADR 0001's retired-R4 decision). No
   history export has been ingested — M5.10's exit criterion 4 is open for the same reason.
 
+- **A person's judgements (M23).** The third source, and the one that can be filled today:
+  `longrun label seed` draws lines between ends somebody runs between, under competing
+  vectors, and the Review tab asks which they would rather run (ADR 0049). A choice is a
+  `source: judged` pair in `~/.longrun/labels/pairs`, published into `tests/eval/pairs/` by
+  `longrun label publish` as summaries only. None has been answered yet.
+
 **Why the gap is not filled with generated labels.** The scorers already read LTS. A fit
 that maximised agreement with routes this project scored would recover the scorers' own
 weights and report them as a runner's preference — circular, and circular in the exact
@@ -161,6 +167,12 @@ a tie scored as a disagreement, which made neutral score 0.0 on signal-free evid
 ## How to add evidence
 
 ```bash
+# Pairs you judge (M23, ADR 0049): start the region's router, queue questions, answer them.
+./deploy/graphhopper/run.ps1 -Region bayarea
+uv run longrun label seed --bbox -122.56,37.82,-122.47,37.88 --sample 25 --km 3-9 --seed 1
+uv run longrun api --ui ui/dist        # then the Review tab; or `longrun label pair TASK ...`
+uv run longrun tune --pairs ~/.longrun/labels/pairs --labeler NAME --holdout 5
+
 # A route you edited. The edited one is the preferred one.
 uv run longrun tune --edit original.gpx edited.gpx --fixtures data/
 
@@ -170,3 +182,18 @@ uv run longrun tune
 
 Twelve real pairs is the floor (`MIN_PAIRS`). Below it this document's table does not change
 and the shipped model stays neutral.
+
+**Above it, the number to read is the held-out one, against neutral.** `--holdout K` fits on
+all but one fold and scores the fold, and prints the fitted vector's agreement with a 95%
+Wilson interval beside NEUTRAL's and AVOID_HIGH_STRESS's on the same folds. NEUTRAL costs a
+route by its length, so it is "prefer the shorter line" and not a coin flip; a fit is worth
+shipping only when the interval's floor clears it (ADR 0021, amended). `tune` also prints the
+metres of difference each parameter has seen: a parameter no pair separated lines on has a
+value that is the grid's tie-break, not the runner's.
+
+**Two things M23 found that a fit would have run into.** Every vector that *sought* anything
+was a request GraphHopper refuses (a priority above 1), so a fitted vector could not have
+been shipped at all until seeks were written as avoids on the complement. And a stated
+`surface: dirt` was applied at query time and ignored by the fit, which would have learned
+the same preference a second time; the fit now costs pairs with the multipliers the router
+actually applies (`custom_model.effective_params`).

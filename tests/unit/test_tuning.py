@@ -415,3 +415,91 @@ def test_the_command_declines_to_fit_and_says_how_many_pairs_it_had(tmp_path: Pa
     assert result.exit_code == 0
     assert "unfitted" in result.output
     assert "fewer than the 12 needed" in result.output
+
+
+# --- held out, against the vector it has to beat (M23) ------------------------------
+
+
+def test_a_real_preference_beats_neutral_on_pairs_the_fit_never_saw() -> None:
+    """ADR 0021's bar, corrected: not "above 0.5" but above NEUTRAL, which is "prefer the
+    shorter line" and agrees with every runner who happened to choose it."""
+    from longrun.core.routing.tuning import holdout_agreement
+
+    held = holdout_agreement(
+        _pairs_from(CustomModelParams(lts3=0.25, path_bonus=4.0), count=24), folds=4, grid=GRID
+    )
+
+    assert held.pairs == 24 and held.folds == 4
+    assert held.fitted > held.neutral
+    assert held.beats_neutral
+
+
+def test_evidence_with_no_signal_does_not_beat_neutral_held_out() -> None:
+    from longrun.core.routing.tuning import holdout_agreement
+
+    noise = [
+        PreferencePair(a=pair.a, b=pair.b, preferred="a" if index % 2 else "b", source="edit")
+        for index, pair in enumerate(_pairs_from(NEUTRAL, count=24))
+    ]
+
+    assert not holdout_agreement(noise, folds=4, grid=GRID).beats_neutral
+
+
+def test_the_interval_is_honest_where_a_normal_one_is_not() -> None:
+    from longrun.core.routing.tuning import wilson
+
+    low, high = wilson(1.0, 5)
+    assert high == 1.0 and 0.5 < low < 0.6, "five out of five is not certainty"
+    assert wilson(0.5, 0) == (0.0, 1.0)
+
+
+def test_evidence_says_which_parameters_any_pair_separated_lines_on() -> None:
+    """A parameter no pair ever split two lines on has a fitted value that is the grid's
+    tie-break, not the runner's - so the metres it has seen are printed beside it."""
+    from longrun.core.routing.tuning import evidence_by_parameter
+
+    pair = PreferencePair(
+        a=_route("a", (BUSY, 500.0)), b=_route("b", (PATH, 600.0)), preferred="b", source="judged"
+    )
+
+    evidence = evidence_by_parameter([pair])
+
+    assert evidence["lts3"] == 500.0 and evidence["path_bonus"] == 600.0
+    assert evidence["unpaved"] == 0.0 and evidence["missing_sidewalk"] == 0.0
+
+
+def test_a_surface_the_runner_stated_is_not_learned_a_second_time() -> None:
+    """A stated "dirt" already rewards unpaved ways at query time (`_surface_terms`). A fit
+    that costed pairs without it would learn the same preference again, and the router
+    would then apply it twice."""
+    truth = CustomModelParams(unpaved=4.0)
+    pairs = [
+        PreferencePair(
+            a=_route("a", (QUIET, 1000.0 + 100.0 * step)),
+            b=_route("b", (DIRT, 1100.0 + 150.0 * step)),
+            preferred="b"
+            if cost(_route("b", (DIRT, 1100.0 + 150.0 * step)), truth)
+            < cost(_route("a", (QUIET, 1000.0 + 100.0 * step)), truth)
+            else "a",
+            source="judged",
+        )
+        for step in range(12)
+    ]
+    dirt = load_defaults().model_copy(update={"surface": PreferenceEntry(value="dirt", weight=1.0)})
+
+    stated = fit(pairs, profile=dirt, grid=GRID, min_pairs=4).params
+    unstated = fit(pairs, grid=GRID, min_pairs=4).params
+
+    assert stated.unpaved < unstated.unpaved
+
+
+def test_the_multipliers_the_router_applies_stay_inside_the_bounds() -> None:
+    from longrun.core.routing.custom_model import MIN_MULTIPLIER, effective_params
+
+    paved = load_defaults().model_copy(
+        update={"surface": PreferenceEntry(value="paved", weight=1.0)}
+    )
+
+    assert (
+        effective_params(CustomModelParams(unpaved=MIN_MULTIPLIER), paved).unpaved == MIN_MULTIPLIER
+    )

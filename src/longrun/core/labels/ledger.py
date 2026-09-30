@@ -161,7 +161,10 @@ class Ledger:
             raise AlreadyAnswered(f"task {task.id} was answered already")
         self.answers_dir.mkdir(parents=True, exist_ok=True)
         path.write_text(answer.model_dump_json() + "\n", encoding="utf-8")
-        pair = pair_from(task, answer)
+        # A probe is its original asked again: its answer measures whether the person
+        # agrees with themselves, and is never a second pair - that would count one
+        # question twice in the fit, weighted by how reliable the person was *not*.
+        pair = None if task.repeat_of is not None else pair_from(task, answer)
         if pair is not None:
             self.pairs_dir.mkdir(parents=True, exist_ok=True)
             (self.pairs_dir / f"{task.id}.yaml").write_text(dump_pairs([pair]), encoding="utf-8")

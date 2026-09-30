@@ -44,10 +44,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from longrun.core.routing.custom_model import (
+    AVOID_HIGH_STRESS,
     MIN_MULTIPLIER,
     NEUTRAL,
     PARAMETER_NAMES,
     CustomModelParams,
+    effective_params,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -271,6 +273,182 @@ def detour_penalty(
     return weight * sum(excesses) / len(excesses)
 
 
+def search(
+    pairs: Sequence[PreferencePair],
+    *,
+    profile: PreferenceProfile | None = None,
+    grid: Sequence[float] = DEFAULT_GRID,
+    tolerance_pct: float = 10.0,
+    penalty_weight: float = DETOUR_PENALTY_WEIGHT,
+) -> tuple[CustomModelParams, float]:
+    """The grid search `fit` runs, without `fit`'s refusal to run it on too little evidence.
+
+    Separate so a held-out measurement can fit on part of the evidence and test on the rest
+    (`holdout_agreement`): that is a question about the optimiser, asked of subsets far
+    below `MIN_PAIRS`, and the gate that protects a *result* has no business refusing it.
+
+    Every vector is costed with the multipliers the router would actually apply
+    (`effective_params`), so a surface the runner stated is not learned a second time.
+    """
+    best: tuple[float, float, CustomModelParams] | None = None
+    for values in itertools.product(grid, repeat=len(PARAMETER_NAMES)):
+        params = CustomModelParams.from_vector(values)
+        applied = effective_params(params, profile)
+        score = agreement_of(pairs, applied) - detour_penalty(
+            pairs, applied, tolerance_pct=tolerance_pct, weight=penalty_weight
+        )
+        # Ties go to the vector nearer neutral: with no evidence to separate two vectors,
+        # the one that claims less is the honest answer, and it keeps the result stable.
+        #
+        # Measured in **log** space, because the grid is symmetric there and not in linear
+        # space: 0.25 and 4.0 are the same claim in opposite directions, but |0.25 - 1| is
+        # 0.75 against |4 - 1| = 3. A linear tie-break therefore made "avoid strongly" look
+        # like a four-times smaller claim than "seek strongly", and the fit systematically
+        # explained evidence by avoidance even where seeking fitted identically.
+        distance = sum(abs(math.log(value)) for value in values)
+        if best is None or (score, -distance) > (best[0], -best[1]):
+            best = (score, distance, params)
+    assert best is not None
+    return best[2], best[0]
+
+
+@dataclass(frozen=True)
+class Holdout:
+    """Agreement on pairs the fit did not see, against the vectors it has to beat.
+
+    ADR 0021 said a fitted vector ships when its agreement is "meaningfully above 0.5".
+    Measured in M23 that was the wrong bar: NEUTRAL costs a route by its length, so it is
+    not a coin flip - it is "prefer the shorter line", which agrees with every runner who
+    chose the shorter line. A fit earns its keep by beating *that*, on pairs it was not fitted
+    to, which is what this reports.
+    """
+
+    folds: int
+    pairs: int
+    fitted: float
+    neutral: float
+    avoid_high_stress: float
+    #: 95% Wilson interval on `fitted`, treating each held-out pair as one trial.
+    interval: tuple[float, float]
+
+    @property
+    def beats_neutral(self) -> bool:
+        """Whether the neutral vector's held-out agreement is below the interval's floor."""
+        return self.interval[0] > self.neutral
+
+    def __str__(self) -> str:
+        low, high = self.interval
+        verdict = "beats" if self.beats_neutral else "does not beat"
+        return (
+            f"held out over {self.folds} folds of {self.pairs} pair(s): fitted "
+            f"{self.fitted:.1%} (95% {low:.1%}-{high:.1%}), neutral {self.neutral:.1%}, "
+            f"avoid-high-stress {self.avoid_high_stress:.1%} - the fit {verdict} neutral"
+        )
+
+
+def wilson(proportion: float, trials: int, z: float = 1.96) -> tuple[float, float]:
+    """The Wilson score interval: honest at small n and at 0 or 1, where +-1.96 SE is not."""
+    if trials <= 0:
+        return (0.0, 1.0)
+    denominator = 1 + z * z / trials
+    centre = (proportion + z * z / (2 * trials)) / denominator
+    half = z * math.sqrt(proportion * (1 - proportion) / trials + z * z / (4 * trials * trials))
+    half /= denominator
+    return (max(0.0, centre - half), min(1.0, centre + half))
+
+
+def holdout_agreement(
+    pairs: Sequence[PreferencePair],
+    *,
+    folds: int = 5,
+    profile: PreferenceProfile | None = None,
+    grid: Sequence[float] = DEFAULT_GRID,
+    penalty_weight: float = DETOUR_PENALTY_WEIGHT,
+) -> Holdout:
+    """K-fold agreement: fit on all but one fold, score the fold, pool the folds.
+
+    Folds are fixed by the pairs' own names (candidate ids, random at seed time), sorted, so
+    the same evidence splits the same way on every run - a measurement that moved between
+    runs would be unreviewable, for `fit`'s reason.
+    """
+    ordered = sorted(pairs, key=lambda pair: (pair.a.name, pair.b.name, pair.preferred))
+    k = max(2, min(folds, len(ordered)))
+    tolerance = 10.0 if profile is None else float(profile.detour_tolerance_pct.value)
+    neutral = effective_params(NEUTRAL, profile)
+    avoid = effective_params(AVOID_HIGH_STRESS, profile)
+
+    scored: list[tuple[float, float, float, float]] = []  # weight, fitted, neutral, avoid
+    for fold in range(k):
+        held = [pair for index, pair in enumerate(ordered) if index % k == fold]
+        train = [pair for index, pair in enumerate(ordered) if index % k != fold]
+        if not held or not train:
+            continue
+        fitted, _ = search(
+            train,
+            profile=profile,
+            grid=grid,
+            tolerance_pct=tolerance,
+            penalty_weight=penalty_weight,
+        )
+        applied = effective_params(fitted, profile)
+        for pair in held:
+            scored.append(
+                (
+                    pair.weight,
+                    agreement_of([pair], applied),
+                    agreement_of([pair], neutral),
+                    agreement_of([pair], avoid),
+                )
+            )
+
+    total = sum(weight for weight, *_ in scored) or 1.0
+
+    def pooled(column: int) -> float:
+        return sum(row[0] * row[column] for row in scored) / total
+
+    fitted_share = pooled(1)
+    return Holdout(
+        folds=k,
+        pairs=len(scored),
+        fitted=fitted_share,
+        neutral=pooled(2),
+        avoid_high_stress=pooled(3),
+        interval=wilson(fitted_share, len(scored)),
+    )
+
+
+def parameter_metres(summary: RouteSummary, parameter: str) -> float:
+    """Metres of a route that one of the six parameters' terms would match."""
+
+    def matches(key: tuple[int | None, bool, bool, bool]) -> bool:
+        lts, unpaved, is_path, is_collector = key
+        return {
+            "lts2": lts == 2,
+            "lts3": lts == 3,
+            "lts4": lts == 4,
+            "unpaved": unpaved,
+            "path_bonus": is_path,
+            "missing_sidewalk": is_collector,
+        }[parameter]
+
+    return sum(metres for key, metres in summary.metres_by_class.items() if matches(key))
+
+
+def evidence_by_parameter(pairs: Sequence[PreferencePair]) -> dict[str, float]:
+    """How many metres of difference between chosen and rejected each parameter has seen.
+
+    A parameter no pair has ever separated two lines on is one the fit has no evidence
+    about - and its fitted value is the grid's tie-break talking, not the runner. Printed
+    beside the vector so a reader can tell the two apart.
+    """
+    return {
+        name: round(
+            sum(abs(parameter_metres(p.a, name) - parameter_metres(p.b, name)) for p in pairs), 1
+        )
+        for name in PARAMETER_NAMES
+    }
+
+
 def fit(
     pairs: Sequence[PreferencePair],
     *,
@@ -310,36 +488,25 @@ def fit(
             )
         return TuningResult(
             params=NEUTRAL,
-            agreement=agreement_of(pairs, NEUTRAL) if pairs else 0.0,
-            penalty=detour_penalty(pairs, NEUTRAL, tolerance_pct=tolerance, weight=penalty_weight),
+            agreement=agreement_of(pairs, effective_params(NEUTRAL, profile)) if pairs else 0.0,
+            penalty=detour_penalty(
+                pairs,
+                effective_params(NEUTRAL, profile),
+                tolerance_pct=tolerance,
+                weight=penalty_weight,
+            ),
             objective=0.0,
             pairs_by_source=by_source,
             caveats=caveats,
             grid_size=0,
         )
 
-    best: tuple[float, float, CustomModelParams] | None = None
-    for values in itertools.product(grid, repeat=len(PARAMETER_NAMES)):
-        params = CustomModelParams.from_vector(values)
-        score = agreement_of(pairs, params) - detour_penalty(
-            pairs, params, tolerance_pct=tolerance, weight=penalty_weight
-        )
-        # Ties go to the vector nearer neutral: with no evidence to separate two vectors,
-        # the one that claims less is the honest answer, and it keeps the result stable.
-        #
-        # Measured in **log** space, because the grid is symmetric there and not in linear
-        # space: 0.25 and 4.0 are the same claim in opposite directions, but |0.25 - 1| is
-        # 0.75 against |4 - 1| = 3. A linear tie-break therefore made "avoid strongly" look
-        # like a four-times smaller claim than "seek strongly", and the fit systematically
-        # explained evidence by avoidance even where seeking fitted identically.
-        distance = sum(abs(math.log(value)) for value in values)
-        if best is None or (score, -distance) > (best[0], -best[1]):
-            best = (score, distance, params)
-
-    assert best is not None
-    score, _, params = best
-    agreement = agreement_of(pairs, params)
-    penalty = detour_penalty(pairs, params, tolerance_pct=tolerance, weight=penalty_weight)
+    params, score = search(
+        pairs, profile=profile, grid=grid, tolerance_pct=tolerance, penalty_weight=penalty_weight
+    )
+    applied = effective_params(params, profile)
+    agreement = agreement_of(pairs, applied)
+    penalty = detour_penalty(pairs, applied, tolerance_pct=tolerance, weight=penalty_weight)
     if params.is_neutral:
         caveats.append("the best vector on this evidence is the neutral one")
     return TuningResult(
@@ -354,6 +521,12 @@ def fit(
 
 
 __all__ = [
+    "Holdout",
+    "evidence_by_parameter",
+    "holdout_agreement",
+    "parameter_metres",
+    "search",
+    "wilson",
     "DEFAULT_GRID",
     "DETOUR_PENALTY_WEIGHT",
     "MIN_PAIRS",

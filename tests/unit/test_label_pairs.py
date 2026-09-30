@@ -540,3 +540,73 @@ def test_status_counts_pairs_the_way_tune_will_see_them(monkeypatch: pytest.Monk
 
     assert "2 answered - 1 chose a line, 1 no preference" in result.output
     assert "no-preference rate 50%" in result.output
+
+
+# --- publishing, and tune reading what was published (M23.7) -------------------------
+
+
+def _answered_ledger() -> Ledger:
+    """A choice, a "no preference", and a probe of the choice - only the first is a pair."""
+    ledger = Ledger(labels_dir_from_env())
+    chosen, shrug = _task("t1", "unpaved", 0.5), _task("t2", "unpaved", 0.5)
+    for task in (chosen, shrug, probe(chosen, "p1", NOW)):
+        ledger.add_task(task)
+    for task_id, prefer, strength in (
+        ("t1", "b", "clear"),
+        ("t2", "none", None),
+        ("p1", "a", "clear"),
+    ):
+        record_pair_answer(
+            ledger,
+            task_id,
+            prefer=prefer,
+            strength=strength,
+            reason=None,
+            labeler="r1",
+            labelled_at=NOW,
+            via="cli",
+        )
+    return ledger
+
+
+def test_a_probe_is_never_a_second_pair() -> None:
+    ledger = _answered_ledger()
+
+    assert [path.stem for path in ledger.pairs_dir.glob("*.yaml")] == ["t1"]
+
+
+def test_publish_writes_a_choice_as_numbers_and_nothing_else(tmp_path: Path) -> None:
+    _answered_ledger()
+    pairs = tmp_path / "pairs"
+
+    result = CliRunner().invoke(
+        app, ["label", "publish", "--cases", str(tmp_path / "cases"), "--pairs", str(pairs)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "0 case(s) and 1 pair(s)" in result.output
+    (published,) = pairs.glob("*.yaml")
+    assert published.name == "judged-r1-t1.yaml"
+    text = published.read_text(encoding="utf-8")
+    for leak in ("lat", "lon", "points", "bayarea", "neutral", "seek-paths", "drawn_by"):
+        assert leak not in text, f"a published pair carries {leak!r}"
+    (pair,) = read_pairs(pairs)
+    assert (pair.preferred, pair.source, pair.labeler) == ("b", "judged", "r1")
+
+
+def test_tune_fits_one_runners_published_pairs_and_holds_some_out(tmp_path: Path) -> None:
+    _answered_ledger()
+    pairs = tmp_path / "pairs"
+    CliRunner().invoke(
+        app, ["label", "publish", "--cases", str(tmp_path / "c"), "--pairs", str(pairs)]
+    )
+
+    mine = CliRunner().invoke(
+        app, ["tune", "--pairs", str(pairs), "--labeler", "r1", "--holdout", "5"]
+    )
+    theirs = CliRunner().invoke(app, ["tune", "--pairs", str(pairs), "--labeler", "someone-else"])
+
+    assert "1 real pair(s)" in mine.output
+    assert "evidence, metres of difference" in mine.output
+    assert "too few pairs from a person to hold any out" in mine.output
+    assert "0 real pair(s)" in theirs.output

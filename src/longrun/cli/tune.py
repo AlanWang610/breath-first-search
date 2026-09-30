@@ -84,11 +84,22 @@ def tune(
     ),
     fixtures: Path = typer.Option(Path("data"), "--fixtures", help="Layer store root, for --edit."),
     snapshot_path: Path | None = typer.Option(None, "--snapshot", help="Snapshot pins."),
+    labeler: str | None = typer.Option(
+        None, "--labeler", help="Fit one runner's pairs only (ADR 0021: never globally)."
+    ),
+    holdout: int = typer.Option(
+        0, "--holdout", help="K-fold held-out agreement, against neutral; 0 skips it."
+    ),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
 ) -> None:
-    """Fit the six scope 7.1 priority parameters against recorded preference pairs."""
+    """Fit the six scope 7.1 priority parameters against recorded preference pairs.
+
+    A person's own answers are in `~/.longrun/labels/pairs` (`longrun label`, ADR 0049):
+    `longrun tune --pairs ~/.longrun/labels/pairs --labeler NAME --holdout 5`.
+    """
     from longrun.core.preferences.store import load_profile
     from longrun.core.routing.preferences import pairs_from_edit
+    from longrun.core.routing.tuning import evidence_by_parameter, holdout_agreement
 
     if edit and edit[0] is not None and edit[1] is not None:
         original, edited = edit
@@ -109,7 +120,19 @@ def tune(
         typer.echo(f"recorded {len(recorded)} pair(s) to {out}")
 
     pairs = read_pairs(pairs_dir)
-    result = fit(pairs, profile=load_profile(profile_path))
+    if labeler is not None:
+        # A pair that does not say whose it is belongs to nobody in particular, and a fit
+        # "for the runner it was fitted for" (ADR 0021) cannot use it.
+        pairs = [pair for pair in pairs if pair.labeler == labeler]
+    profile = load_profile(profile_path)
+    result = fit(pairs, profile=profile)
+    real = [pair for pair in pairs if pair.source != "synthetic"]
+    evidence = evidence_by_parameter(real)
+    held = (
+        holdout_agreement(real, folds=holdout, profile=profile)
+        if holdout > 0 and len(real) >= 2
+        else None
+    )
 
     if as_json:
         typer.echo(
@@ -122,6 +145,19 @@ def tune(
                     "real_pairs": result.real_pairs,
                     "grid_size": result.grid_size,
                     "caveats": result.caveats,
+                    "labeler": labeler,
+                    "evidence_m": evidence,
+                    "holdout": None
+                    if held is None
+                    else {
+                        "folds": held.folds,
+                        "pairs": held.pairs,
+                        "fitted": round(held.fitted, 4),
+                        "neutral": round(held.neutral, 4),
+                        "avoid_high_stress": round(held.avoid_high_stress, 4),
+                        "interval": [round(v, 4) for v in held.interval],
+                        "beats_neutral": held.beats_neutral,
+                    },
                 },
                 indent=2,
             )
@@ -131,6 +167,17 @@ def tune(
     typer.echo(str(result))
     for caveat in result.caveats:
         typer.echo(f"  {caveat}")
+    if real:
+        # A parameter no pair ever separated two lines on has a fitted value that is the
+        # grid's tie-break talking, not the runner.
+        typer.echo(
+            "  evidence, metres of difference each parameter has seen: "
+            + ", ".join(f"{name} {metres:.0f}" for name, metres in evidence.items())
+        )
+    if held is not None:
+        typer.echo(f"  {held}")
+    elif holdout > 0:
+        typer.echo("  too few pairs from a person to hold any out")
     if not pairs:
         typer.echo(f"  no pairs found in {pairs_dir}; see docs/tuning.md for how to record one")
 

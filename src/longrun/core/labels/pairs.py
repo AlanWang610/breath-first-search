@@ -33,7 +33,7 @@ from longrun.core.labels.pairs_io import class_key, summary_from_dict
 from longrun.core.labels.records import LABELER_PATTERN, Via
 from longrun.core.models.geometry import Route
 from longrun.core.routing.custom_model import PARAMETER_NAMES, CustomModelParams
-from longrun.core.routing.tuning import PreferencePair, RouteSummary, cost
+from longrun.core.routing.tuning import PreferencePair, RouteSummary, cost, parameter_metres
 
 Prefer = Literal["a", "b", "none", "cant"]
 Strength = Literal["slight", "clear"]
@@ -189,24 +189,11 @@ def distinct(shared_fraction: float, a: RouteSummary, b: RouteSummary) -> bool:
     )
 
 
-def _metres(summary: RouteSummary, parameter: str) -> float:
-    def matches(key: tuple[int | None, bool, bool, bool]) -> bool:
-        lts, unpaved, is_path, is_collector = key
-        return {
-            "lts2": lts == 2,
-            "lts3": lts == 3,
-            "lts4": lts == 4,
-            "unpaved": unpaved,
-            "path_bonus": is_path,
-            "missing_sidewalk": is_collector,
-        }[parameter]
-
-    return sum(m for key, m in summary.metres_by_class.items() if matches(key))
-
-
 def stratum(a: RouteSummary, b: RouteSummary) -> str:
     """Which of the six parameters the two lines differ on most, in metres."""
-    return max(PARAMETER_NAMES, key=lambda name: abs(_metres(a, name) - _metres(b, name)))
+    return max(
+        PARAMETER_NAMES, key=lambda name: abs(parameter_metres(a, name) - parameter_metres(b, name))
+    )
 
 
 def split_fraction(a: RouteSummary, b: RouteSummary, grid: Sequence[float] = SPLIT_GRID) -> float:
