@@ -40,7 +40,8 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Plan } from "../api";
-import { api, FLAG_KIND } from "../api";
+import { FLAG_KIND } from "../api";
+import { attachBasemap } from "./basemap";
 import {
   elevationRuns,
   flagsBySegment,
@@ -74,7 +75,7 @@ import {
  * M15's first browser test is what found it. `tsc` cannot: the property is optional and
  * `undefined` is assignable to it.
  */
-const BLANK_STYLE: maplibregl.StyleSpecification = {
+export const BLANK_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {},
   layers: [{ id: "bg", type: "background", paint: { "background-color": "#11151a" } }],
@@ -253,32 +254,12 @@ export function MapView({
     instance.on("mousemove", onMove);
 
     instance.once("load", () => {
-      api
-        .basemap()
-        .then((basemap) => {
-          if (!basemap.provider || !basemap.tiles || map.current !== instance) {
-            // Said out loud rather than silently blank: a map with no ground under it
-            // should explain itself, and the API sends the reason.
-            if (basemap.reason) setBasemapNote(`No basemap: ${basemap.reason}`);
-            return;
-          }
-          instance.addSource("basemap", {
-            type: "raster",
-            tiles: basemap.tiles,
-            tileSize: basemap.tile_size ?? 256,
-            // MapLibre stops requesting past this and scales the last real tile up. USGS
-            // measured at 16: past it every request is a 404.
-            maxzoom: basemap.maxzoom ?? 16,
-            attribution: basemap.attribution,
-          });
-          // Underneath the route if the route is already drawn, at the bottom otherwise.
-          const beneath = instance.getLayer("segments") ? "segments" : undefined;
-          instance.addLayer({ id: "basemap", type: "raster", source: "basemap" }, beneath);
-        })
-        .catch(() => {
-          // An API that cannot say which provider is no reason to lose the route.
-          setBasemapNote("No basemap: the API did not answer");
-        });
+      attachBasemap(instance, {
+        // Underneath the route if the route is already drawn, at the bottom otherwise.
+        beneath: () => (instance.getLayer("segments") ? "segments" : undefined),
+        note: setBasemapNote,
+        stillCurrent: () => map.current === instance,
+      });
     });
     return () => {
       // Explicit, although `remove()` would take them with it. React 18's StrictMode runs

@@ -71,3 +71,7 @@ person's - and it carries whose it is, because ADR 0021 fits a vector for one ru
   attribute that weight to whatever class the climbing ran on. Known, and not fixed here.
 - Tasks hold geometry near where somebody runs, so they live in the ledger (ADR 0048). What
   reaches the tree is `publish`'s: summaries named by candidate id, never a coordinate.
+- The Review endpoints (`/api/labels/...`) take a task id and nothing else, and the ledger
+  resolves it only if it is `[a-z0-9-]` - an id that can name a file outside the queue is
+  not one the alphabet can spell, which is ADR 0036's rule reached without a resolver.
+  Answers are synchronous `201`s, as verdicts are, for ADR 0036's addendum's reason.

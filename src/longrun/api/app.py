@@ -181,6 +181,14 @@ class VerdictSubmission(BaseModel):
     golden: str | None = Field(default=None, description="The golden this plan was seeded from.")
 
 
+class PairAnswerSubmission(BaseModel):
+    """What the Review page sends: the fields `longrun label pair` takes, and no others."""
+
+    prefer: str = Field(description="a, b, none (no preference) or cant.")
+    strength: str | None = Field(default=None, description="slight or clear, with a or b.")
+    reason: str | None = None
+
+
 class JobView(BaseModel):
     """A job as the UI sees it. A pause is `needs_input`, which is a status, not an error."""
 
@@ -366,6 +374,54 @@ def create_app(
             return await anyio.to_thread.run_sync(_record_verdict, path, submission, labeler)
         except VerdictRefused as refused:
             raise HTTPException(status_code=422, detail="\n".join(refused.problems)) from None
+
+    # --- preference pairs (ADR 0049) -------------------------------------------------
+    #
+    # A task id is resolved by the ledger, which accepts only `[a-z0-9-]` and so can only
+    # ever name a file inside its own queue: the containment `_plan_id_dir` has to check,
+    # this gets from the alphabet. Nothing here names a path (ADR 0036).
+
+    @app.get("/api/labels/queue")
+    async def read_label_queue() -> dict[str, Any]:
+        """How many questions are left, the next to ask, and who is answering them."""
+        import anyio
+
+        return await anyio.to_thread.run_sync(_label_queue)
+
+    @app.get("/api/labels/tasks/{task_id}")
+    async def read_label_task(task_id: str) -> dict[str, Any]:
+        """One question, as `core.labels.review.task_view` says the page may see it:
+        blind to which vector drew which line, and without shares until it is answered."""
+        import anyio
+
+        view = await anyio.to_thread.run_sync(_label_task, task_id)
+        if view is None:
+            raise HTTPException(status_code=404, detail=f"no task {task_id!r}")
+        return view
+
+    @app.post("/api/labels/tasks/{task_id}/answer", status_code=201)
+    async def post_label_answer(task_id: str, submission: PairAnswerSubmission) -> dict[str, Any]:
+        """Record which line the person would rather run. Synchronous, like a verdict: it
+        changes no plan, and "say how strongly" belongs in the answer to the click."""
+        import anyio
+
+        from longrun.core.labels.answers import AnswerRefused
+        from longrun.core.labels.ledger import LABELER_ENV_VAR, AlreadyAnswered, labeler_from_env
+
+        labeler = labeler_from_env()
+        if labeler is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"this server was started without {LABELER_ENV_VAR}, so it cannot say "
+                "whose answer this is; set it and restart `longrun api`",
+            )
+        try:
+            return await anyio.to_thread.run_sync(_answer_label_task, task_id, submission, labeler)
+        except AnswerRefused as refused:
+            status = 404 if refused.problems[0].startswith("no task") else 422
+            raise HTTPException(status_code=status, detail="\n".join(refused.problems)) from None
+        except AlreadyAnswered as exc:
+            raise HTTPException(status_code=409, detail=f"{exc}; a first answer stands") from None
 
     @app.post("/api/plans", status_code=202)
     async def submit_plan(submission: PlanSubmission) -> JobView:
@@ -1072,6 +1128,60 @@ def _record_verdict(path: Path, submission: VerdictSubmission, labeler: str) -> 
         "labeler": verdict.labeler,
         "publishable": verdict.golden is not None,
     }
+
+
+def _label_queue() -> dict[str, Any]:
+    from longrun.core.labels.answers import next_task, probe_agreement
+    from longrun.core.labels.ledger import Ledger, labeler_from_env, labels_dir_from_env
+
+    ledger = Ledger(labels_dir_from_env())
+    tasks, answers = ledger.tasks(), ledger.answers()
+    upcoming = next_task(ledger)
+    agreeing, probed = probe_agreement(tasks, answers)
+    return {
+        "pending": len(tasks) - len(answers),
+        "answered": len(answers),
+        "next": None if upcoming is None else upcoming.id,
+        "labeler": labeler_from_env(),
+        "counts": {
+            kind: sum(1 for a in answers if a.prefer == kind) for kind in ("a", "b", "none", "cant")
+        },
+        "probes": {"agree": agreeing, "total": probed},
+    }
+
+
+def _label_task(task_id: str) -> dict[str, Any] | None:
+    from longrun.core.labels.ledger import Ledger, labels_dir_from_env
+    from longrun.core.labels.review import task_view
+
+    ledger = Ledger(labels_dir_from_env())
+    task = ledger.task(task_id)
+    return None if task is None else task_view(task, ledger.answer(task_id))
+
+
+def _answer_label_task(
+    task_id: str, submission: PairAnswerSubmission, labeler: str
+) -> dict[str, Any]:
+    from datetime import UTC, datetime
+
+    from longrun.core.labels.answers import record_pair_answer
+    from longrun.core.labels.ledger import Ledger, labels_dir_from_env
+    from longrun.core.labels.review import task_view
+
+    ledger = Ledger(labels_dir_from_env())
+    answer = record_pair_answer(
+        ledger,
+        task_id,
+        prefer=submission.prefer,
+        strength=submission.strength,
+        reason=submission.reason,
+        labeler=labeler,
+        labelled_at=datetime.now(UTC).replace(microsecond=0),
+        via="ui",
+    )
+    task = ledger.task(task_id)
+    assert task is not None  # record_pair_answer found it
+    return task_view(task, answer)
 
 
 def _version() -> str:

@@ -87,6 +87,26 @@ The server records under `LONGRUN_LABELER`, and without it the panel says so and
 submit. A verdict with no golden stays in the ledger; `longrun label publish` is the only way
 anything reaches `tests/eval`, and you run it.
 
+## Review: which of two lines would you rather run? (M23)
+
+The **Review** tab answers preference pairs (ADR 0049) - two lines the router drew between
+the same ends, queued by `longrun label seed` while the region's router runs. It has its own
+map (`PairMap`), because nothing about planning belongs on the page a person chooses on, and
+`MapView`'s camera rules and gesture handlers are a risk to share.
+
+- **Blind, and numbers after.** `GET /api/labels/tasks/{id}` sends two lines, their lengths
+  and where they part - never which vector drew them, and no shares of LTS 3+, unpaved or
+  path until the task has an answer. The server enforces both; the page cannot show what it
+  was not sent.
+- **Four answers.** A or B with a strength (slightly = weight 0.5, clearly = 1.0), no
+  preference, or can't judge. The last two are kept and counted, and are never a pair.
+- **A first answer stands.** A second look is a probe the queue asks later, A and B swapped.
+- The lines are offset a few pixels each way, so a shared stretch reads as two lines side by
+  side, and the stretches where they part are drawn heavier.
+
+Answers go to `~/.longrun/labels/`; a choice is a tune-format pair there at once
+(`longrun tune --pairs ~/.longrun/labels/pairs`).
+
 ## Two decisions worth knowing
 
 **The basemap is USGS The National Map, drawn as a layer under the route** (ADR 0023).

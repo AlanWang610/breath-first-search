@@ -183,3 +183,32 @@ export function seedPlan(planId: string, route: SeedRoute = "synthetic-hazards")
   fs.copyFileSync(seedPlanPath(route), path.join(directory, "plan.json"));
   return planId;
 }
+
+/**
+ * Empty the suite's preference-pair queue and put `count` fresh tasks in it (ADR 0049).
+ *
+ * Per test, because the Review page always shows the *next* unanswered task and every test
+ * answers some: a queue shared across tests would make each one's question depend on what
+ * ran before it. `seed_review.py` writes them with the real schema, from this run's own
+ * seeded plan. Verdicts live in a sibling directory and are left alone.
+ */
+export function seedReviewTasks(count = 2): void {
+  for (const directory of ["queue", "answers", "pairs"]) {
+    fs.rmSync(path.join(LABELS_DIR, directory), { recursive: true, force: true });
+  }
+  execFileSync(
+    "uv",
+    [
+      "run",
+      "python",
+      path.join("ui", "gestures", "seed_review.py"),
+      "--plan",
+      seedPlanPath("synthetic-hazards"),
+      "--labels",
+      LABELS_DIR,
+      "--count",
+      String(count),
+    ],
+    { cwd: REPO_ROOT, stdio: "pipe", shell: process.platform === "win32" },
+  );
+}

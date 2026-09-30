@@ -30,6 +30,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MapView, type DrawMode, type Selection } from "./components/MapView";
 import { Timeline } from "./components/Timeline";
 import { JudgePanel } from "./components/JudgePanel";
+import { ReviewView } from "./components/ReviewView";
 import {
   CoveragePanel,
   MetricsPanel,
@@ -60,6 +61,9 @@ const FROZEN_POLICY_NOTE =
   "is a routing call — run `longrun edit reroute` against the stored plan.";
 
 export default function App() {
+  // Two pages, one header. Review answers preference pairs (ADR 0049); it has its own map,
+  // because nothing about planning belongs on the page a person chooses between two lines on.
+  const [mode, setMode] = useState<"plan" | "review">("plan");
   const [health, setHealth] = useState<Health | null>(null);
   const [regions, setRegions] = useState<Region[]>([]);
   const [profile, setProfile] = useState<Plan["profile"] | null>(null);
@@ -250,6 +254,18 @@ export default function App() {
     <div className="app">
       <header className="top">
         <h1>longrun</h1>
+        <nav className="tabs" aria-label="Page">
+          {(["plan", "review"] as const).map((page) => (
+            <button
+              key={page}
+              className={mode === page ? "tab active" : "tab"}
+              aria-pressed={mode === page}
+              onClick={() => setMode(page)}
+            >
+              {page === "plan" ? "Plan" : "Review"}
+            </button>
+          ))}
+        </nav>
         {health && (
           <span className="muted small">
             v{health.version} · router {health.router ?? "not configured"} · fixtures{" "}
@@ -261,219 +277,223 @@ export default function App() {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="layout">
-        <aside className="side">
-          <section className="panel">
-            <h2>Plan a route</h2>
-            <label>
-              From <input value={start} onChange={(e) => setStart(e.target.value)} />
-            </label>
-            <label>
-              To <input value={end} onChange={(e) => setEnd(e.target.value)} />
-            </label>
-            <label>
-              Date <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </label>
-            <label>
-              Start{" "}
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </label>
-            <button onClick={submit} disabled={busy}>
-              {busy ? "planning…" : "Plan"}
-            </button>
-          </section>
-
-          {plan && planId && (
+      {mode === "review" ? (
+        <ReviewView />
+      ) : (
+        <div className="layout">
+          <aside className="side">
             <section className="panel">
-              <h2>Edit this plan</h2>
-              {selection ? (
-                <p className="small">
-                  {selection.id} · {(selection.startM / 1000).toFixed(2)}–
-                  {(selection.endM / 1000).toFixed(2)} km
-                </p>
-              ) : (
-                <p className="muted small">Click a segment on the map to select a stretch.</p>
-              )}
-              <div className="row">
-                <button
-                  disabled={busy || !selection}
-                  onClick={() =>
-                    selection &&
-                    void edit((id) =>
-                      api.edit.lock(id, {
-                        start_m: selection.startM,
-                        end_m: selection.endM,
-                        reason: "locked on the map",
-                      }),
-                    )
-                  }
-                >
-                  Lock
-                </button>
-                <button
-                  disabled={busy || !selection}
-                  onClick={() =>
-                    selection &&
-                    void edit((id) =>
-                      api.edit.unlock(id, {
-                        start_m: selection.startM,
-                        end_m: selection.endM,
-                        mine: true,
-                      }),
-                    )
-                  }
-                  title="Releases locks you set, leaving the loop's own reroute locks standing."
-                >
-                  Unlock mine
-                </button>
-                <button
-                  disabled={busy || !selection}
-                  onClick={() => {
-                    setVertices([]);
-                    setDrawMode("alternative");
-                  }}
-                >
-                  Replace this stretch
-                </button>
-              </div>
-              <div className="row">
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setVertices([]);
-                    setDrawMode("via");
-                  }}
-                >
-                  Add a via
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setVertices([]);
-                    setDrawMode("avoid");
-                  }}
-                >
-                  Draw an avoid area
-                </button>
-                {drawMode && (
+              <h2>Plan a route</h2>
+              <label>
+                From <input value={start} onChange={(e) => setStart(e.target.value)} />
+              </label>
+              <label>
+                To <input value={end} onChange={(e) => setEnd(e.target.value)} />
+              </label>
+              <label>
+                Date <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </label>
+              <label>
+                Start{" "}
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              </label>
+              <button onClick={submit} disabled={busy}>
+                {busy ? "planning…" : "Plan"}
+              </button>
+            </section>
+
+            {plan && planId && (
+              <section className="panel">
+                <h2>Edit this plan</h2>
+                {selection ? (
+                  <p className="small">
+                    {selection.id} · {(selection.startM / 1000).toFixed(2)}–
+                    {(selection.endM / 1000).toFixed(2)} km
+                  </p>
+                ) : (
+                  <p className="muted small">Click a segment on the map to select a stretch.</p>
+                )}
+                <div className="row">
                   <button
+                    disabled={busy || !selection}
+                    onClick={() =>
+                      selection &&
+                      void edit((id) =>
+                        api.edit.lock(id, {
+                          start_m: selection.startM,
+                          end_m: selection.endM,
+                          reason: "locked on the map",
+                        }),
+                      )
+                    }
+                  >
+                    Lock
+                  </button>
+                  <button
+                    disabled={busy || !selection}
+                    onClick={() =>
+                      selection &&
+                      void edit((id) =>
+                        api.edit.unlock(id, {
+                          start_m: selection.startM,
+                          end_m: selection.endM,
+                          mine: true,
+                        }),
+                      )
+                    }
+                    title="Releases locks you set, leaving the loop's own reroute locks standing."
+                  >
+                    Unlock mine
+                  </button>
+                  <button
+                    disabled={busy || !selection}
                     onClick={() => {
-                      setDrawMode(null);
                       setVertices([]);
+                      setDrawMode("alternative");
                     }}
                   >
-                    Cancel
-                  </button>
-                )}
-              </div>
-              {drawMode === "avoid" && (
-                <div className="row">
-                  <button disabled={busy || vertices.length < 3} onClick={useDrawnArea}>
-                    Use this area ({vertices.length})
+                    Replace this stretch
                   </button>
                 </div>
-              )}
-              {drawMode === "alternative" && (
                 <div className="row">
-                  <button disabled={busy || vertices.length < 2} onClick={useDrawnLine}>
-                    Use this line ({vertices.length})
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setVertices([]);
+                      setDrawMode("via");
+                    }}
+                  >
+                    Add a via
                   </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setVertices([]);
+                      setDrawMode("avoid");
+                    }}
+                  >
+                    Draw an avoid area
+                  </button>
+                  {drawMode && (
+                    <button
+                      onClick={() => {
+                        setDrawMode(null);
+                        setVertices([]);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
-              )}
-              {/* Said at the button, not only in the event log the server writes. */}
-              <p className="muted small">{FROZEN_POLICY_NOTE}</p>
-            </section>
-          )}
-
-          {plan && planId && measured && (
-            <JudgePanel
-              planId={planId}
-              measured={measured}
-              onRecorded={() => {
-                api
-                  .measured(planId)
-                  .then(setMeasured)
-                  .catch(() => undefined);
-              }}
-            />
-          )}
-
-          {job && (
-            <section className="panel">
-              <h2>
-                Job <span className="muted">{job.status}</span>
-              </h2>
-              {job.question && (
-                <div className="tradeoff">
-                  {/* Not an error state. The loop stopped because two candidates are in
-                      the same tier and only the runner can break that. */}
-                  <p>{job.question.prompt}</p>
+                {drawMode === "avoid" && (
                   <div className="row">
-                    {job.question.options.map((option) => (
-                      <button key={option} onClick={() => choose(option)} disabled={busy}>
-                        {option}
-                      </button>
-                    ))}
+                    <button disabled={busy || vertices.length < 3} onClick={useDrawnArea}>
+                      Use this area ({vertices.length})
+                    </button>
                   </div>
-                </div>
-              )}
-              <ol className="events">
-                {job.events.slice(-8).map((event, index) => (
-                  <li key={index} className={event.kind === "failed" ? "bad" : undefined}>
-                    {event.message}
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
-          <section className="panel">
-            <h2>Stored plans</h2>
-            {summaries.length === 0 ? (
-              <p className="muted small">Nothing planned yet.</p>
-            ) : (
-              <ul className="plans">
-                {summaries.map((summary) => (
-                  <li key={summary.plan_id}>
-                    <button className="link" onClick={() => openPlan(summary.plan_id)}>
-                      {summary.plan_id}
-                    </button>{" "}
-                    <span className="muted small">
-                      {summary.date ?? "—"} ·{" "}
-                      {summary.length_m ? `${(summary.length_m / 1000).toFixed(1)} km` : "—"}
-                      {summary.trade_offs > 0 ? ` · ${summary.trade_offs} to decide` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                )}
+                {drawMode === "alternative" && (
+                  <div className="row">
+                    <button disabled={busy || vertices.length < 2} onClick={useDrawnLine}>
+                      Use this line ({vertices.length})
+                    </button>
+                  </div>
+                )}
+                {/* Said at the button, not only in the event log the server writes. */}
+                <p className="muted small">{FROZEN_POLICY_NOTE}</p>
+              </section>
             )}
-          </section>
 
-          <RegionsPanel regions={regions} />
-          <PreferencePanel profile={plan?.profile ?? profile} />
-        </aside>
+            {plan && planId && measured && (
+              <JudgePanel
+                planId={planId}
+                measured={measured}
+                onRecorded={() => {
+                  api
+                    .measured(planId)
+                    .then(setMeasured)
+                    .catch(() => undefined);
+                }}
+              />
+            )}
 
-        <main className="main">
-          <MapView
-            plan={plan}
-            drawMode={drawMode}
-            vertices={vertices}
-            selection={selection}
-            cursorM={cursorM}
-            onPickSegment={(segment) => setSelection(segment)}
-            onVertex={onVertex}
-          />
-          <Timeline plan={plan} cursorM={cursorM} onCursor={setCursorM} />
-          {plan && (
-            <div className="panels">
-              <MetricsPanel plan={plan} />
-              <TradeOffsPanel tradeOffs={plan.trade_offs ?? []} />
-              <WarningsPanel plan={plan} />
-              <CoveragePanel entries={plan.coverage?.entries ?? []} />
-            </div>
-          )}
-        </main>
-      </div>
+            {job && (
+              <section className="panel">
+                <h2>
+                  Job <span className="muted">{job.status}</span>
+                </h2>
+                {job.question && (
+                  <div className="tradeoff">
+                    {/* Not an error state. The loop stopped because two candidates are in
+                        the same tier and only the runner can break that. */}
+                    <p>{job.question.prompt}</p>
+                    <div className="row">
+                      {job.question.options.map((option) => (
+                        <button key={option} onClick={() => choose(option)} disabled={busy}>
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <ol className="events">
+                  {job.events.slice(-8).map((event, index) => (
+                    <li key={index} className={event.kind === "failed" ? "bad" : undefined}>
+                      {event.message}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            <section className="panel">
+              <h2>Stored plans</h2>
+              {summaries.length === 0 ? (
+                <p className="muted small">Nothing planned yet.</p>
+              ) : (
+                <ul className="plans">
+                  {summaries.map((summary) => (
+                    <li key={summary.plan_id}>
+                      <button className="link" onClick={() => openPlan(summary.plan_id)}>
+                        {summary.plan_id}
+                      </button>{" "}
+                      <span className="muted small">
+                        {summary.date ?? "—"} ·{" "}
+                        {summary.length_m ? `${(summary.length_m / 1000).toFixed(1)} km` : "—"}
+                        {summary.trade_offs > 0 ? ` · ${summary.trade_offs} to decide` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <RegionsPanel regions={regions} />
+            <PreferencePanel profile={plan?.profile ?? profile} />
+          </aside>
+
+          <main className="main">
+            <MapView
+              plan={plan}
+              drawMode={drawMode}
+              vertices={vertices}
+              selection={selection}
+              cursorM={cursorM}
+              onPickSegment={(segment) => setSelection(segment)}
+              onVertex={onVertex}
+            />
+            <Timeline plan={plan} cursorM={cursorM} onCursor={setCursorM} />
+            {plan && (
+              <div className="panels">
+                <MetricsPanel plan={plan} />
+                <TradeOffsPanel tradeOffs={plan.trade_offs ?? []} />
+                <WarningsPanel plan={plan} />
+                <CoveragePanel entries={plan.coverage?.entries ?? []} />
+              </div>
+            )}
+          </main>
+        </div>
+      )}
     </div>
   );
 }
