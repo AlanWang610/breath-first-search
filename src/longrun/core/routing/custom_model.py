@@ -75,7 +75,52 @@ PARAMETER_NAMES: tuple[str, ...] = (
 #: first draft of this module used: `UNPAVED` and `GROUND` are both common in OSM and
 #: omitting them would have left the unpaved multiplier silently not applying to most of
 #: the ways it is about.
-UNPAVED_SURFACES: tuple[str, ...] = ("UNPAVED", "GRAVEL", "DIRT", "GROUND", "SAND")
+#:
+#: M23 added the last three, and the reason is the same failure one layer down: the fitter
+#: (`preferences.UNPAVED_SURFACES`) counted `compacted`, `fine_gravel` and `grass` as
+#: unpaved and this list did not, so a vector fitted to prefer Marin's compacted fire roads
+#: would have been costed on ways its own `unpaved` term never touched. All three are
+#: `Surface` enum names in GraphHopper 11 (read from the jar, not assumed), and the order
+#: appends rather than sorts so the emitted condition changes only by what was added.
+UNPAVED_SURFACES: tuple[str, ...] = (
+    "UNPAVED",
+    "GRAVEL",
+    "DIRT",
+    "GROUND",
+    "SAND",
+    "COMPACTED",
+    "FINE_GRAVEL",
+    "GRASS",
+)
+
+#: OSM spellings GraphHopper folds into one of its own `Surface` values on import -
+#: `Surface.SURFACE_MAP` in the 11.0 jar, disassembled rather than remembered. A way tagged
+#: `surface=earth` is `DIRT` to the router, so it has to be unpaved to the fitter too.
+SURFACE_ALIASES: dict[str, str] = {
+    "metal": "PAVED",
+    "sett": "COBBLESTONE",
+    "unhewn_cobblestone": "COBBLESTONE",
+    "earth": "DIRT",
+    "pebblestone": "GRAVEL",
+    "grass_paver": "GRASS",
+}
+
+#: The `road_class` values the path bonus matches, and the ones the missing-sidewalk
+#: multiplier does. Named so the emitted conditions and anything that *counts* ways by
+#: class - a fitter, a route summary - read one list rather than two that agree today.
+PATH_ROAD_CLASSES: tuple[str, ...] = ("PATH", "FOOTWAY")
+COLLECTOR_ROAD_CLASSES: tuple[str, ...] = ("SECONDARY", "TERTIARY")
+
+
+def osm_unpaved_surfaces() -> frozenset[str]:
+    """`UNPAVED_SURFACES` as OSM spells them, aliases included."""
+    return frozenset(value.lower() for value in UNPAVED_SURFACES) | frozenset(
+        alias for alias, target in SURFACE_ALIASES.items() if target in UNPAVED_SURFACES
+    )
+
+
+def _any_of(field: str, values: tuple[str, ...]) -> str:
+    return " || ".join(f"{field} == {value}" for value in values)
 
 
 class CustomModelParams(BaseModel):
@@ -181,14 +226,10 @@ def _surface_terms(
 
     terms: list[dict[str, str]] = []
     if unpaved != 1.0:
-        condition = " || ".join(f"surface == {value}" for value in UNPAVED_SURFACES)
-        terms.append({"if": condition, "multiply_by": _number(unpaved)})
+        terms.append({"if": _any_of("surface", UNPAVED_SURFACES), "multiply_by": _number(unpaved)})
     if path_bonus != 1.0:
         terms.append(
-            {
-                "if": "road_class == PATH || road_class == FOOTWAY",
-                "multiply_by": _number(path_bonus),
-            }
+            {"if": _any_of("road_class", PATH_ROAD_CLASSES), "multiply_by": _number(path_bonus)}
         )
     return terms
 
@@ -206,7 +247,7 @@ def _sidewalk_terms(params: CustomModelParams) -> list[dict[str, str]]:
         return []
     return [
         {
-            "if": "road_class == SECONDARY || road_class == TERTIARY",
+            "if": _any_of("road_class", COLLECTOR_ROAD_CLASSES),
             "multiply_by": _number(params.missing_sidewalk),
         }
     ]
@@ -258,6 +299,10 @@ __all__: list[str] = [
     "NEUTRAL",
     "PARAMETER_NAMES",
     "UNPAVED_SURFACES",
+    "SURFACE_ALIASES",
+    "PATH_ROAD_CLASSES",
+    "COLLECTOR_ROAD_CLASSES",
+    "osm_unpaved_surfaces",
     "CustomModelParams",
     "describe",
     "to_custom_model",

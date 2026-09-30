@@ -47,11 +47,14 @@ from longrun.core.routing.graphhopper import (
     cue_sheet_of,
     path_to_route,
     route_body,
+    summaries_of,
+    summary_details,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.data.base import Cache
     from longrun.core.models.context import Budget
+    from longrun.core.routing.tuning import RouteSummary
 
 
 @runtime_checkable
@@ -140,6 +143,30 @@ class CachedRouter:
         body = route_body(waypoints, profile, avoid_polygons, custom_model, instructions=True)
         paths = self._paths(body, waypoints, lambda: self.inner_paths(body, waypoints))
         return path_to_route(paths[0], route_id="generated"), cue_sheet_of(paths[0])
+
+    def route_summaries(
+        self,
+        waypoints: list[LatLon],
+        profile: str = FOOT_PROFILE,
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+        *,
+        alternatives: int = 0,
+        has_lts: bool = True,
+        name: str = "route",
+    ) -> list[tuple[Route, RouteSummary]]:
+        """Recorded under its own key: a request that asked for details is a different
+        question from one that did not, and the answer to it carries them."""
+        body = route_body(
+            waypoints,
+            profile,
+            avoid_polygons,
+            custom_model,
+            alternatives=alternatives if len(waypoints) == 2 else 0,
+            details=summary_details(has_lts=has_lts),
+        )
+        paths = self._paths(body, waypoints, lambda: self.inner_paths(body, waypoints))
+        return summaries_of(paths, name)
 
     def alternatives(
         self,
@@ -273,6 +300,12 @@ def route_args(
     # guard the general invariant rather than this one field.
     if body.get("instructions"):
         args["instructions"] = True
+    # The same asymmetry, for the same reason (M23): a request that asks for path details
+    # gets an answer that carries them, and one recorded without them must never be served
+    # to it - the summary would read every edge as unknown. Absent when not asked for, so
+    # every cassette recorded before this field existed keeps its key.
+    if body.get("details"):
+        args["details"] = list(body["details"])
     return args
 
 

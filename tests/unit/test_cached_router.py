@@ -259,6 +259,8 @@ def test_no_two_distinct_requests_share_a_key() -> None:
         "alts": route_body(pair, alternatives=3),
         "cues+alts": route_body(pair, alternatives=3, instructions=True),
         "other-profile": route_body(pair, profile="car"),
+        "details": route_body(pair, details=("lts", "surface", "road_class")),
+        "details+alts": route_body(pair, alternatives=3, details=("lts", "surface", "road_class")),
     }
     keys = {name: args_hash(route_args(body, pair, _GRAPH)) for name, body in variants.items()}
     assert len(set(keys.values())) == len(keys), f"two distinct requests collide: {keys}"

@@ -12,10 +12,13 @@ connected point is 240 m away" is actionable.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from longrun.core.models.geometry import LatLon, Route
 from longrun.core.models.routing import CueSheet
+
+if TYPE_CHECKING:  # pragma: no cover
+    from longrun.core.routing.tuning import RouteSummary
 
 #: The costing model is opaque above the adapter: a dict here, a GraphHopper custom model
 #: in the adapter, something else entirely under a different router.
@@ -98,6 +101,25 @@ class Router(Protocol):
         """
         ...
 
+    def route_summaries(
+        self,
+        waypoints: list[LatLon],
+        profile: str = "foot",
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+        *,
+        alternatives: int = 0,
+        has_lts: bool = True,
+        name: str = "route",
+    ) -> list[tuple[Route, RouteSummary]]:
+        """Each line and what it is made of - metres per way class - from one request.
+
+        What a preference pair stores (ADR 0020), read off the router's own path details
+        rather than a ways layer: the lines a person is asked to choose between are the
+        router's, so their summaries are too, in the vocabulary a custom model matches on.
+        """
+        ...
+
     def alternatives(
         self,
         gpx: Route,
@@ -147,6 +169,22 @@ class NullRouter:
         silence would be told this route has none, which is the confusion the whole design
         is arranged around.
         """
+        raise RouterUnavailable(
+            "no router configured: generate mode needs one, repair mode does not"
+        )
+
+    def route_summaries(
+        self,
+        waypoints: list[LatLon],
+        profile: str = "foot",
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+        *,
+        alternatives: int = 0,
+        has_lts: bool = True,
+        name: str = "route",
+    ) -> list[tuple[Route, RouteSummary]]:
+        """The same refusal `route` gives: there is no line to summarise."""
         raise RouterUnavailable(
             "no router configured: generate mode needs one, repair mode does not"
         )

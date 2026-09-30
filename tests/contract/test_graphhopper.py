@@ -244,3 +244,38 @@ def test_map_matching_a_track_that_is_not_on_the_graph_degrades(
     matched, way_ids = router.map_match(offshore)
     assert matched.points == offshore.points
     assert way_ids == [None] * len(offshore.points)
+
+
+# --- M23: a line summarised from the router's own details --------------------
+
+
+def test_a_line_comes_back_with_the_details_a_summary_is_read_from(
+    router: GraphHopperRouter,
+) -> None:
+    """ADR 0020, amended: a preference pair's summary is read off the path's `lts`, `surface`
+    and `road_class` details. Asserted against a live graph because the details' spelling -
+    lowercase names, integer LTS, `[from, to, value]` over point indices - is the router's,
+    and a unit test built from a hand-written path would only check it against itself."""
+    lines = router.route_summaries([FERRY, DEYOUNG], alternatives=2, name="n")
+
+    assert lines, "no line at all"
+    route, summary = lines[0]
+    assert summary.length_m == pytest.approx(route.length_m, rel=0.02)
+    levels = {key[0] for key in summary.metres_by_class}
+    assert levels - {None}, f"no edge carried an LTS: {sorted(map(str, levels))}"
+    assert any(key[2] for key in summary.metres_by_class) or any(
+        key[3] for key in summary.metres_by_class
+    ), "no edge was a path or a collector on a route across the city"
+
+
+def test_every_unpaved_surface_is_a_name_the_server_accepts(router: GraphHopperRouter) -> None:
+    """A surface name the graph does not know is not ignored: the custom model is rejected
+    and the request fails as "no route" - the wrong answer to "wrong spelling". M23 added
+    COMPACTED, FINE_GRAVEL and GRASS, read from the jar; this is the server agreeing."""
+    from longrun.core.routing.custom_model import CustomModelParams, to_custom_model
+
+    route = router.route(
+        [FERRY, DEYOUNG], custom_model=to_custom_model(CustomModelParams(unpaved=0.5))
+    )
+
+    assert route.length_m > 0
