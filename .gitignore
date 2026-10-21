@@ -65,3 +65,7 @@ plans/
 # tree, which is the rule immediately above applied rather than worked around.
 ui/test-results/
 ui/playwright-report/
+
+# Answers saved from a hosted review page (ADR 0050). They reach the ledger by
+# `longrun label import` and the tree only by `longrun label publish`, never by a commit.
+longrun-answers-*.json

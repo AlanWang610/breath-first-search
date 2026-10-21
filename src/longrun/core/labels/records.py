@@ -20,7 +20,9 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 #: escaped on its way into a path.
 LABELER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
 
-Via = Literal["cli", "ui"]
+#: The door an answer came through: `longrun label`, the local web UI, or a hosted page whose
+#: answers file the person imported (ADR 0050).
+Via = Literal["cli", "ui", "page"]
 
 
 class Verdict(BaseModel):

@@ -5,6 +5,7 @@
         --reason "..." --bound fraction_lts3_plus_max=0.02
     longrun label publish --dry-run                    # what would enter tests/eval
     longrun label status
+    longrun label import answers.json                  # answers a hosted page saved
 
 **This is a person's door.** An agent does not run `verdict` or `publish` (`CLAUDE.md`), and
 `tools/` has no equivalent (`test_the_agents_door_has_no_way_to_record_a_label`). Labels go
@@ -581,6 +582,113 @@ def pair(
         raise _fail(f"{exc}; a first answer stands") from None
     counted = "a pair `tune` will read" if answer.prefer in ("a", "b") else "kept, not a pair"
     typer.echo(f"recorded {answer.prefer} on {task_id} (by {labeler}): {counted}")
+
+
+# --- a batch answered on a hosted page (ADR 0050) ------------------------------------
+
+
+@label_app.command("batch")
+def batch(
+    out: Path | None = typer.Option(
+        None, "--out", help="Where the batch goes; default `batches/` beside the ledger."
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", help="At most this many questions, not counting ones asked twice."
+    ),
+    stratum: list[str] = typer.Option(  # noqa: B008 - Typer's idiom for a repeatable option
+        [], "--stratum", help="Only questions about this parameter; repeatable."
+    ),
+) -> None:
+    """Gather the ledger's unanswered questions into a batch a hosted page can ask.
+
+    Writes BATCH.json (the tasks, kept on this machine) and BATCH.page.json (what the page
+    may hold: no vector names, no probe flags). Answers come back with `label import`.
+    `--stratum` aims a batch at the parameters earlier answers left unpinned.
+    """
+    import json
+
+    from longrun.core.labels.batch import batches_dir, make_batch, page_payload
+    from longrun.core.labels.pairs import order
+    from longrun.core.routing.custom_model import PARAMETER_NAMES
+
+    unknown = sorted(set(stratum) - set(PARAMETER_NAMES))
+    if unknown:
+        raise _fail(f"--stratum {', '.join(unknown)}: expected one of {', '.join(PARAMETER_NAMES)}")
+    ledger = _ledger()
+    answered = {answer.task_id for answer in ledger.answers()}
+    pending = order(task for task in ledger.tasks() if task.id not in answered)
+    if stratum:
+        # A probe carries its original's stratum, so it is kept or dropped with it.
+        pending = [task for task in pending if task.stratum in stratum]
+    if limit is not None:
+        # The first questions in session order are the ones worth asking first. A probe sorts
+        # after all of them, so it is kept by its original rather than by its position.
+        kept = set([task.id for task in pending if task.repeat_of is None][: max(limit, 0)])
+        pending = [task for task in pending if (task.repeat_of or task.id) in kept]
+    if not pending:
+        raise _fail("no unanswered questions in the ledger; queue some with `label seed`")
+    now = datetime.now(UTC).replace(microsecond=0)
+    made = make_batch(f"{now:%Y%m%d}-{_new_id()[:6]}", pending, now)
+    directory = out or batches_dir(ledger.root)
+    directory.mkdir(parents=True, exist_ok=True)
+    tasks_path = directory / f"{made.id}.json"
+    page_path = directory / f"{made.id}.page.json"
+    tasks_path.write_text(made.model_dump_json(indent=1) + "\n", encoding="utf-8")
+    page_path.write_text(json.dumps(page_payload(made)) + "\n", encoding="utf-8")
+    probes = sum(1 for task in made.tasks if task.repeat_of)
+    typer.echo(f"batch {made.id}: {len(made.tasks)} question(s), {probes} of them asked twice")
+    typer.echo(f"  tasks: {tasks_path}")
+    typer.echo(f"  page:  {page_path}")
+
+
+@label_app.command("import")
+def import_(
+    answers_path: Path = typer.Argument(..., help="The answers file the page saved."),
+    tasks: Path | None = typer.Option(
+        None, "--tasks", help="The batch's tasks; default `batches/BATCH.json` beside the ledger."
+    ),
+) -> None:
+    """Record the answers a hosted page saved, as yours (`LONGRUN_LABELER`)."""
+    from pydantic import ValidationError
+
+    from longrun.core.labels.batch import AnswersFile, Batch, batches_dir, import_answers
+
+    labeler = labeler_from_env()
+    if labeler is None:
+        raise _fail(f"set {LABELER_ENV_VAR} to the name your labels go under")
+    try:
+        answers = AnswersFile.model_validate_json(answers_path.read_text(encoding="utf-8"))
+    except (OSError, ValidationError) as exc:
+        raise _fail(f"{answers_path} is not an answers file the page saved ({exc})") from None
+    ledger = _ledger()
+    tasks_path = tasks or batches_dir(ledger.root) / f"{answers.batch}.json"
+    try:
+        made = Batch.model_validate_json(tasks_path.read_text(encoding="utf-8"))
+    except (OSError, ValidationError) as exc:
+        raise _fail(f"no batch {answers.batch} at {tasks_path}; pass --tasks ({exc})") from None
+
+    from longrun.core.labels.answers import AnswerRefused
+
+    try:
+        report = import_answers(ledger, made, answers, labeler=labeler)
+    except AnswerRefused as refused:
+        raise _fail("; ".join(refused.problems)) from None
+    chose = sum(1 for answer in report.recorded if answer.prefer in ("a", "b"))
+    typer.echo(
+        f"recorded {len(report.recorded)} answer(s) by {labeler} into {ledger.root}: "
+        f"{chose} chose a line, {len(report.recorded) - chose} did not"
+    )
+    if report.already:
+        typer.echo(f"  {len(report.already)} already in the ledger, unchanged")
+    if report.kept_first:
+        typer.echo(
+            f"  {len(report.kept_first)} answered differently before; the first answer stands: "
+            + ", ".join(report.kept_first)
+        )
+    for task_id, problems in report.refused:
+        typer.echo(f"  not recorded {task_id}: {'; '.join(problems)}", err=True)
+    if report.refused:
+        raise typer.Exit(1)
 
 
 def register(app: typer.Typer) -> None:

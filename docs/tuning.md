@@ -173,6 +173,10 @@ uv run longrun label seed --bbox -122.56,37.82,-122.47,37.88 --sample 25 --km 3-
 uv run longrun api --ui ui/dist        # then the Review tab; or `longrun label pair TASK ...`
 uv run longrun tune --pairs ~/.longrun/labels/pairs --labeler NAME --holdout 5
 
+# The same questions on a hosted page (ADR 0050): gather them, answer anywhere, import the file.
+uv run longrun label batch --limit 30      # writes ~/.longrun/batches/BATCH.json and .page.json
+uv run longrun label import ~/Downloads/longrun-answers-BATCH.json   # with LONGRUN_LABELER set
+
 # A route you edited. The edited one is the preferred one.
 uv run longrun tune --edit original.gpx edited.gpx --fixtures data/
 
