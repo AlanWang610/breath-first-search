@@ -1,0 +1,24 @@
+pairs:
+- a:
+    length_m: 6887.8
+    metres_by_class:
+      1|false|false|false: 1246.3
+      1|false|true|false: 1676.0
+      1|true|false|false: 1093.3
+      1|true|true|false: 2554.3
+      2|false|false|false: 317.9
+    name: 37655d80f166
+  b:
+    length_m: 7871.5
+    metres_by_class:
+      1|false|false|false: 1613.2
+      1|false|true|false: 1250.7
+      1|true|false|false: 746.0
+      1|true|true|false: 999.2
+      2|false|false|false: 3007.9
+      2|false|false|true: 254.4
+    name: e36c604dba8b
+  labeler: alan
+  preferred: a
+  source: judged
+  weight: 1.0
