@@ -16,6 +16,7 @@ lowering `confidence` rather than by inventing a level.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -68,6 +69,18 @@ UNKNOWN_HIGHWAY_PENALTY = 0.5
 #: `<extract>+lts<version>` is what makes a stale graph visible, and it is the graph identity
 #: the route cache keys on.
 LTS_VERSION = 1
+
+#: Columns an HPMS conflation may have written onto the ways frame (scope 5, 7.2). AADT
+#: is a confidence-raiser for `lts_from_tags`, never a requirement.
+AADT_COLUMNS = ("aadt", "AADT", "aadt_veh_day")
+
+#: The column a region build's speed-survey merge puts on a way (M18, ADR 0053): the
+#: 85th-percentile operating speed a survey measured on it, in km/h, and where it came from.
+#: One name in every place a way's tags are read - the plan-time `ways` layer, so every
+#: frozen fixture, and the build's own scoring pass - which is what keeps the router's LTS
+#: and the scorer's reading the speed from the same place (ADR 0025).
+SURVEY_SPEED_COLUMN = "survey_speed_85_kph"
+SURVEY_SOURCE_COLUMN = "survey_speed_source"
 
 
 class LTSResult(BaseModel):
@@ -144,18 +157,66 @@ def has_sidewalk(tags: dict[str, Any]) -> bool | None:
     return None
 
 
-def lts_from_tags(tags: dict[str, Any], aadt: float | None = None) -> LTSResult:
+def aadt_of(tags: dict[str, Any]) -> float | None:
+    """Annual average daily traffic from a conflated column, if the frame carries one."""
+    for column in AADT_COLUMNS:
+        if column not in tags:
+            continue
+        try:
+            return float(tags[column])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def survey_speed_of(tags: dict[str, Any]) -> float | None:
+    """The surveyed 85th-percentile speed a region build merged onto this way, or `None`.
+
+    `None` for a NaN as well as for an absent column: a frame read from PostGIS carries the
+    column on every way, null where no survey matched.
+    """
+    try:
+        value = float(tags[SURVEY_SPEED_COLUMN])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def lts_for_way(tags: dict[str, Any]) -> LTSResult:
+    """The one way to score a way, whoever is asking (ADR 0025, 0053).
+
+    Reads every input a way's tags can carry - the posted speed and the rest of its OSM
+    tags, a volume, a surveyed speed - so that the hostility scorer, the build's `way_lts`
+    table and the tuning classes cannot each pick a different subset of them. Before M18
+    `preferences.way_class` already read fewer than the other two.
+    """
+    return lts_from_tags(tags, aadt=aadt_of(tags), operating_speed_kph=survey_speed_of(tags))
+
+
+def lts_from_tags(
+    tags: dict[str, Any],
+    aadt: float | None = None,
+    operating_speed_kph: float | None = None,
+) -> LTSResult:
     """Level of traffic stress 1-4 for someone on foot.
 
     `aadt` is a confidence-raiser, never a requirement (risk R2). HPMS covers arterials
     and collectors only (scope 12), and conflating it onto OSM geometry is unreliable, so
     the level is computed from tags and refined only when a volume is actually supplied.
+
+    `operating_speed_kph` is a surveyed 85th percentile (M18). The speed read is the higher
+    of it and the posted limit - a 40 km/h street where traffic does 60 is a 60 km/h street
+    to someone beside it, and a survey that came in under the limit is no reason to believe
+    a sign less. A survey is a measured speed, so it also lifts the missing-speed penalty.
     """
     reasons: list[str] = []
     confidence = 1.0
 
     highway = str(tags.get("highway", "")).lower()
-    speed = parse_maxspeed(tags.get("maxspeed"))
+    posted = parse_maxspeed(tags.get("maxspeed"))
+    speed, label = posted, "maxspeed"
+    if operating_speed_kph is not None and (posted is None or operating_speed_kph > posted):
+        speed, label = operating_speed_kph, "speed85"
     lanes = parse_lanes(tags.get("lanes"))
     sidewalk = has_sidewalk(tags)
 
@@ -189,10 +250,10 @@ def lts_from_tags(tags: dict[str, Any], aadt: float | None = None) -> LTSResult:
         reasons.append("maxspeed_unknown")
     elif speed >= HIGH_SPEED_KPH:
         level += 1
-        reasons.append(f"maxspeed_{speed:.0f}kph")
+        reasons.append(f"{label}_{speed:.0f}kph")
     elif speed <= MODERATE_SPEED_KPH:
         level -= 1
-        reasons.append(f"maxspeed_{speed:.0f}kph")
+        reasons.append(f"{label}_{speed:.0f}kph")
 
     if lanes is not None and lanes >= 4:
         level += 1

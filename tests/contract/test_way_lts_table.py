@@ -23,8 +23,16 @@ from typing import Any
 
 import pytest
 
-from longrun.core.routing.lts import LTS_VERSION, lts_from_tags
-from longrun.regions.lts import SCHEMA, TABLE, composite_vintage, lookup, resolve_aadt
+from longrun.core.routing.lts import LTS_VERSION, lts_from_tags, survey_speed_of
+from longrun.regions.lts import (
+    SCHEMA,
+    SURVEY_TABLE,
+    TABLE,
+    composite_vintage,
+    lookup,
+    resolve_aadt,
+    with_survey,
+)
 
 pytestmark = pytest.mark.network
 
@@ -59,13 +67,19 @@ def scored(conn: Any, polygon: str) -> list[tuple[int, int, float, list[str], di
         row = cur.fetchone()
         if not (row and row[0]):
             pytest.skip(f"{SCHEMA}.{TABLE} does not exist; run build-region first")
+        # The surveyed speed the row was scored with, merged back under the plan-time
+        # column's name (M18) - `None` on every way of a region with no survey, which is
+        # every region until a speed-survey adapter exists.
         cur.execute(
-            f"SELECT l.way_id, l.lts, l.confidence, l.reasons, w.tags "
+            f"SELECT l.way_id, l.lts, l.confidence, l.reasons, w.tags, l.operating_speed_kph "
             f"FROM {SCHEMA}.{TABLE} l JOIN osm.ways w USING (way_id) "
             "WHERE ST_Intersects(w.geom, ST_GeomFromText(%s, 4326))",
             (polygon,),
         )
-        rows = cur.fetchall()
+        rows = [
+            (way_id, lts, confidence, reasons, with_survey(tags, speed, "survey"))
+            for way_id, lts, confidence, reasons, tags, speed in cur.fetchall()
+        ]
     if not rows:
         pytest.skip("no scored ways in the Ozarks; run build-region first")
     return rows
@@ -78,10 +92,15 @@ def test_the_stored_level_is_the_level_the_scorer_gives(scored: list[Any]) -> No
     `lts_from_tags`; on this region the two disagreed about 469 of 1,600 ways. There is one
     implementation now, and this is what says so.
     """
+
+    def scorer(tags: dict[str, Any]) -> int:
+        aadt = resolve_aadt(tags, None)[0]
+        return lts_from_tags(tags, aadt=aadt, operating_speed_kph=survey_speed_of(tags)).level
+
     disagreements = [
-        (way_id, stored, lts_from_tags(tags, aadt=resolve_aadt(tags, None)[0]).level)
+        (way_id, stored, scorer(tags))
         for way_id, stored, _confidence, _reasons, tags in scored
-        if lts_from_tags(tags, aadt=resolve_aadt(tags, None)[0]).level != stored
+        if scorer(tags) != stored
     ]
     assert not disagreements, f"{len(disagreements)} way(s) differ, e.g. {disagreements[:3]}"
 
@@ -170,3 +189,35 @@ def test_the_lookup_the_importer_uses_covers_the_scored_ways(
     assert len(table) == len(scored)
     way_id, stored, *_rest = scored[0]
     assert table[way_id] == stored
+
+
+def test_a_surveyed_way_reads_the_same_level_through_the_plan_time_store(
+    conn: Any, polygon: str
+) -> None:
+    """ADR 0053 against the database: the `ways` layer a plan (or a freeze) reads carries
+    the merged survey under the column the build scored with, so the level the scorer
+    computes from it is the level in the graph. Skips until a region has a survey merged."""
+    from longrun.core.data.postgis import PostGISLayerStore
+    from longrun.core.routing.lts import SURVEY_SPEED_COLUMN, lts_for_way
+    from longrun.core.scorers._common import row_tags
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s)", (SURVEY_TABLE,))
+        row = cur.fetchone()
+        if not (row and row[0]):
+            pytest.skip(f"no {SURVEY_TABLE}; no speed survey has been merged into any region")
+        cur.execute(
+            f"SELECT l.way_id, l.lts FROM {SCHEMA}.{TABLE} l JOIN {SURVEY_TABLE} s USING (way_id)"
+        )
+        stored = dict(cur.fetchall())
+    if not stored:
+        pytest.skip("the survey table is empty")
+
+    frame = PostGISLayerStore(conn)._intersecting("ways", polygon)
+    assert SURVEY_SPEED_COLUMN in frame.columns
+    checked = 0
+    for _, way in frame.iterrows():
+        if int(way["way_id"]) in stored:
+            assert lts_for_way(row_tags(way)).level == stored[int(way["way_id"])]
+            checked += 1
+    assert checked, "no surveyed way inside the Ozarks polygon"

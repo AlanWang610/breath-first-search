@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor_polygon
+from longrun.core.routing.lts import SURVEY_SOURCE_COLUMN, SURVEY_SPEED_COLUMN
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
@@ -74,6 +75,10 @@ DEFAULT_LAYER_TABLES: dict[str, str] = {
 
 #: Geometry column every layer table carries, in EPSG:4326.
 GEOM_COLUMN = "geom"
+
+#: Where a region build's speed-survey merge lives (M18). Optional: a database built before
+#: it, or a region with no survey, simply has no table and its ways read as they always did.
+SURVEY_TABLE = "speed_survey.way_speed"
 
 #: Column holding OSM tags as `jsonb`, expanded into flat columns on read. Absent on
 #: layers that have no tags (PAD-US units, TIGER boundaries), which is not an error.
@@ -168,11 +173,25 @@ class PostGISLayerStore:
             sql += " AND kind = ANY(%s)"
             params.append(list(kinds))
 
+        joined: list[str] = []
+        if layer == "ways" and "way_id" in columns and self._exists(SURVEY_TABLE):
+            # A surveyed speed rides on the way it was merged onto (M18, ADR 0053), under the
+            # one column name the build's `way_lts` pass also reads - so the scorer measures
+            # with the speed the router's graph was built from. Freezing a fixture reads
+            # through here, so a frozen `ways` layer carries it too. The query above is
+            # wrapped rather than rewritten, so a database with no survey runs it unchanged.
+            sql = (
+                f'SELECT q.*, s.speed_85_kph AS "{SURVEY_SPEED_COLUMN}", '
+                f's.source AS "{SURVEY_SOURCE_COLUMN}" FROM ({sql}) q '
+                f"LEFT JOIN {SURVEY_TABLE} s ON s.way_id = q.way_id"
+            )
+            joined = [SURVEY_SPEED_COLUMN, SURVEY_SOURCE_COLUMN]
+
         with self._conn.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
 
-        return _to_geodataframe(rows, [*selected, "wkb"])
+        return _to_geodataframe(rows, [*selected, "wkb", *joined])
 
     # --- manifest -----------------------------------------------------------
 

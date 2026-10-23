@@ -29,7 +29,7 @@ from longrun.core.routing.custom_model import (
     PATH_ROAD_CLASSES,
     osm_unpaved_surfaces,
 )
-from longrun.core.routing.lts import lts_from_tags
+from longrun.core.routing.lts import lts_for_way
 from longrun.core.routing.tuning import PreferencePair, RouteSummary, WayClass
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -66,7 +66,7 @@ def way_class(tags: dict[str, Any] | None) -> WayClass:
         return WayClass()
     highway = str(tags.get("highway") or "").lower()
     surface = str(tags.get("surface") or "").lower()
-    lts = lts_from_tags(tags)
+    lts = lts_for_way(tags)
     return WayClass(
         lts=lts.level,
         unpaved=surface in UNPAVED_SURFACES,
