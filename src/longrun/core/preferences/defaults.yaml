@@ -96,3 +96,26 @@ pacing:
     speed_by_grade_bin: {}
   weight: 0.0
   provenance: 0
+
+# Scope 7.1's six routing multipliers, all 1.0: stock foot_priority decides (ADR 0021).
+# `longrun tune --labeler NAME --save` replaces this in a runner's own profile with a vector
+# fitted to their answers, and only when ADR 0051's gates pass.
+routing:
+  value:
+    params:
+      lts2: 1.0
+      lts3: 1.0
+      lts4: 1.0
+      unpaved: 1.0
+      path_bonus: 1.0
+      missing_sidewalk: 1.0
+    labeler: null
+    pairs: 0
+    held_out: null
+    held_out_interval: null
+    neutral_held_out: null
+    rerouted: null
+    followed_chosen: null
+    followed_rejected: null
+  weight: 0.0
+  provenance: 0

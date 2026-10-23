@@ -11,6 +11,7 @@ import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -651,3 +652,91 @@ def test_an_over_cap_avoid_polygon_stops_the_plan_by_name_with_its_size(tmp_path
 
     assert result.exit_code == 2
     assert "km2" in result.output
+
+
+# --- the vector a plan is drawn with (M24, ADR 0051) -----------------------------------
+
+_ENDS = ["--from", "37.7955,-122.3937", "--to", "37.7715,-122.4686", "--date", "2026-09-15"]
+
+
+def test_plan_can_be_asked_for_neutral_over_a_fitted_vector() -> None:
+    """`--neutral` is the per-plan way back to stock foot_priority. `PlanSubmission` grew
+    `neutral` in the same commit; `test_api.py` checks that direction."""
+    from typer.main import get_command
+
+    plan_command = get_command(app).commands["plan"]  # type: ignore[attr-defined]
+    switches = {switch for param in plan_command.params for switch in param.opts}
+
+    assert "--neutral" in switches
+
+
+def test_two_named_vectors_stop_the_plan_before_anything_is_routed() -> None:
+    result = runner.invoke(app, ["plan", *_ENDS, "--neutral", "--avoid-high-stress"])
+
+    assert result.exit_code == 2
+    assert "two vectors" in result.output
+
+
+def _record_and_refuse(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """GraphHopper's stand-in: keep each request's custom model, then answer "no route".
+
+    `NoRouteError` exits 4 after the model was chosen and sent, so the vector a plan asked
+    for is observable without running a single scorer.
+    """
+    from longrun.core.routing.base import NoRouteError
+
+    sent: list[Any] = []
+
+    class _Refusing:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def paths(self, body: dict[str, Any], waypoints: list[Any]) -> list[Any]:
+            sent.append(body.get("custom_model"))
+            raise NoRouteError(waypoints[0], waypoints[-1], detail="recorded the request")
+
+    monkeypatch.setattr("longrun.core.routing.graphhopper.GraphHopperRouter", _Refusing)
+    return sent
+
+
+def test_a_saved_fit_is_the_model_a_plan_asks_the_router_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0021's "the default for the runner it was fitted for", end to end through the
+    command: the profile's vector reaches the request body, and `--neutral` sends none."""
+    from longrun.core.models.profile import (
+        FittedRouting,
+        PreferenceEntry,
+        PreferenceProfile,
+        Provenance,
+    )
+    from longrun.core.preferences.store import save_profile
+    from longrun.core.routing.custom_model import CustomModelParams, to_custom_model
+
+    fitted = CustomModelParams(lts3=0.25, path_bonus=0.5)
+    profile = PreferenceProfile(
+        routing=PreferenceEntry(
+            value=FittedRouting(params=fitted, labeler="runner-1", pairs=50),
+            provenance=Provenance.INFERRED,
+        )
+    )
+    path = save_profile(profile, tmp_path / "profile.yaml")
+    sent = _record_and_refuse(monkeypatch)
+    args = [
+        "plan",
+        *_ENDS,
+        "--router",
+        "http://router.invalid",
+        "--profile",
+        str(path),
+        "--cache",
+        str(tmp_path / "cache.sqlite"),
+    ]
+
+    fitted_run = runner.invoke(app, args)
+    neutral_run = runner.invoke(app, [*args, "--neutral"])
+
+    assert (fitted_run.exit_code, neutral_run.exit_code) == (4, 4)
+    assert sent == [to_custom_model(fitted, profile), None]
+    assert "drawn with fitted for runner-1 from 50 pairs" in fitted_run.output
+    assert "was not used" in neutral_run.output

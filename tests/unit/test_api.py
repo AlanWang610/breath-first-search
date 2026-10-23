@@ -268,6 +268,8 @@ def test_a_submission_takes_the_same_fields_the_cli_does(client: Any) -> None:
         "target_km",
         "rounds",
         "avoid_high_stress",
+        # M24: `longrun plan --neutral`, added to both in one commit.
+        "neutral",
         # M12.3. Both reached `PlanRequest` for the first time from here, and
         # `longrun plan` grew `--avoid-name` and `--avoid-polygon` in the same commit -
         # which is the direction this assertion does *not* check, and why the CLI half
@@ -275,6 +277,23 @@ def test_a_submission_takes_the_same_fields_the_cli_does(client: Any) -> None:
         "avoid_names",
         "avoid_polygons",
     }
+
+
+def test_a_submission_asking_for_two_vectors_is_refused(client: Any) -> None:
+    """The CLI stops `--neutral --avoid-high-stress` before routing; this is the same no."""
+    response = client.post(
+        "/api/plans",
+        json={
+            "start": "37.7955,-122.3937",
+            "end": "37.7715,-122.4686",
+            "date": "2026-09-15",
+            "neutral": True,
+            "avoid_high_stress": True,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "two vectors" in response.text
 
 
 def test_a_submission_can_say_what_to_stay_off(client: Any, runner: Any) -> None:

@@ -43,12 +43,12 @@ same reason the slope term is absent entirely.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:  # pragma: no cover
-    from longrun.core.models.profile import PreferenceProfile
+    from longrun.core.models.profile import FittedRouting, PreferenceEntry, PreferenceProfile
     from longrun.core.routing.base import CostingModel
 
 #: Multipliers below this are an exclusion rather than a preference. A fitter that drove a
@@ -323,8 +323,89 @@ def describe(params: CustomModelParams) -> str:
     )
 
 
+#: Why a plan's lines were drawn with the vector they were. Four answers, and the sheet says
+#: which: a runner who asked for neutral over their own fit should not read "unfitted".
+DrawnBy = Literal["neutral", "fitted", "asked-neutral", "avoid-high-stress"]
+
+
+class DrawnWith(BaseModel):
+    """The vector a plan's lines were drawn with, and why that one (ADR 0021, ADR 0051).
+
+    Kept on the manifest rather than read back from the plan's profile, because the profile
+    says what the runner *has* and `--neutral` or `--avoid-high-stress` can draw a plan with
+    something else. ADR 0021 promised the sheet would say which vector drew the route; until
+    M24 nothing did, because nothing but `--avoid-high-stress` ever drew with one.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    params: CustomModelParams = NEUTRAL
+    source: DrawnBy = "neutral"
+    #: The sheet's line, composed once here so the CLI, the API and MCP cannot word it apart.
+    text: str = ""
+
+
+def drawn_with(
+    profile: PreferenceProfile | None,
+    *,
+    neutral: bool = False,
+    avoid_high_stress: bool = False,
+) -> DrawnWith:
+    """The vector a new plan is drawn with: the flag asked for, else the runner's own fit.
+
+    The one place that choice is made. `cli/plan.py`, `api/app.py` and the MCP `route` tool
+    each picked between NEUTRAL and AVOID_HIGH_STRESS with their own line, and a third
+    option added to two of them would be a capability one surface had (scope 3.9).
+
+    A fitted vector is used only because the runner saved it (`longrun tune --save`, ADR
+    0051): ADR 0021's "the default for the runner it was fitted for", read from the one file
+    that is theirs. `neutral` is the way back to stock `foot_priority` for one plan without
+    editing it.
+    """
+    if neutral and avoid_high_stress:
+        raise ValueError("--neutral and --avoid-high-stress ask for two different vectors")
+    entry = None if profile is None else profile.routing
+    fitted = NEUTRAL if entry is None else entry.value.params
+    unused = "" if fitted.is_neutral else f"; your fitted vector ({describe(fitted)}) was not used"
+    if avoid_high_stress:
+        return DrawnWith(
+            params=AVOID_HIGH_STRESS,
+            source="avoid-high-stress",
+            text=f"avoid-high-stress, as asked: {describe(AVOID_HIGH_STRESS)}{unused}",
+        )
+    if fitted.is_neutral:
+        return DrawnWith(text=describe(NEUTRAL))
+    if neutral:
+        return DrawnWith(
+            source="asked-neutral", text=f"neutral, as asked (stock foot_priority){unused}"
+        )
+    assert entry is not None
+    return DrawnWith(params=fitted, source="fitted", text=_fitted_text(entry))
+
+
+def _fitted_text(entry: PreferenceEntry[FittedRouting]) -> str:
+    """The sheet's line for a saved fit: whose, when, from how much, and what it beat."""
+    record = entry.value
+    who = (
+        f"fitted for {record.labeler}"
+        if record.labeler
+        else f"from your profile ({entry.provenance.name.lower()})"
+    )
+    when = f" on {entry.updated:%Y-%m-%d}" if entry.updated else ""
+    pairs = f" from {record.pairs} pairs" if record.pairs else ""
+    held = (
+        f"; held out {record.held_out:.0%} against neutral's {record.neutral_held_out:.0%}"
+        if record.held_out is not None and record.neutral_held_out is not None
+        else ""
+    )
+    return f"{who}{when}{pairs}: {describe(record.params)}{held}"
+
+
 __all__: list[str] = [
     "AVOID_HIGH_STRESS",
+    "DrawnBy",
+    "DrawnWith",
+    "drawn_with",
     "MAX_MULTIPLIER",
     "MIN_MULTIPLIER",
     "NEUTRAL",
