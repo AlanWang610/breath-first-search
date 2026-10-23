@@ -72,6 +72,7 @@ from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.geometry import LatLon
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, SegmentMeasurement, Tier
 from longrun.core.models.waypoint import PlanWaypoint
+from longrun.core.pacing.model import eta_at_distance
 from longrun.core.scorers._coastal import CoastalStretch, coastal_stretches
 from longrun.core.scorers._common import (
     ROUTE_SUMMARY_ID,
@@ -236,7 +237,7 @@ def _gates(
         cum_m, offset_m, at = placed
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
-        arrival = _eta_for(segment, segments, etas)
+        arrival = _eta_for(route, etas, cum_m)
         open_now = clock.active_at(feature, arrival) if arrival is not None else None
         instant = clock.to_utc(arrival) if arrival is not None else None
 
@@ -349,12 +350,13 @@ def _tides(
 
         first = by_id.get(stretch.segment_ids[0])
         segment_id = first.id if first is not None else ROUTE_SUMMARY_ID
-        conflict = _stretch_conflict(stretch, by_id, segments, etas, tides)
+        conflict = _stretch_conflict(stretch, route, etas, tides)
 
         if not tides.answered:
             scan.unchecked += 1
             code, severity = "tide_unknown", TIDE_UNKNOWN_SEVERITY
-            arrival, detail = _eta_for(first, segments, etas), tides.reason or "no tide prediction"
+            arrival = _eta_for(route, etas, stretch.cum_start_m)
+            detail = tides.reason or "no tide prediction"
         elif conflict is None:
             continue  # checked, and the water is not up when the runner is there
         else:
@@ -408,8 +410,7 @@ def _tides(
 
 def _stretch_conflict(
     stretch: CoastalStretch,
-    by_id: dict[str, Segment],
-    segments: list[Segment],
+    route: Route,
     etas: list[datetime] | None,
     tides: StationTides,
 ) -> tuple[datetime, TideExtreme] | None:
@@ -420,10 +421,13 @@ def _stretch_conflict(
     inside it is a conflict that testing the entry alone would miss. The *other* direction
     of an out-and-back needs no special handling: it is a second, non-contiguous run of
     segments, so `coastal_stretches` already returns it as its own stretch with its own ETA.
+
+    The ends are the stretch's own distances. They were the arrival at its first and last
+    *segment*, read by segment number from a per-point list - early, and for the exit
+    early by the whole last segment (M18).
     """
-    ends = (stretch.segment_ids[0], stretch.segment_ids[-1])
-    for segment_id in dict.fromkeys(ends):
-        arrival = _eta_for(by_id.get(segment_id), segments, etas)
+    for cum_m in dict.fromkeys((stretch.cum_start_m, stretch.cum_end_m)):
+        arrival = _eta_for(route, etas, cum_m)
         if arrival is None:
             continue
         extreme = tides.high_water_conflict(arrival)
@@ -450,16 +454,10 @@ def _place(feature: Feature, frame: RouteFrame) -> tuple[float, float, LatLon | 
     return cum_m, offset_m, LatLon(lat=lat, lon=lon)
 
 
-def _eta_for(
-    segment: Segment | None, segments: list[Segment], etas: list[datetime] | None
-) -> datetime | None:
-    if not etas or segment is None:
-        return None
-    try:
-        index = segments.index(segment)
-    except ValueError:  # pragma: no cover - defensive
-        return None
-    return etas[min(index, len(etas) - 1)]
+def _eta_for(route: Route, etas: list[datetime] | None, cum_m: float) -> datetime | None:
+    """The arrival at a distance along the route. It indexed the per-point ETAs by segment
+    number, which reads every segment early (M18)."""
+    return eta_at_distance(route, etas, cum_m) if etas else None
 
 
 def _summarise(

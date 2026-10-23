@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 from longrun.core.data.jurisdictions import route_jurisdictions, unqualified_reason
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, SegmentMeasurement, Tier
+from longrun.core.pacing.model import eta_at_distance
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, segment_at
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -259,7 +260,7 @@ def closures(
             continue  # not on this route at all; the adapter answered about a polygon
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
-        arrival = _eta_for(segment, segments, etas)
+        arrival = _eta_for(route, etas, cum_m)
         when = clock.to_utc(arrival) if arrival is not None else None
         hard = is_hard(feature, parallel, when)
 
@@ -271,21 +272,14 @@ def closures(
     return _summarise(result, segments, counts, jurisdictions=len(scan.jurisdictions))
 
 
-def _eta_for(
-    segment: Segment | None, segments: list[Segment], etas: list[datetime] | None
-) -> datetime | None:
-    """ADR 0013 gate 3: the *segment's* arrival time, not the route's date.
+def _eta_for(route: Route, etas: list[datetime] | None, cum_m: float) -> datetime | None:
+    """ADR 0013 gate 3: the arrival time *at the closure*, not the route's date.
 
     A closure lifting at noon does not block a runner who reaches it at 14:00, and a route
-    scored by its start date alone cannot tell the difference.
+    scored by its start date alone cannot tell the difference. Read at the closure's own
+    distance: this used to index the per-point ETAs by segment number (M18).
     """
-    if not etas or segment is None:
-        return None
-    try:
-        index = segments.index(segment)
-    except ValueError:  # pragma: no cover - defensive
-        return None
-    return etas[min(index, len(etas) - 1)]
+    return eta_at_distance(route, etas, cum_m) if etas else None
 
 
 def _flag(segment_id: str, feature: Feature, hard: bool, offset_m: float) -> Flag:

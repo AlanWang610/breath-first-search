@@ -298,6 +298,33 @@ def test_a_closure_along_the_route_hard_flags(ctx_factory: Any, tmp_path: Any) -
     assert hard[0].reason_code == "closed_to_pedestrians"
 
 
+def test_a_closure_is_read_at_the_runners_arrival_there_not_at_an_earlier_point(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    """ADR 0013 gate 3, with ETAs that actually move (M18).
+
+    The ETA list is one per route *point*. The scorer used to index it by *segment*
+    number, so a closure near the finish of this 40-point route was read at roughly
+    point 8's arrival - two and a half hours early - and a work zone that lifts at 10:00
+    hard-flagged a runner who reaches it at 12:40.
+    """
+    _write_boundaries(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    etas = [START + timedelta(minutes=10 * i) for i in range(len(route.points))]
+    # 10:00 local in San Francisco in September, as the naive UTC a window is stored in.
+    lifts = datetime(2026, 9, 15, 17, 0)
+    late = _feature(geometry=_along(-122.3825, -122.3815), end=lifts)
+    result = cl.closures(route, segments, ctx_factory([late]), etas)
+    assert [f.kind for f in result.flags] == [FlagKind.SOFT]
+    assert result.flags[0].reason_code == "closure_nearby"
+
+    # The same work zone near the start is met at 07:10, while it is still in force.
+    early = _feature(geometry=_along(-122.3990, -122.3980), end=lifts)
+    result = cl.closures(route, segments, ctx_factory([early]), etas)
+    assert [f.kind for f in result.flags] == [FlagKind.HARD]
+
+
 def test_a_cross_street_closure_is_soft(ctx_factory: Any, tmp_path: Any) -> None:
     _write_boundaries(tmp_path)
     route = _route()
