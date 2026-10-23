@@ -24,11 +24,13 @@ from longrun.core.preferences.floors import (
     check_water_gap,
 )
 from longrun.core.preferences.store import (
+    USER_PROFILE_PATH,
     ProfileError,
     apply_overrides,
     load_defaults,
     load_profile,
     merge,
+    profile_path_from_env,
     save_profile,
 )
 
@@ -225,3 +227,25 @@ def test_a_stored_profile_breaching_a_floor_is_rejected_at_load(tmp_path: Path) 
     path.write_text("traffic_tolerance:\n  value: 4\n", encoding="utf-8")
     with pytest.raises(FloorViolation):
         load_profile(path)
+
+
+def test_the_suite_never_reads_a_runners_real_profile() -> None:
+    """The conftest guard, checked from inside a test rather than trusted (M24)."""
+    assert profile_path_from_env() != USER_PROFILE_PATH
+    assert not profile_path_from_env().exists()
+
+
+def test_the_profile_lives_in_the_runners_home_unless_told_otherwise(tmp_path: Path) -> None:
+    assert profile_path_from_env({}) == Path.home() / ".longrun" / "profile.yaml"
+    target = tmp_path / "elsewhere.yaml"
+    assert profile_path_from_env({"LONGRUN_PROFILE_PATH": f" {target} "}) == target
+
+
+def test_a_profile_found_by_the_environment_is_the_one_loaded_and_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "configured.yaml"
+    monkeypatch.setenv("LONGRUN_PROFILE_PATH", str(target))
+    target.write_text("traffic_tolerance:\n  value: 3\n  provenance: stated\n", encoding="utf-8")
+    assert load_profile().traffic_tolerance.value == 3
+    assert save_profile(load_profile()) == target

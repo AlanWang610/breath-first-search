@@ -17,6 +17,8 @@ remember to re-check.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,18 @@ DEFAULTS_PATH = Path(__file__).with_name("defaults.yaml")
 
 #: Where a user's profile lives when the caller does not say (scope 6.3).
 USER_PROFILE_PATH = Path.home() / ".longrun" / "profile.yaml"
+
+#: Overrides `USER_PROFILE_PATH`. `.env.example` has documented it since the scaffold and
+#: nothing read it, which did not matter while a profile changed only thresholds. Since M24
+#: a profile can hold a fitted routing vector, and a test that loaded the runner's own file
+#: would route with it - a cache miss in every cassette, on one machine and not in CI.
+PROFILE_PATH_ENV_VAR = "LONGRUN_PROFILE_PATH"
+
+
+def profile_path_from_env(env: Mapping[str, str] | None = None) -> Path:
+    source = os.environ if env is None else env
+    configured = source.get(PROFILE_PATH_ENV_VAR, "").strip()
+    return Path(configured).expanduser() if configured else USER_PROFILE_PATH
 
 
 class ProfileError(ValueError):
@@ -47,7 +61,7 @@ def load_profile(path: Path | None = None) -> PreferenceProfile:
     A missing file is normal, not an error: a first-time user has no profile and scope
     6.3 forbids an up-front questionnaire to create one.
     """
-    target = path or USER_PROFILE_PATH
+    target = path or profile_path_from_env()
     if not target.exists():
         return load_defaults()
 
@@ -64,7 +78,7 @@ def load_profile(path: Path | None = None) -> PreferenceProfile:
 
 def save_profile(profile: PreferenceProfile, path: Path | None = None) -> Path:
     """Persist a profile. Called only after the user confirms a change (scope 6.3)."""
-    target = path or USER_PROFILE_PATH
+    target = path or profile_path_from_env()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         yaml.safe_dump(profile.model_dump(mode="json"), sort_keys=False),
