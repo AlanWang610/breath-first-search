@@ -8,6 +8,7 @@ floors out of `PreferenceProfile` is that the separation holds mechanically.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -309,3 +310,56 @@ def test_a_stated_entry_still_beats_a_fitted_vector_on_merge() -> None:
 
     assert merged.routing == stated.routing
     assert refused == ["routing"]
+
+
+# --- writing one axis into a hand-kept file (M24, ADR 0051) ----------------------------
+
+
+def _fit_entry(lts3: float) -> PreferenceEntry[Any]:
+    from longrun.core.models.profile import FittedRouting
+    from longrun.core.routing.custom_model import CustomModelParams
+
+    return PreferenceEntry(
+        value=FittedRouting(params=CustomModelParams(lts3=lts3)), provenance=Provenance.INFERRED
+    )
+
+
+def test_an_entry_replaced_mid_file_leaves_the_next_entry_and_its_comment_alone(
+    tmp_path: Path,
+) -> None:
+    from longrun.core.preferences.store import save_entry
+
+    path = tmp_path / "profile.yaml"
+    head = "# mine\ntraffic_tolerance:\n  value: 2\n  provenance: stated\n\n"
+    tail = "\n# why I said 15\ndetour_tolerance_pct:\n  value: 15.0\n  provenance: stated\n"
+    path.write_text(head + "routing:\n  value:\n    params: {lts3: 0.5}\n" + tail, encoding="utf-8")
+
+    save_entry("routing", _fit_entry(0.25), path)
+
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith(head) and text.endswith(tail)
+    assert load_profile(path).routing == _fit_entry(0.25)
+    assert load_profile(path).detour_tolerance_pct.value == 15.0
+
+
+def test_an_entry_appended_to_a_file_without_a_last_newline_starts_on_its_own_line(
+    tmp_path: Path,
+) -> None:
+    from longrun.core.preferences.store import save_entry
+
+    path = tmp_path / "profile.yaml"
+    path.write_text("traffic_tolerance:\n  value: 2", encoding="utf-8")
+
+    save_entry("routing", _fit_entry(0.25), path, comment="saved by a test")
+
+    text = path.read_text(encoding="utf-8")
+    assert "  value: 2\n\n# saved by a test\nrouting:\n" in text
+    assert load_profile(path).traffic_tolerance.value == 2
+
+
+def test_an_entry_the_profile_does_not_have_is_refused(tmp_path: Path) -> None:
+    from longrun.core.preferences.store import save_entry
+
+    with pytest.raises(ProfileError, match="unknown preference"):
+        save_entry("routing_vector", _fit_entry(0.25), tmp_path / "profile.yaml")
+    assert not (tmp_path / "profile.yaml").exists()

@@ -4,14 +4,15 @@ Scope §7.1 asks for two things this document is the answer to: the ~6 priority 
 *"fit against pairwise route preferences"*, and acceptance metrics *"published for a set of
 reference routes"*.
 
-**The short version: the metrics are published below, the parameters are still not fitted for
-want of human preference pairs — and as of M9 we know *why* the Bay Area measurements kept
-coming back empty.** It was never that the parameters do nothing. It is that four of the five
+**The short version: the metrics are published below, the parameters have one runner's fit,
+which beats neutral held out and is drawn with only for that runner once they save it (M24,
+ADR 0051) — and as of M9 we know *why* the Bay Area measurements kept coming back empty.**
+It was never that the parameters do nothing. It is that four of the five
 built regions have a low-stress network so well connected that GraphHopper's stock
 `foot_priority` already finds it, and the LTS term merely agrees. In the one region without
 that luxury the same term is worth tripling a route's length.
 
-Last updated 2026-09-16 (M9).
+Last updated 2026-10-23 (M24).
 
 ## The question R1 asked, and M9's answer
 
@@ -135,7 +136,8 @@ numbers anyway. Both sources §7.1 names are empty:
   `longrun label seed` draws lines between ends somebody runs between, under competing
   vectors, and the Review tab asks which they would rather run (ADR 0049). A choice is a
   `source: judged` pair in `~/.longrun/labels/pairs`, published into `tests/eval/pairs/` by
-  `longrun label publish` as summaries only. None has been answered yet.
+  `longrun label publish` as summaries only. One runner answered 66 between 2026-10-09 and
+  10-11; the 50 that chose a line are published as `judged-alan-*.yaml`.
 
 **Why the gap is not filled with generated labels.** The scorers already read LTS. A fit
 that maximised agreement with routes this project scored would recover the scorers' own
@@ -177,6 +179,11 @@ uv run longrun tune --pairs ~/.longrun/labels/pairs --labeler NAME --holdout 5
 uv run longrun label batch --limit 30      # writes ~/.longrun/batches/BATCH.json and .page.json
 uv run longrun label import ~/Downloads/longrun-answers-BATCH.json   # with LONGRUN_LABELER set
 
+# Draw your own plans with your fit (ADR 0051). Six gates, the last re-drawing every pair, so
+# the region's router must be running. `--reroute` runs that check alone and saves nothing;
+# `longrun plan --neutral` draws one plan without the fit.
+uv run longrun tune --labeler NAME --save
+
 # A route you edited. The edited one is the preferred one.
 uv run longrun tune --edit original.gpx edited.gpx --fixtures data/
 
@@ -194,6 +201,28 @@ route by its length, so it is "prefer the shorter line" and not a coin flip; a f
 shipping only when the interval's floor clears it (ADR 0021, amended). `tune` also prints the
 metres of difference each parameter has seen: a parameter no pair separated lines on has a
 value that is the grid's tie-break, not the runner's.
+
+**The first fit, 2026-10-21: 50 pairs, one runner, their stated 15% detour tolerance.**
+
+| | |
+|---|---|
+| Vector | `lts3=0.25, lts4=0.5, unpaved=2, path_bonus=0.5` (`lts2`, `missing_sidewalk` stay 1) |
+| In sample | agreement 77.9%, detour penalty 0 |
+| Held out, 5 folds | fitted **64.9%** (95% 51.1%-76.7%), neutral 37.7%, avoid-high-stress 55.8% |
+| Evidence, km of difference | lts2 39.7, lts3 27.7, **lts4 7.9**, unpaved 87.8, path_bonus 117.5, missing_sidewalk 41.9 |
+
+It beats neutral, which is the bar, and does not separate from avoid-high-stress. Neutral
+below 50% says this runner chose the longer line more often than not. `lts4` is the thinnest
+evidence, and its 0.5 being milder than `lts3`'s 0.25 is more likely that than a preference.
+
+**Saving a fit (M24, ADR 0051).** `tune --labeler NAME --save` writes the fit into that
+runner's own profile as `routing`, and `longrun plan`, the API and the MCP `route` tool draw
+with it from then on; each sheet's manifest says which vector drew it. It refuses unless six
+gates pass: one runner, `MIN_PAIRS`, a non-neutral vector, a detour penalty of zero, the
+held-out floor above neutral, and the router agreeing - each pair's ends re-drawn once with
+the vector, nothing refused, more lines on the chosen side than the rejected one, none
+beyond the detour tolerance. Only the `routing:` block of the profile file is rewritten.
+Adopting a fit is the runner's decision, so the runner runs it.
 
 **Two things M23 found that a fit would have run into.** Every vector that *sought* anything
 was a request GraphHopper refuses (a priority above 1), so a fitted vector could not have

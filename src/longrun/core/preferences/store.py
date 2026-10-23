@@ -87,6 +87,66 @@ def save_profile(profile: PreferenceProfile, path: Path | None = None) -> Path:
     return target
 
 
+def save_entry(
+    key: str,
+    entry: PreferenceEntry[Any],
+    path: Path | None = None,
+    *,
+    comment: str | None = None,
+) -> Path:
+    """Write one axis into a profile file and leave every other line of it as it was.
+
+    `save_profile` dumps the whole model, which is right for a file this project wrote and
+    wrong for one a runner keeps by hand: their comments go, and every default they never
+    stated is written out as though they had. So this replaces the one top-level block for
+    `key` - its line and the indented lines under it - or appends it, with `comment` above
+    it, when the file has none. Everything else is copied byte for byte.
+
+    Checked before it lands: the new text must load as a profile, pass the safety floors,
+    and read back `entry` for `key`. Written through a temporary file, so a failure leaves
+    the old one whole.
+    """
+    import re
+
+    if key not in PreferenceProfile.model_fields or key == "version":
+        raise ProfileError(f"unknown preference {key!r}")
+    target = path or profile_path_from_env()
+    existing = target.read_text(encoding="utf-8") if target.exists() else ""
+    block = yaml.safe_dump({key: entry.model_dump(mode="json")}, sort_keys=False)
+
+    lines = existing.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if re.match(rf"{key}\s*:", line)), None)
+    if start is None:
+        gap = "" if not existing.strip() else ("\n" if existing.endswith("\n") else "\n\n")
+        header = "".join(f"# {line}".rstrip() + "\n" for line in (comment or "").splitlines())
+        text = existing + gap + header + block
+    else:
+        end = start + 1
+        # The block is its own line and everything indented under it. A comment or a key
+        # back at column 0 is the next entry's, and so are the blank lines before it.
+        while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t"):
+            end += 1
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1
+        text = "".join(lines[:start]) + block + "".join(lines[end:])
+
+    try:
+        raw = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:  # pragma: no cover - the block is safe_dump's own output
+        raise ProfileError(f"writing {key} would leave {target} unreadable: {exc}") from exc
+    merged = load_defaults().model_dump()
+    merged.update(raw)
+    written = _check_floors(PreferenceProfile.model_validate(merged))
+    if getattr(written, key) != entry:
+        raise ProfileError(f"writing {key} into {target} would not read back what was written")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = target.with_name(target.name + ".tmp")
+    staging.write_text(text, encoding="utf-8", newline="")
+    staging.replace(target)
+    return target
+
+
 def apply_overrides(profile: PreferenceProfile, overrides: dict[str, Any]) -> PreferenceProfile:
     """Return a profile with per-run overrides applied. Never writes to disk.
 
