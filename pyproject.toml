@@ -105,6 +105,7 @@ wzdx-ncdot = "longrun.adapters.wzdx.ncdot:CLOSURES"
 wzdx-wsdot = "longrun.adapters.wzdx.wsdot:CLOSURES"
 # Tier 3: agency portals. Keyed on a PAD-US agency rather than a census boundary.
 portal-nps = "longrun.adapters.portals.nps:TRAIL_STATUS"
+portal-nps-hours = "longrun.adapters.portals.nps:ACCESS_HOURS"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/longrun"]

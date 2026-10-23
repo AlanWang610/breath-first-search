@@ -28,6 +28,7 @@ and `kica,ozar` for nobody (checked 2026-10-23).
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from longrun.adapters.base import AdapterResult, describe
@@ -222,16 +223,223 @@ class NpsTrailStatus:
 
 TRAIL_STATUS = NpsTrailStatus()
 
+
+# --- access_hours: a park's own hours (M18) ----------------------------------------------
+
+PARKS_URL = "https://developer.nps.gov/api/v1/parks"
+
+_DAYS = (
+    ("monday", "Mo"),
+    ("tuesday", "Tu"),
+    ("wednesday", "We"),
+    ("thursday", "Th"),
+    ("friday", "Fr"),
+    ("saturday", "Sa"),
+    ("sunday", "Su"),
+)
+_CLOCK = re.compile(r"^(\d{1,2})(?::(\d{2}))?\s*([AP])\.?M\.?$", re.IGNORECASE)
+_SUN = {"sunrise": "sunrise", "sunset": "sunset", "dawn": "dawn", "dusk": "dusk"}
+
+
+def _nps_time(text: str) -> str | None:
+    """`6:00AM` -> `06:00`, `Sunset` -> `sunset`; `None` when it is neither."""
+    word = text.strip().lower()
+    if word in _SUN:
+        return _SUN[word]
+    match = _CLOCK.match(text.strip())
+    if match is None:
+        return None
+    hour, minute = int(match.group(1)) % 12, int(match.group(2) or 0)
+    if match.group(3).upper() == "P":
+        hour += 12
+    return f"{hour:02d}:{minute:02d}"
+
+
+def nps_day_hours(value: Any) -> str:
+    """One day of an NPS `standardHours` as an `opening_hours` time selector.
+
+    The forms the API carries (counted over ten parks on 2026-10-23): `All Day`, `Closed`,
+    `Sunrise to Sunset`, `10:00AM - 5:00PM`, `6:00AM - Sunset`. Anything else is `unknown`,
+    which `_hours` reads as not understood rather than closed - an unreadable day is not a
+    locked gate.
+    """
+    text = str(value or "").strip()
+    lowered = text.lower()
+    if lowered == "all day":
+        return "00:00-24:00"
+    if lowered == "closed":
+        return "off"
+    parts = re.split(r"\s+(?:-|to|–)\s+|\s*-\s*", text, maxsplit=1)
+    if len(parts) == 2:
+        start, end = _nps_time(parts[0]), _nps_time(parts[1])
+        if start and end:
+            return f"{start}-{end}"
+    return "unknown"
+
+
+def nps_hours_rule(hours: Any) -> str:
+    """A week of NPS hours as one `opening_hours` rule, a day per `;`-part.
+
+    A day per part rather than grouped (`Mo-Fr ...`) because each part then selects exactly
+    one weekday, so no part can replace another (OSM's rule order) and the rule reads back
+    the way the API published it. An empty week is a closure - that is how the API writes
+    a dated exception that shuts the park.
+    """
+    if not isinstance(hours, dict) or not hours:
+        return "off"
+    return "; ".join(f"{short} {nps_day_hours(hours.get(day))}" for day, short in _DAYS)
+
+
+def _is_the_park(entry_name: Any, full_name: str) -> bool:
+    """Whether an `operatingHours` entry is the park's own rather than a facility's.
+
+    A visitor centre's hours are not the park's gate hours, and GOGA posts only facilities
+    (parking lots, day-use areas, Muir Woods). Containment either way, because North
+    Cascades posts its hours as "North Cascades National Park Service Complex".
+    """
+    one = re.sub(r"[^a-z0-9 ]", "", str(entry_name or "").lower()).strip()
+    other = re.sub(r"[^a-z0-9 ]", "", full_name.lower()).strip()
+    return bool(one and other) and (one in other or other in one)
+
+
+def parse_park_hours(payload: Any, *, source_url: str | None = None) -> list[Feature]:
+    """A park's own hours as `access_hours` rules: one standing, one per dated exception.
+
+    Park-wide (`{}` geometry), so `access_hours` reads them where the route enters NPS land
+    (M18.7). A dated exception's days are local dates, converted to the instants its
+    validity is stored in through the park's own zone (ADR 0046) - and skipped when no zone
+    can be found for the park, since a window on an unknown clock is no window.
+    """
+    from longrun.core.models.features import Feature
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        return []
+    out: list[Feature] = []
+    for park in payload["data"]:
+        if not isinstance(park, dict):
+            continue
+        full_name = str(park.get("fullName") or "").strip()
+        zone = _park_zone(park)
+        url = str(park.get("url") or "") or source_url
+        for entry in park.get("operatingHours") or []:
+            if not isinstance(entry, dict) or not _is_the_park(entry.get("name"), full_name):
+                continue
+            base: dict[str, Any] = {
+                "kind": "access_hours",
+                "category": "park hours",
+                "geometry": {},
+                "tier": 3,
+                "confidence": NPS_CONFIDENCE,
+                "jurisdiction": "padus:NPS",
+                "name": full_name,
+                "source_url": url,
+            }
+            out.append(
+                Feature(
+                    **base,
+                    hours=nps_hours_rule(entry.get("standardHours")),
+                    detail="standard hours",
+                )
+            )
+            for exception in entry.get("exceptions") or []:
+                window = _local_window(exception, zone) if isinstance(exception, dict) else None
+                if window is None:
+                    continue
+                out.append(
+                    Feature(
+                        **base,
+                        hours=nps_hours_rule(exception.get("exceptionHours")),
+                        start=window[0],
+                        end=window[1],
+                        detail=str(exception.get("name") or "exception"),
+                    )
+                )
+    return out
+
+
+def _park_zone(park: dict[str, Any]) -> str | None:
+    try:
+        import tzfpy
+
+        return tzfpy.get_tz(float(park["longitude"]), float(park["latitude"])) or None
+    except Exception:  # noqa: BLE001 - no coordinate, or no zone covers it
+        return None
+
+
+def _local_window(exception: dict[str, Any], zone: str | None) -> tuple[Any, Any] | None:
+    from datetime import date as calendar
+    from datetime import datetime, time
+
+    from longrun.adapters.base import local_to_utc
+
+    if zone is None:
+        return None
+    try:
+        first = calendar.fromisoformat(str(exception["startDate"])[:10])
+        last = calendar.fromisoformat(str(exception["endDate"])[:10])
+    except (KeyError, ValueError):
+        return None
+    if last < first:
+        return None
+    return (
+        local_to_utc(datetime.combine(first, time()), zone),
+        local_to_utc(datetime.combine(last, time(23, 59, 59)), zone),
+    )
+
+
+class NpsAccessHours:
+    """A park's own hours, for `access_hours` (M18).
+
+    Hours change by season, not by the hour, so the answer is cached per ISO week (keyed by
+    its Monday) rather than per day - a week of plans in one park asks once.
+    """
+
+    name = "portal.nps_hours"
+    kind = "access_hours"
+    tier = 3
+    jurisdictions = ("padus:NPS",)
+    source = "nps"
+    key = NPS
+    vintage: str | None = None
+
+    def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult:
+        from datetime import timedelta
+
+        codes = park_codes(polygon)
+        if not codes:
+            if NPS.value() is None:
+                return AdapterResult(
+                    reason=NPS.missing_reason(), source_url=PARKS_URL, key_missing=True
+                )
+            return AdapterResult(reason=NO_UNIT_REASON, source_url=PARKS_URL)
+        monday = day - timedelta(days=day.weekday())
+        found = per_park(
+            self.name, PARKS_URL, codes, monday, ctx, params={"fields": "operatingHours"}
+        )
+        if isinstance(found, AdapterResult):
+            return found
+        features = [f for payload in found for f in parse_park_hours(payload, source_url=PARKS_URL)]
+        return AdapterResult(features=features, vintage="nps-park-hours", source_url=PARKS_URL)
+
+
+ACCESS_HOURS = NpsAccessHours()
+
 __all__ = [
+    "ACCESS_HOURS",
     "MAX_PAGES",
     "NO_UNIT_REASON",
     "NPS_CONFIDENCE",
     "PAGE_SIZE",
+    "PARKS_URL",
     "TRAIL_STATUS",
     "URL",
+    "NpsAccessHours",
     "NpsTrailStatus",
     "nps_args",
+    "nps_day_hours",
+    "nps_hours_rule",
     "park_codes",
     "parse_alerts",
+    "parse_park_hours",
     "per_park",
 ]

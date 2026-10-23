@@ -465,3 +465,122 @@ def test_peek_is_none_on_a_miss_even_offline() -> None:
 
     with SqliteCache(offline=True) as cache:
         assert peek(cache, "adapter.anything", {"a": 1}, DAY) is None
+
+
+# --- NPS park hours, for access_hours (M18) ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("published", "rule"),
+    [
+        ("All Day", "00:00-24:00"),
+        ("Closed", "off"),
+        ("Sunrise to Sunset", "sunrise-sunset"),
+        ("10:00AM - 5:00PM", "10:00-17:00"),
+        ("12:30PM - 3:30PM", "12:30-15:30"),
+        ("6:00AM - Sunset", "06:00-sunset"),
+        ("12:00AM - 11:59PM", "00:00-23:59"),
+        ("By reservation", "unknown"),
+        (None, "unknown"),
+    ],
+)
+def test_an_nps_day_reads_as_an_opening_hours_selector(published: Any, rule: str) -> None:
+    """Every form ten parks posted on 2026-10-23, and the one thing anything else becomes:
+    `unknown`, which `_hours` reads as not understood rather than closed."""
+    assert nps_portal.nps_day_hours(published) == rule
+
+
+def _park(**overrides: Any) -> dict[str, Any]:
+    week = {
+        d: "All Day"
+        for d in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    }
+    park: dict[str, Any] = {
+        "parkCode": "ozar",
+        "fullName": "Ozark National Scenic Riverways",
+        "latitude": "37.14",
+        "longitude": "-91.26",
+        "url": "https://www.nps.gov/ozar/index.htm",
+        "operatingHours": [
+            {"name": "Ozark National Scenic Riverways", "standardHours": week, "exceptions": []},
+            {"name": "Alley Mill", "standardHours": {"monday": "9:00AM - 4:00PM"}},
+        ],
+    }
+    park.update(overrides)
+    return park
+
+
+def test_a_park_posts_its_own_hours_and_a_facilitys_are_not_the_gates() -> None:
+    features = nps_portal.parse_park_hours({"data": [_park()]})
+    assert [f.detail for f in features] == ["standard hours"]
+    [standing] = features
+    assert standing.kind == "access_hours" and standing.geometry == {}
+    assert standing.name == "Ozark National Scenic Riverways"
+    assert standing.hours is not None and standing.hours.startswith(
+        "Mo 00:00-24:00; Tu 00:00-24:00"
+    )
+    assert standing.start is None and standing.end is None
+
+
+def test_a_dated_exception_holds_for_its_local_days_as_utc_instants() -> None:
+    """Thanksgiving in the Ozarks is a Central-time day: 06:00Z to 05:59:59Z next day."""
+    from datetime import datetime
+
+    closed = {
+        "name": "Thanksgiving",
+        "startDate": "2026-11-26",
+        "endDate": "2026-11-26",
+        "exceptionHours": {},
+    }
+    park = _park()
+    park["operatingHours"][0]["exceptions"] = [closed]
+    standing, exception = nps_portal.parse_park_hours({"data": [park]})
+    assert exception.hours == "off" and exception.detail == "Thanksgiving"
+    assert exception.start == datetime(2026, 11, 26, 6, 0)
+    assert exception.end == datetime(2026, 11, 27, 5, 59, 59)
+    assert standing.name == exception.name, "one gate, so access_hours judges them together"
+
+
+def test_north_cascades_posts_its_hours_under_the_complex_name() -> None:
+    park = _park(fullName="North Cascades National Park")
+    park["operatingHours"][0]["name"] = "North Cascades National Park Service Complex"
+    assert len(nps_portal.parse_park_hours({"data": [park]})) == 1
+
+
+def test_park_hours_replay_from_a_weekly_cassette_with_no_key() -> None:
+    """Hours change by season, so a week of plans asks once - keyed by the Monday."""
+    monday = date(2026, 9, 14)
+    with SqliteCache() as cache:
+        cache.put(
+            "adapter.portal.nps_hours",
+            args_hash(nps_portal.nps_args(["ozar"], monday, "portal.nps_hours")),
+            monday.isoformat(),
+            {"data": [_park()]},
+        )
+        wednesday = nps_portal.ACCESS_HOURS.fetch(OZARKS, date(2026, 9, 16), _ctx(cache))
+    assert wednesday.answered and [f.name for f in wednesday.features] == [
+        "Ozark National Scenic Riverways"
+    ]
+
+
+def test_a_week_of_nps_hours_reads_back_through_the_parser_access_hours_uses() -> None:
+    from datetime import datetime
+
+    from longrun.core.scorers._hours import is_open, read_hours
+
+    rule = nps_portal.nps_hours_rule(
+        {
+            "monday": "Closed",
+            "tuesday": "10:00AM - 5:00PM",
+            "wednesday": "All Day",
+            "thursday": "6:00AM - Sunset",
+            "friday": "Sunrise to Sunset",
+            "saturday": "By reservation",
+            "sunday": "All Day",
+        }
+    )
+    assert read_hours(rule).unread == 0
+    assert is_open(rule, datetime(2026, 9, 14, 12)) is False  # Monday, closed
+    assert is_open(rule, datetime(2026, 9, 15, 18)) is False  # Tuesday after 17:00
+    assert is_open(rule, datetime(2026, 9, 16, 3)) is True  # Wednesday, all day
+    assert is_open(rule, datetime(2026, 9, 19, 12)) is None  # Saturday, unknown
