@@ -499,6 +499,28 @@ def jurisdiction_table(
     typer.echo(f"wrote {len(rows)} jurisdictions to {target}")
 
 
+def nps_units(
+    boundaries: Path = typer.Argument(..., help="GeoJSON of the NPS LRD nps_boundary layer."),
+    read_on: str = typer.Option(..., "--read-on", help="The date it was downloaded, ISO."),
+    out: Path | None = typer.Option(None, "--out", help="Defaults to the packaged file."),
+) -> None:
+    """Rebuild the park-code boxes the NPS adapters choose parks by (M18, ADR 0054).
+
+    From a GeoJSON download of the Land Resources Division's `nps_boundary` layer, a federal
+    work and public domain (`adapters/portals/nps_units.py` names the service). Deterministic,
+    so a rebuild from the same download and date is the same bytes.
+    """
+    import json
+
+    from longrun.adapters.portals.nps_units import UNITS, build_units, write_units
+
+    units = build_units(json.loads(boundaries.read_text(encoding="utf-8")), read_on=read_on)
+    target = out or UNITS
+    write_units(units, target)
+    boxes = sum(len(b) for b in units["units"].values())
+    typer.echo(f"wrote {len(units['units'])} units ({boxes} boxes) to {target}")
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
     app.command("load-tiger")(load_tiger)
@@ -509,3 +531,4 @@ def register(app: typer.Typer) -> None:
     app.command("promote-adapter")(promote_adapter)
     app.command("adapter-coverage")(adapter_coverage)
     app.command("jurisdiction-table")(jurisdiction_table)
+    app.command("nps-units")(nps_units)
