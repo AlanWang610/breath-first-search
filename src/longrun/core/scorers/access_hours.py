@@ -18,6 +18,15 @@ It deliberately does **not** write that shift into `PlanRequest.time_constraints
 tests the constraints the *user* stated, and a scorer that added its own would make check 9
 start failing on a requirement nobody asked for.
 
+## How a gate's rules are read (M18, ADR 0052)
+
+A gate record carries its rule in `hours` - OSM `opening_hours` on the local clock, read by
+`_hours` - and its `start`/`end` say when that *rule* holds: a season, or one dated
+exception. A gate's rules are judged together: of those holding at the arrival, a dated
+one beats a standing one, and then any rule that opens the gate opens it. No rule holding
+is `gate_hours_unknown`, not closed. A rule for a whole park, with no geometry, is read
+where the route enters that agency's ground (`JurisdictionScan.spans`), not at 0 m.
+
 ## The other half: tide conflicts (ADR 0042)
 
 Scope 7.6 signs this tool *"park gate and dawn-to-dusk violations at ETA; **tide conflicts
@@ -58,6 +67,7 @@ of the seven crosses tidal ground, and none of their `ways` fixtures carries the
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 
 from longrun.core.data.file_store import LayerNotFound
@@ -81,14 +91,17 @@ from longrun.core.scorers._common import (
     segment_at,
     way_tags_in_corridor,
 )
+from longrun.core.scorers._hours import is_open, next_open, sun_at
 
 if TYPE_CHECKING:  # pragma: no cover
-    from datetime import datetime
+    from collections.abc import Sequence
 
+    from longrun.core.data.features import RouteFeatures
     from longrun.core.data.tides import StationTides, TideExtreme
     from longrun.core.models.context import ScorerContext
     from longrun.core.models.features import Feature, FeatureKind
     from longrun.core.models.geometry import Route, Segment
+    from longrun.core.scorers._hours import SunOn
 
 name: FeatureKind = "access_hours"
 
@@ -122,19 +135,27 @@ TIDE_UNKNOWN_SEVERITY = 0.35
 TIDE_TIER: dict[str, Tier] = {"tidal": Tier.SAFETY, "beach": Tier.COMFORT}
 
 
-def shift_to_open(feature: Feature, arrival: datetime) -> float | None:
+def shift_to_open(
+    rules: Sequence[Feature], arrival: datetime, sun: SunOn | None = None
+) -> float | None:
     """Minutes a start would have to move for this gate to be open on arrival.
 
-    `arrival` is a naive **UTC** instant, the frame the window is stored in (ADR 0046); a
-    shift is a difference, so it comes out the same in either frame once both operands are
-    in one. `None` when the gate's window does not say - an open-ended `start` with no `end`
-    is a gate that has opened and not yet shut, which needs no shift at all.
+    `arrival` is naive **local**: a gate's rule is a rule on the local clock (ADR 0046 §5),
+    and so is the opening this finds. Only an opening later the *same day* counts - a gate
+    that shut at 22:00 is not bought back by starting nine hours later, it is bought back
+    by starting earlier, and proposing the long way round would send `start_time_optimizer`
+    in the wrong direction. `None` when no rule opens it again today.
     """
-    if feature.start is None or feature.active_at(arrival):
-        return None
-    if arrival < feature.start:
-        return round((feature.start - arrival).total_seconds() / 60.0, 1)
-    return None
+    midnight = datetime.combine(arrival.date() + timedelta(days=1), time())
+    opens = [
+        next_open(rule.hours, arrival, sun, horizon=midnight - arrival)
+        for rule in rules
+        if rule.hours
+    ]
+    first = min((at for at in opens if at is not None), default=None)
+    if first is None or first <= arrival or first.date() != arrival.date():
+        return None  # open already, or not again until tomorrow
+    return round((first - arrival).total_seconds() / 60.0, 1)
 
 
 def access_hours(
@@ -230,52 +251,56 @@ def _gates(
     frame = RouteFrame(route)
     shifts: list[float] = []
 
-    for feature in found.features:
-        placed = _place(feature, frame)
-        if placed is None:
-            continue
-        cum_m, offset_m, at = placed
-        segment = segment_at(segments, cum_m)
-        segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
-        arrival = _eta_for(route, etas, cum_m)
-        open_now = clock.active_at(feature, arrival) if arrival is not None else None
-        instant = clock.to_utc(arrival) if arrival is not None else None
-
-        if open_now is None:
-            code, severity = "gate_hours_unknown", UNKNOWN_TIME_SEVERITY
-        elif open_now:
-            continue  # open when the runner gets there, which is the ordinary case
-        else:
-            code, severity = "gate_closed_at_eta", CLOSED_SEVERITY
-            shift = shift_to_open(feature, instant) if instant is not None else None
-            if shift is not None:
-                shifts.append(shift)
-
-        counts.setdefault(segment_id, {})
-        counts[segment_id][code] = counts[segment_id].get(code, 0) + 1
-        result.flags.append(
-            Flag(
-                scorer=name,
-                segment_id=segment_id,
-                kind=FlagKind.SOFT,
-                tier=Tier.COMFORT,
-                severity=round(severity * feature.confidence, 3),
-                reason_code=code,
-                detail=(
-                    f"{feature.detail or feature.category or 'gate'} "
-                    f"({offset_m:.0f} m from the route, tier {feature.tier})"
-                ),
+    for rules in _by_gate(found.features):
+        first = rules[0]
+        label = str(first.name or first.detail or first.category or "gate")
+        for cum_m, offset_m, at in _places(first, frame, route, scan):
+            segment = segment_at(segments, cum_m)
+            segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
+            arrival = _eta_for(route, etas, cum_m)
+            offset = clock.utc_offset_hours
+            sun = sun_at(at.lat, at.lon, offset) if offset is not None else None
+            state, applicable = (
+                _gate_state(rules, arrival, clock, sun) if arrival is not None else (None, [])
             )
-        )
-        # Only where it flagged. A gate that is open when the runner reaches it is not a
-        # waypoint - it is the ordinary case, and a marker on every open park gate would
-        # bury the one that is shut.
-        if at is not None:
+
+            if state is True:
+                continue  # open when the runner gets there, which is the ordinary case
+            if state is None:
+                code, severity = "gate_hours_unknown", UNKNOWN_TIME_SEVERITY
+            else:
+                code, severity = "gate_closed_at_eta", CLOSED_SEVERITY
+                shift = shift_to_open(applicable, arrival, sun) if arrival is not None else None
+                if shift is not None:
+                    shifts.append(shift)
+
+            confidence = max(rule.confidence for rule in (applicable or rules))
+            where = (
+                f"{offset_m:.0f} m from the route"
+                if first.geometry
+                else f"park-wide, entered at {cum_m / 1000:.1f} km"
+            )
+            counts.setdefault(segment_id, {})
+            counts[segment_id][code] = counts[segment_id].get(code, 0) + 1
+            result.flags.append(
+                Flag(
+                    scorer=name,
+                    segment_id=segment_id,
+                    kind=FlagKind.SOFT,
+                    tier=Tier.COMFORT,
+                    severity=round(severity * confidence, 3),
+                    reason_code=code,
+                    detail=f"{label} ({where}, tier {first.tier})",
+                )
+            )
+            # Only where it flagged. A gate that is open when the runner reaches it is not
+            # a waypoint - it is the ordinary case, and a marker on every open park gate
+            # would bury the one that is shut.
             result.waypoints.append(
                 PlanWaypoint(
                     position=at,
                     kind="gate",
-                    label=str(feature.detail or feature.category or "gate"),
+                    label=label,
                     cum_dist_m=cum_m,
                     scorer=name,
                     offset_m=round(offset_m, 1),
@@ -285,6 +310,56 @@ def _gates(
             )
 
     return len(agencies), (max(shifts) if shifts else None)
+
+
+def _by_gate(features: list[Feature]) -> list[list[Feature]]:
+    """A gate's rules, together. One gate posts several: `06:00-12:00` and `13:00-22:00`,
+    or a standing rule and a dated exception. Read one at a time, the first said "closed"
+    at 14:00 of a gate the second had open - so rules are grouped by what they are about,
+    the agency, the name and the place, and the gate is judged on all of them (M18)."""
+    import json
+
+    groups: dict[tuple[str, str, str], list[Feature]] = {}
+    for feature in features:
+        key = (
+            feature.jurisdiction or "",
+            feature.name or feature.detail or feature.category or "",
+            json.dumps(feature.geometry, sort_keys=True),
+        )
+        groups.setdefault(key, []).append(feature)
+    return list(groups.values())
+
+
+def _gate_state(
+    rules: list[Feature], arrival: datetime, clock: RouteFeatures, sun: SunOn | None
+) -> tuple[bool | None, list[Feature]]:
+    """Whether a gate is open at a local arrival, and the rules that decided it.
+
+    A rule's `start`/`end` say *when the rule holds* - a season, a dated exception - and
+    are instants read through the route's clock; its `hours` say when the gate is open and
+    are read on the local clock (ADR 0046 §5). Of the rules that hold, a dated one beats a
+    standing one ("closed 2026-09-15" over "sunrise-sunset"), and then any open rule opens
+    the gate - the same three-valued OR `_hours` uses within one string. No rule holding
+    is not closed: it is a gate nobody has said anything about for this date.
+    """
+    holding: list[Feature] = []
+    unsure = False
+    for rule in rules:
+        holds = clock.active_at(rule, arrival)
+        if holds is None:
+            unsure = True
+        elif holds:
+            holding.append(rule)
+    dated = [rule for rule in holding if rule.start is not None or rule.end is not None]
+    applicable = dated or holding
+    if not applicable:
+        return None, []
+    answers = [is_open(rule.hours, arrival, sun) for rule in applicable]
+    if True in answers:
+        return True, applicable
+    if None in answers or unsure:
+        return None, applicable
+    return False, applicable
 
 
 @dataclass
@@ -436,22 +511,34 @@ def _stretch_conflict(
     return None
 
 
-def _place(feature: Feature, frame: RouteFrame) -> tuple[float, float, LatLon | None] | None:
-    """Where a gate sits along the route, how far off it is, and where it actually is.
+def _places(
+    feature: Feature, frame: RouteFrame, route: Route, scan: JurisdictionScan
+) -> list[tuple[float, float, LatLon]]:
+    """Where a gate's rules are tested: along the route, how far off, and where on a map.
 
-    The third element used to be computed and dropped. A gate is a place a runner arrives at
-    and may not get through, which is exactly what belongs on a course.
+    A gate with a geometry is one place, or none past `GATE_REACH_M`. A rule for a whole
+    park (`{}` geometry) is tested where the route **enters** each of that agency's parks
+    (`JurisdictionScan.spans`, M18) - it used to be tested at 0 m, the route's start,
+    wherever the park was. With no span on record it falls back to 0 m, which is what it
+    always did.
     """
     from longrun.core.scorers.closures import _coordinates
 
     coords = _coordinates(feature.geometry)
-    if not coords:
-        return 0.0, 0.0, None
-    cum_m, offset_m = frame.locate_path(coords)
-    if offset_m > GATE_REACH_M:
-        return None
-    lon, lat = coords[0]
-    return cum_m, offset_m, LatLon(lat=lat, lon=lon)
+    if coords:
+        cum_m, offset_m = frame.locate_path(coords)
+        if offset_m > GATE_REACH_M:
+            return []
+        lon, lat = coords[0]
+        return [(cum_m, offset_m, LatLon(lat=lat, lon=lon))]
+    entries = sorted({start for start, _ in scan.spans.get(feature.jurisdiction or "", ())})
+    return [(cum_m, 0.0, _point_at(route, cum_m)) for cum_m in entries or [0.0]]
+
+
+def _point_at(route: Route, cum_m: float) -> LatLon:
+    """The first route point at or past a distance - where a park-wide rule is placed."""
+    point = next((p for p in route.points if p.cum_dist_m >= cum_m), route.points[-1])
+    return LatLon(lat=point.lat, lon=point.lon)
 
 
 def _eta_for(route: Route, etas: list[datetime] | None, cum_m: float) -> datetime | None:

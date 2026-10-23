@@ -103,6 +103,10 @@ class Feature(BaseModel):
                 raise ValueError(f"only an access_hours record carries hours, not {self.kind}")
             if not self.hours.strip():
                 raise ValueError("an hours rule cannot be blank")
+        elif self.kind == "access_hours":
+            # Since M18.7 the scorer reads the rule from `hours` and treats `start`/`end` as
+            # when the rule holds; a record with no rule would read as a gate always open.
+            raise ValueError("an access_hours record carries its rule in hours")
         if self.kind == "speed_survey":
             _check_survey(self.measures, self.geometry)
         elif self.measures is not None:

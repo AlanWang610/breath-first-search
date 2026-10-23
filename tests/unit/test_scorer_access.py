@@ -475,48 +475,158 @@ def test_access_hours_never_produces_a_hard_flag_at_any_confidence() -> None:
 # --- access_hours -----------------------------------------------------------
 
 
+def _gate(hours: str, **kwargs: Any) -> Feature:
+    """A gate on the route at -122.39, managed by the NPS unit `_write_parks` draws."""
+    base: dict[str, Any] = {
+        "kind": "access_hours",
+        "category": "gate",
+        "geometry": {"type": "Point", "coordinates": [-122.39, LAT]},
+        "tier": 3,
+        "confidence": 0.7,
+        "jurisdiction": "padus:NPS",
+        "name": "Main gate",
+        "hours": hours,
+    }
+    return Feature(**{**base, **kwargs})
+
+
+def _write_parks(directory: Any, west: float = -122.392, east: float = -122.386) -> None:
+    import json
+
+    directory.mkdir(parents=True, exist_ok=True)
+    ring = [[west, LAT - 0.003], [east, LAT - 0.003], [east, LAT + 0.003], [west, LAT + 0.003]]
+    (directory / "parks.geojson").write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"agency": "NPS", "agency_type": "FED", "name": "Unit"},
+                        "geometry": {"type": "Polygon", "coordinates": [[*ring, ring[0]]]},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_a_gate_shut_at_arrival_proposes_a_start_shift() -> None:
     """Scope 6.4 files "earliest start (e.g. gate opens)" as a request constraint, and 8.1
     step 7's `start_time_optimizer` is the machinery. A locked gate is bought back by
     starting later, which is why it is soft rather than a reroute demand."""
-    gate = Feature(
-        kind="access_hours",
-        category="gate",
-        geometry={},
-        tier=1,
-        confidence=1.0,
-        start=START + timedelta(minutes=90),
-        end=START + timedelta(hours=12),
-    )
-    assert ah.shift_to_open(gate, START) == pytest.approx(90.0)
+    assert ah.shift_to_open([_gate("08:30-22:00")], START) == pytest.approx(90.0)
 
 
 def test_a_gate_already_open_needs_no_shift() -> None:
-    gate = Feature(
-        kind="access_hours",
-        category="gate",
-        geometry={},
-        tier=1,
-        confidence=1.0,
-        start=START - timedelta(hours=1),
-        end=START + timedelta(hours=12),
-    )
-    assert ah.shift_to_open(gate, START) is None
+    assert ah.shift_to_open([_gate("06:00-22:00")], START) is None
 
 
 def test_a_gate_that_has_already_shut_cannot_be_opened_by_starting_later() -> None:
     """Starting later makes it worse, so there is no shift to propose - and reporting one
-    would send `start_time_optimizer` in the wrong direction."""
-    gate = Feature(
-        kind="access_hours",
-        category="gate",
-        geometry={},
-        tier=1,
-        confidence=1.0,
-        start=START - timedelta(hours=12),
-        end=START - timedelta(hours=1),
+    would send `start_time_optimizer` in the wrong direction. Tomorrow's opening is not
+    today's shift."""
+    assert ah.shift_to_open([_gate("00:00-06:00")], START) is None
+
+
+def test_the_shift_is_to_the_first_rule_that_opens() -> None:
+    rules = [_gate("10:00-12:00"), _gate("08:00-09:00")]
+    assert ah.shift_to_open(rules, START) == pytest.approx(60.0)
+
+
+def test_a_gate_is_open_if_any_of_its_rules_is(ctx_factory: Any, tmp_path: Any) -> None:
+    """One gate, two rules. Read one at a time, the morning rule said "closed" at 14:00 of
+    a gate the afternoon rule had open (M18)."""
+    _write_boundaries(tmp_path)
+    _write_parks(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    rules = [_gate("06:00-12:00"), _gate("13:00-22:00")]
+    afternoon = [START.replace(hour=14)] * len(segments)
+    assert not ah.access_hours(route, segments, ctx_factory(rules), afternoon).flags
+    lunch = [START.replace(hour=12, minute=30)] * len(segments)
+    shut = ah.access_hours(route, segments, ctx_factory(rules), lunch)
+    assert [f.reason_code for f in shut.flags] == ["gate_closed_at_eta"]
+    assert _summary(shut)["earliest_feasible_start_shift_min"] == pytest.approx(30.0)
+
+
+def test_a_park_wide_rule_is_read_where_the_route_enters_the_park(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    """A rule with no geometry was tested at 0 m - the route's start, at 07:00 - wherever
+    the park was. This route enters it at its 17th point, about 09:40 (M18)."""
+    _write_boundaries(tmp_path)
+    _write_parks(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    etas = [START + timedelta(minutes=10 * i) for i in range(len(route.points))]
+
+    open_by_then = _gate("09:00-18:00", geometry={})
+    assert not ah.access_hours(route, segments, ctx_factory([open_by_then]), etas).flags
+
+    not_yet = _gate("10:00-18:00", geometry={})
+    result = ah.access_hours(route, segments, ctx_factory([not_yet]), etas)
+    assert [f.reason_code for f in result.flags] == ["gate_closed_at_eta"]
+    assert "park-wide" in (result.flags[0].detail or "")
+    entry = next(p for p in route.points if p.lon > -122.392)
+    assert [w.cum_dist_m for w in result.waypoints] == [pytest.approx(entry.cum_dist_m)]
+    assert _summary(result)["earliest_feasible_start_shift_min"] == pytest.approx(20.0)
+
+
+def test_a_dated_exception_beats_the_standing_rule(ctx_factory: Any, tmp_path: Any) -> None:
+    """NPS publishes a standing rule and dated exceptions. On the exception's day it is the
+    exception that holds, whatever the standing rule says."""
+    _write_boundaries(tmp_path)
+    _write_parks(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    etas = [START] * len(segments)
+    standing = _gate("24/7", geometry={})
+    # 2026-09-15 local in San Francisco, as the naive UTC a validity window is stored in.
+    closed_today = _gate(
+        "off", geometry={}, start=datetime(2026, 9, 15, 7), end=datetime(2026, 9, 16, 7)
     )
-    assert ah.shift_to_open(gate, START) is None
+    closed_later = _gate(
+        "off", geometry={}, start=datetime(2026, 9, 20, 7), end=datetime(2026, 9, 21, 7)
+    )
+    today = ah.access_hours(route, segments, ctx_factory([standing, closed_today]), etas)
+    assert [f.reason_code for f in today.flags] == ["gate_closed_at_eta"]
+    later = ah.access_hours(route, segments, ctx_factory([standing, closed_later]), etas)
+    assert not later.flags
+
+
+def test_a_rule_out_of_season_says_nothing_so_the_gate_is_unknown(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    """Summer hours are not a statement about September; with nothing else said, the gate's
+    hours are unknown rather than open or shut."""
+    _write_boundaries(tmp_path)
+    _write_parks(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    summer = _gate("06:00-22:00", start=datetime(2026, 6, 1, 7), end=datetime(2026, 9, 1, 7))
+    result = ah.access_hours(route, segments, ctx_factory([summer]), [START] * len(segments))
+    assert [f.reason_code for f in result.flags] == ["gate_hours_unknown"]
+
+
+def test_a_sunrise_rule_is_read_against_the_sun_at_the_gate(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    """`Sunrise to Sunset` is how NPS posts most park hours. Sunrise in San Francisco on
+    2026-09-15 is about 06:52, so a 06:00 arrival waits about fifty minutes."""
+    _write_boundaries(tmp_path)
+    _write_parks(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    dark = [START.replace(hour=6)] * len(segments)
+    result = ah.access_hours(route, segments, ctx_factory([_gate("sunrise-sunset")]), dark)
+    assert [f.reason_code for f in result.flags] == ["gate_closed_at_eta"]
+    assert 45 < _summary(result)["earliest_feasible_start_shift_min"] < 60
+    daylight = [START.replace(hour=12)] * len(segments)
+    assert not ah.access_hours(
+        route, segments, ctx_factory([_gate("sunrise-sunset")]), daylight
+    ).flags
 
 
 # --- check 6: fail > skip > pass (ADR 0013) ---------------------------------

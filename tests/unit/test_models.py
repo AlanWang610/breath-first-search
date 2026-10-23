@@ -306,6 +306,13 @@ def test_an_hours_rule_belongs_to_access_hours_and_nothing_else() -> None:
         )
 
 
+def test_a_gate_record_without_a_rule_is_refused() -> None:
+    """`start`/`end` on a gate say when its rule holds (M18.7), so a gate with no rule
+    would read as always open - the one answer it has no evidence for."""
+    with pytest.raises(ValidationError, match="carries its rule in hours"):
+        Feature(kind="access_hours", category="gate", geometry={}, tier=3, confidence=0.7)
+
+
 def test_a_speed_survey_is_a_speed_along_a_line() -> None:
     survey = Feature(
         kind="speed_survey",
