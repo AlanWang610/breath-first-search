@@ -8,7 +8,8 @@ marked unverified in the coverage manifest.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import math
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -19,6 +20,12 @@ FeatureKind = Literal["closures", "trail_status", "access_hours", "speed_survey"
 
 #: Above this, a record must have come from a structured feed rather than extraction.
 MAX_EXTRACTION_CONFIDENCE = 0.5
+
+#: The one measure every speed survey must carry, and the bounds it is believed within. A
+#: walking pace at the bottom and nothing on a public road at the top: a value outside is a
+#: unit error (mph read as km/h is still inside, which is why the adapter states its unit).
+SPEED_85 = "speed_85_kph"
+SPEED_85_RANGE_KPH = (5.0, 200.0)
 
 
 class Feature(BaseModel):
@@ -43,6 +50,21 @@ class Feature(BaseModel):
     #: tracing a flag back to its source row; never used to match records across two
     #: publishers, whose id spaces are their own.
     ref: str | None = None
+    #: An opening-hours rule in OSM `opening_hours` syntax - the subset
+    #: `core/scorers/_hours.py` reads - on the **local** clock of the place, and never
+    #: converted (ADR 0046 §5): "06:00-22:00" means 06:00 on either side of a DST change.
+    #: Only an `access_hours` record carries one, and on that kind `start`/`end` say when
+    #: the *rule* holds (a season, a dated exception), not when the gate is open.
+    hours: str | None = None
+    #: Measured values by name. Only a `speed_survey` record carries them, and it must
+    #: carry `speed_85_kph` (M18).
+    measures: dict[str, float] | None = None
+    #: The day a measurement was taken. A date and not an instant: nothing compares it
+    #: against an ETA, and a count taken on 2024-05-07 was taken on that date everywhere.
+    observed_on: date | None = None
+    #: What the publisher calls the thing - a gate, a road - where it says. Used to match a
+    #: survey to a way and to group a gate's rules; never shown as the record's identity.
+    name: str | None = None
 
     @field_validator("start", "end", mode="after")
     @classmethod
@@ -68,6 +90,25 @@ class Feature(BaseModel):
             raise ValueError("feature end precedes its start")
         return self
 
+    @model_validator(mode="after")
+    def _check_kind_fields(self) -> Feature:
+        """A field that belongs to one kind is refused on every other.
+
+        `hours` on a closure would be read by nobody, and a closure that silently lost the
+        rule it was published with is worse than one that failed to parse: the second says
+        so. The same holds for a measure on anything but a survey.
+        """
+        if self.hours is not None:
+            if self.kind != "access_hours":
+                raise ValueError(f"only an access_hours record carries hours, not {self.kind}")
+            if not self.hours.strip():
+                raise ValueError("an hours rule cannot be blank")
+        if self.kind == "speed_survey":
+            _check_survey(self.measures, self.geometry)
+        elif self.measures is not None:
+            raise ValueError(f"only a speed_survey record carries measures, not {self.kind}")
+        return self
+
     def active_at(self, when: datetime) -> bool:
         """Whether this record applies at a given naive-UTC instant. Open-ended bounds count.
 
@@ -78,6 +119,36 @@ class Feature(BaseModel):
         if self.end and when > self.end:
             return False
         return True
+
+
+def _check_survey(measures: dict[str, float] | None, geometry: dict[str, Any]) -> None:
+    """A speed survey is a speed along a line, or it is nothing the build can merge.
+
+    The line is required because the region build matches a survey to a way by distance
+    *and* bearing (M18); a point has no bearing, and a count station dropped onto a
+    crossroads would be merged into whichever of the two streets happened to be nearer.
+    """
+    if not measures or SPEED_85 not in measures:
+        raise ValueError(f"a speed_survey record must carry measures[{SPEED_85!r}]")
+    for key, value in measures.items():
+        if not math.isfinite(value):
+            raise ValueError(f"measure {key!r} is not a finite number")
+    low, high = SPEED_85_RANGE_KPH
+    if not low <= measures[SPEED_85] <= high:
+        raise ValueError(
+            f"{SPEED_85} {measures[SPEED_85]} is outside {low:.0f}-{high:.0f} km/h; "
+            f"check the publisher's unit"
+        )
+    kind = geometry.get("type")
+    coords = geometry.get("coordinates") or []
+    if kind == "LineString":
+        parts = [coords]
+    elif kind == "MultiLineString":
+        parts = list(coords)
+    else:
+        raise ValueError(f"a speed_survey record needs a line geometry, not {kind or 'none'}")
+    if not any(len(part) >= 2 for part in parts):
+        raise ValueError("a speed_survey line needs at least two coordinates")
 
 
 #: What happened when the registry asked one adapter about one jurisdiction (M17).

@@ -283,6 +283,89 @@ def test_active_at_treats_open_bounds_as_unbounded() -> None:
     assert not f.active_at(datetime(2026, 3, 15, 7))
 
 
+_SURVEY_LINE = {"type": "LineString", "coordinates": [[-94.58, 39.10], [-94.58, 39.11]]}
+
+
+def test_an_hours_rule_belongs_to_access_hours_and_nothing_else() -> None:
+    """A closure that silently dropped the rule it was published with is worse than one
+    that failed: the second says so (M18)."""
+    gate = Feature(
+        kind="access_hours",
+        category="gate",
+        geometry={},
+        tier=3,
+        confidence=0.7,
+        hours="06:00-22:00",
+    )
+    assert gate.hours == "06:00-22:00"
+    with pytest.raises(ValidationError, match="only an access_hours"):
+        Feature(kind="closures", category="lane", geometry={}, tier=1, confidence=0.9, hours="24/7")
+    with pytest.raises(ValidationError, match="blank"):
+        Feature(
+            kind="access_hours", category="gate", geometry={}, tier=3, confidence=0.7, hours=" "
+        )
+
+
+def test_a_speed_survey_is_a_speed_along_a_line() -> None:
+    survey = Feature(
+        kind="speed_survey",
+        category="speed_survey",
+        geometry=_SURVEY_LINE,
+        tier=3,
+        confidence=0.9,
+        measures={"speed_85_kph": 61.0},
+        observed_on=date(2024, 5, 7),
+        name="Main St",
+    )
+    assert survey.measures == {"speed_85_kph": 61.0}
+    assert survey.observed_on == date(2024, 5, 7)
+
+
+@pytest.mark.parametrize(
+    ("measures", "geometry", "match"),
+    [
+        (None, _SURVEY_LINE, "must carry measures"),
+        ({"aadt": 4000.0}, _SURVEY_LINE, "must carry measures"),
+        ({"speed_85_kph": 2.0}, _SURVEY_LINE, "outside 5-200"),
+        ({"speed_85_kph": 380.0}, _SURVEY_LINE, "outside 5-200"),
+        ({"speed_85_kph": float("nan")}, _SURVEY_LINE, "not a finite"),
+        ({"speed_85_kph": 61.0}, {"type": "Point", "coordinates": [-94.58, 39.1]}, "line geometry"),
+        ({"speed_85_kph": 61.0}, {}, "line geometry"),
+        (
+            {"speed_85_kph": 61.0},
+            {"type": "LineString", "coordinates": [[-94.58, 39.1]]},
+            "two coordinates",
+        ),
+    ],
+)
+def test_a_speed_survey_that_cannot_be_merged_is_refused(
+    measures: dict[str, float] | None, geometry: dict[str, object], match: str
+) -> None:
+    """The build matches a survey to a way by distance *and* bearing, so a point - which
+    has no bearing - would be merged into whichever street was nearer (M18)."""
+    with pytest.raises(ValidationError, match=match):
+        Feature(
+            kind="speed_survey",
+            category="speed_survey",
+            geometry=geometry,
+            tier=3,
+            confidence=0.9,
+            measures=measures,
+        )
+
+
+def test_a_measure_belongs_to_a_speed_survey_and_nothing_else() -> None:
+    with pytest.raises(ValidationError, match="only a speed_survey"):
+        Feature(
+            kind="closures",
+            category="lane",
+            geometry=_SURVEY_LINE,
+            tier=1,
+            confidence=0.9,
+            measures={"speed_85_kph": 61.0},
+        )
+
+
 def test_nothing_found_differs_from_nobody_asked() -> None:
     """An empty result with no jurisdictions queried is not evidence of no closures."""
     asked = FeatureSet(queried=["0600000US"])
