@@ -42,6 +42,41 @@ LICENCE = "public domain (a work of the US federal government, 17 U.S.C. 105)"
 #: Decimal places a box edge is rounded outward to - about 100 m of latitude.
 PLACES = 3
 
+#: Boundary units the NPS API publishes under another code, mapped to that code. Read
+#: 2026-10-23 by listing all 475 `/parks` and matching the 17 boundary codes it does not
+#: know by name: a combined unit (Sequoia and Kings Canyon are `seki`, the North Cascades
+#: complex is `noca`), a unit published under the park that administers it (Fort Caroline
+#: under Timucuan, the Rockefeller Parkway under Grand Teton, Lower St. Croix under the
+#: St. Croix riverway), or a plain difference of code. Asked under the boundary's code,
+#: each answered nothing - which reads as "no alerts", not as "asked the wrong question".
+API_ALIASES: dict[str, str] = {
+    "crmp": "crmo",  # Craters of the Moon National Preserve -> National Monument & Preserve
+    "dela": "dewa",  # Middle Delaware National Scenic River -> Delaware Water Gap NRA
+    "foca": "timu",  # Fort Caroline National Memorial -> Timucuan Preserve
+    "jefm": "thje",  # Thomas Jefferson Memorial
+    "jodr": "grte",  # John D. Rockefeller, Jr., Memorial Parkway -> Grand Teton
+    "kica": "seki",  # Kings Canyon -> Sequoia & Kings Canyon
+    "lach": "noca",  # Lake Chelan NRA -> North Cascades
+    "losa": "sacn",  # Lower Saint Croix -> Saint Croix National Scenic Riverway
+    "mabe": "mamc",  # Mary McLeod Bethune Council House
+    "mall": "nama",  # National Mall -> National Mall and Memorial Parks
+    "obri": "obed",  # Obed Wild and Scenic River
+    "perl": "valr",  # Pearl Harbor National Memorial
+    "rola": "noca",  # Ross Lake NRA -> North Cascades
+    "sequ": "seki",  # Sequoia -> Sequoia & Kings Canyon
+}
+
+#: Boundary units the API publishes nothing for under any code: National Capital Parks (a
+#: DC-MD administrative grouping), Hohokam Pima (closed to the public), Ronald Reagan
+#: Boyhood Home (an affiliated site). Not asked - there is nothing to ask.
+UNPUBLISHED = frozenset({"naca", "pima", "rrbh"})
+
+
+def api_codes(codes: list[str]) -> list[str]:
+    """Boundary codes as the API's park codes, deduplicated and sorted."""
+    return sorted({API_ALIASES.get(code, code) for code in codes if code not in UNPUBLISHED})
+
+
 Box = tuple[float, float, float, float]
 
 
@@ -147,10 +182,13 @@ def units_meeting(bounds: tuple[float, float, float, float], path: Path = UNITS)
 
 
 __all__ = [
+    "API_ALIASES",
     "LICENCE",
     "SOURCE",
     "SOURCE_URL",
     "UNITS",
+    "UNPUBLISHED",
+    "api_codes",
     "build_units",
     "load_units",
     "units_meeting",

@@ -18,7 +18,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
+import respx
+from shapely.geometry import box
 
 from longrun.adapters.base import AdapterContext
 from longrun.adapters.keys import ALL_KEYS, MASSDOT, NPS, SF_BAY_511
@@ -389,19 +392,70 @@ def test_a_keyed_feed_replays_its_cassette_with_no_key() -> None:
     assert ctx.budget.api_calls_used == 0
 
 
+#: A corridor box around the Ozark National Scenic Riverways and nothing else (M18).
+OZARKS = box(-91.6, 37.0, -91.2, 37.3)
+
+
 def test_nps_replays_its_cassette_with_no_key() -> None:
     """Alerts are US public domain, so an NPS payload is the one keyed recording this
-    project may commit - and it has to replay in keyless CI to be worth committing."""
-    payload = {"data": [{"title": "Trail closed", "category": "Park Closure", "url": ""}]}
+    project may commit - and it has to replay in keyless CI to be worth committing. Since
+    M18 a recording is per park, keyed by the park the corridor meets."""
+    payload = {"data": [{"id": "a1", "title": "Trail closed", "category": "Park Closure"}]}
     with SqliteCache() as cache:
         cache.put(
             "adapter.portal.nps",
-            args_hash(nps_portal.nps_args(None, DAY)),
+            args_hash(nps_portal.nps_args(["ozar"], DAY)),
             DAY.isoformat(),
             payload,
         )
-        result = nps_portal.TRAIL_STATUS.fetch(None, DAY, _ctx(cache))
-    assert result.answered and len(result.features) == 1
+        result = nps_portal.TRAIL_STATUS.fetch(OZARKS, DAY, _ctx(cache))
+    assert result.answered and [f.ref for f in result.features] == ["a1"]
+
+
+def test_nps_asks_only_for_the_parks_the_corridor_meets() -> None:
+    """Until M18 it asked for no park, got the first fifty alerts in the country, and every
+    one of them was read as being about whatever NPS route had asked (ADR 0054)."""
+    assert nps_portal.park_codes(OZARKS) == ["ozar"]
+    assert nps_portal.park_codes(box(-122.43, 37.80, -122.40, 37.81)) == ["goga", "safr"]
+    # Sequoia and Kings Canyon are two boundary units and one API park.
+    assert nps_portal.park_codes(box(-118.9, 36.4, -118.6, 36.8)) == ["seki"]
+    assert nps_portal.park_codes(None) == []
+
+
+def test_a_corridor_meeting_no_park_box_is_a_reason_not_an_empty_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PAD-US said NPS land and no unit's box met the corridor: nobody was asked."""
+    monkeypatch.setenv(nps_portal.NPS.env_var, "test-key")
+    with SqliteCache() as cache:
+        result = nps_portal.TRAIL_STATUS.fetch(box(-100.0, 40.0, -99.99, 40.01), DAY, _ctx(cache))
+    assert result.reason == nps_portal.NO_UNIT_REASON and not result.key_missing
+
+
+@respx.mock
+def test_nps_asks_one_park_per_request_and_pages_rather_than_truncating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The API reads only the first code of `parkCode=a,b` (checked 2026-10-23), so one
+    request per park; and a park with more pages than `MAX_PAGES` is refused, not cut."""
+    monkeypatch.setenv(nps_portal.NPS.env_var, "test-key")
+    asked: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        code = request.url.params["parkCode"]
+        asked.append(code)
+        start = int(request.url.params["start"])
+        total = 3 if code == "goga" else 999
+        data = [{"id": f"{code}-{start}", "title": "t"}] if start < total else []
+        return httpx.Response(200, json={"total": str(total), "data": data})
+
+    respx.get(nps_portal.URL).mock(side_effect=answer)
+    with SqliteCache() as cache:
+        golden_gate = nps_portal.per_park("portal.nps", nps_portal.URL, ["goga"], DAY, _ctx(cache))
+        busy = nps_portal.per_park("portal.nps", nps_portal.URL, ["busy"], DAY, _ctx(cache))
+    assert isinstance(golden_gate, list) and len(golden_gate[0]["data"]) == 3
+    assert asked.count("goga") == 3, "one page per request, three records"
+    assert isinstance(busy, nps_portal.AdapterResult) and "more than" in (busy.reason or "")
 
 
 def test_peek_is_none_on_a_miss_even_offline() -> None:
