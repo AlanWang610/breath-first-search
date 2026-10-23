@@ -32,7 +32,11 @@ from typing import TYPE_CHECKING, Any
 
 from longrun.core.data.file_store import LayerNotFound
 from longrun.core.geo.segments import corridor_polygon
-from longrun.core.routing.lts import SURVEY_SOURCE_COLUMN, SURVEY_SPEED_COLUMN
+from longrun.core.routing.lts import (
+    AADT_CONFLATED_COLUMN,
+    SURVEY_SOURCE_COLUMN,
+    SURVEY_SPEED_COLUMN,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Mapping
@@ -79,6 +83,10 @@ GEOM_COLUMN = "geom"
 #: Where a region build's speed-survey merge lives (M18). Optional: a database built before
 #: it, or a region with no survey, simply has no table and its ways read as they always did.
 SURVEY_TABLE = "speed_survey.way_speed"
+
+#: The HPMS volume conflation `regions/lts` prefers to OSM's tag. Nothing writes it today
+#: (ADR 0012); when something does, the scorer reads it through the same join.
+AADT_TABLE = "osm.way_aadt"
 
 #: Column holding OSM tags as `jsonb`, expanded into flat columns on read. Absent on
 #: layers that have no tags (PAD-US units, TIGER boundaries), which is not an error.
@@ -174,24 +182,42 @@ class PostGISLayerStore:
             params.append(list(kinds))
 
         joined: list[str] = []
-        if layer == "ways" and "way_id" in columns and self._exists(SURVEY_TABLE):
-            # A surveyed speed rides on the way it was merged onto (M18, ADR 0053), under the
-            # one column name the build's `way_lts` pass also reads - so the scorer measures
-            # with the speed the router's graph was built from. Freezing a fixture reads
-            # through here, so a frozen `ways` layer carries it too. The query above is
-            # wrapped rather than rewritten, so a database with no survey runs it unchanged.
-            sql = (
-                f'SELECT q.*, s.speed_85_kph AS "{SURVEY_SPEED_COLUMN}", '
-                f's.source AS "{SURVEY_SOURCE_COLUMN}" FROM ({sql}) q '
-                f"LEFT JOIN {SURVEY_TABLE} s ON s.way_id = q.way_id"
-            )
-            joined = [SURVEY_SPEED_COLUMN, SURVEY_SOURCE_COLUMN]
+        if layer == "ways" and "way_id" in columns:
+            sql, joined = self._with_way_inputs(sql)
 
         with self._conn.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
 
         return _to_geodataframe(rows, [*selected, "wkb", *joined])
+
+    def _with_way_inputs(self, sql: str) -> tuple[str, list[str]]:
+        """The `ways` query, with the LTS inputs a region build merged beside OSM (M18).
+
+        A surveyed speed (ADR 0053) and a conflated volume ride on the way they were merged
+        onto, under the column names the build's `way_lts` pass also reads - so the scorer
+        measures with the inputs the router's graph was built from. Freezing a fixture reads
+        through here, so a frozen `ways` layer carries them too. The query is wrapped rather
+        than rewritten, and only for a table that exists, so a database with neither runs
+        exactly what it always did.
+        """
+        selects: list[str] = []
+        joins: list[str] = []
+        joined: list[str] = []
+        if self._exists(SURVEY_TABLE):
+            selects += [
+                f's.speed_85_kph AS "{SURVEY_SPEED_COLUMN}"',
+                f's.source AS "{SURVEY_SOURCE_COLUMN}"',
+            ]
+            joins.append(f"LEFT JOIN {SURVEY_TABLE} s ON s.way_id = q.way_id")
+            joined += [SURVEY_SPEED_COLUMN, SURVEY_SOURCE_COLUMN]
+        if self._exists(AADT_TABLE):
+            selects.append(f'a.aadt AS "{AADT_CONFLATED_COLUMN}"')
+            joins.append(f"LEFT JOIN {AADT_TABLE} a ON a.way_id = q.way_id")
+            joined.append(AADT_CONFLATED_COLUMN)
+        if not joined:
+            return sql, []
+        return f"SELECT q.*, {', '.join(selects)} FROM ({sql}) q {' '.join(joins)}", joined
 
     # --- manifest -----------------------------------------------------------
 

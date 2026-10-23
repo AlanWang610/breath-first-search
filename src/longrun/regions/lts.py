@@ -192,13 +192,17 @@ def resolve_aadt(tags: dict[str, Any], conflated: float | None) -> tuple[float |
     a table that ignored the tag would disagree with the scorer on **precisely the ways that
     carry a volume** — the ones where the answer is least likely to be a guess.
 
-    The forward hazard, recorded in ADR 0025: the day something writes `osm.way_aadt`, the
-    scorer has to read it too, or the two part company again on every conflated way.
+    The forward hazard, recorded in ADR 0025 - the day something writes `osm.way_aadt`, the
+    scorer has to read it too - is closed since M18: the plan-time `ways` layer carries the
+    conflation as `aadt_conflated`, which `aadt_of` reads before the tag, so a conflated
+    volume reaches the scorer in the same precedence it is scored with here.
     """
-    from longrun.core.scorers._common import aadt_of
+    from longrun.core.routing.lts import AADT_CONFLATED_COLUMN, aadt_of
 
     if conflated is not None:
         return conflated, "conflated"
+    if tags.get(AADT_CONFLATED_COLUMN) is not None:
+        return aadt_of(tags), "conflated"
     tagged = aadt_of(tags)
     return (tagged, "osm_tag") if tagged is not None else (None, None)
 

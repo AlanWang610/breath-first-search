@@ -211,3 +211,26 @@ def test_a_table_built_before_m18_gains_the_survey_columns_in_place() -> None:
     statements = " ".join(create_statements())
     assert "ADD COLUMN IF NOT EXISTS operating_speed_kph" in statements
     assert "ADD COLUMN IF NOT EXISTS speed_source" in statements
+
+
+# --- a conflated volume (M18, ADR 0025's forward hazard) ---------------------
+
+
+def test_a_conflated_volume_reaches_the_scorer_in_the_order_the_table_uses() -> None:
+    """The table prefers `osm.way_aadt` to OSM's own tag. The plan-time `ways` layer now
+    carries the conflation as `aadt_conflated`, read first by `aadt_of` - so the scorer and
+    the table agree on a conflated way, which was the hazard ADR 0025 recorded."""
+    from longrun.core.routing.lts import AADT_CONFLATED_COLUMN, aadt_of, lts_for_way
+
+    tags = {"highway": "tertiary", "maxspeed": "50", "sidewalk": "both", "aadt": "1200"}
+    row = score_way(14, tags, conflated=30_000.0)
+    scorer = lts_for_way({**tags, AADT_CONFLATED_COLUMN: 30_000.0})
+    assert row is not None
+    assert (row.lts, row.reasons, row.aadt, row.aadt_source) == (
+        scorer.level,
+        scorer.reasons,
+        30_000.0,
+        "conflated",
+    )
+    assert aadt_of({**tags, AADT_CONFLATED_COLUMN: 30_000.0}) == 30_000.0
+    assert resolve_aadt({**tags, AADT_CONFLATED_COLUMN: 30_000.0}, None) == (30_000.0, "conflated")

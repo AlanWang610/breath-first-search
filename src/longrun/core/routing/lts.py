@@ -70,9 +70,15 @@ UNKNOWN_HIGHWAY_PENALTY = 0.5
 #: the route cache keys on.
 LTS_VERSION = 1
 
-#: Columns an HPMS conflation may have written onto the ways frame (scope 5, 7.2). AADT
-#: is a confidence-raiser for `lts_from_tags`, never a requirement.
-AADT_COLUMNS = ("aadt", "AADT", "aadt_veh_day")
+#: The column the plan-time `ways` layer carries a conflated volume in (`osm.way_aadt`,
+#: M18): the build's `way_lts` pass prefers that table to OSM's own tag, so the scorer has
+#: to read it first too - ADR 0025's forward hazard, closed for volume as for speed.
+AADT_CONFLATED_COLUMN = "aadt_conflated"
+
+#: Columns a way's volume may be read from, in order of preference: the conflation first,
+#: then what OSM or an older frame calls it (scope 5, 7.2). AADT is a confidence-raiser for
+#: `lts_from_tags`, never a requirement.
+AADT_COLUMNS = (AADT_CONFLATED_COLUMN, "aadt", "AADT", "aadt_veh_day")
 
 #: The column a region build's speed-survey merge puts on a way (M18, ADR 0053): the
 #: 85th-percentile operating speed a survey measured on it, in km/h, and where it came from.
@@ -158,7 +164,7 @@ def has_sidewalk(tags: dict[str, Any]) -> bool | None:
 
 
 def aadt_of(tags: dict[str, Any]) -> float | None:
-    """Annual average daily traffic from a conflated column, if the frame carries one."""
+    """Annual average daily traffic, from the first of `AADT_COLUMNS` the tags carry."""
     for column in AADT_COLUMNS:
         if column not in tags:
             continue
