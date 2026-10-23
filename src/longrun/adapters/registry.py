@@ -216,8 +216,15 @@ class AdapterRegistry:
         offline: bool = False,
         adapters: Sequence[Adapter] | None = None,
         extractor: Extractor | None = None,
+        max_jurisdictions: int | None = MAX_JURISDICTIONS,
+        max_fetches: int | None = MAX_ADAPTER_FETCHES,
     ) -> None:
         """`adapters` injected bypasses discovery, which is how the tests run.
+
+        The two ceilings are a *plan's*: a route crossing 40 jurisdictions or spending 16
+        live asks on one kind is one this plan cannot afford to finish. A region build is
+        not a plan - Bay Area's 187 jurisdictions are its ordinary size - so it passes
+        `None` for both (M18).
 
         Without it every adapter test would depend on the package having been reinstalled
         since `pyproject.toml` last changed - `importlib.metadata` reads installed
@@ -238,6 +245,8 @@ class AdapterRegistry:
         for adapter in self._adapters:
             for claimed in adapter.jurisdictions:
                 self._claims.setdefault((adapter.kind, claimed), []).append(adapter)
+        self._max_jurisdictions = max_jurisdictions
+        self._max_fetches = max_fetches
         self._fetches: dict[str, int] = {}
         self._memo: dict[tuple[Any, ...], AdapterResult] = {}
         self._extracted_memo: dict[tuple[str, str, str], AdapterResult] = {}
@@ -269,8 +278,9 @@ class AdapterRegistry:
     ) -> FeatureSet:
         from longrun.core.models.features import FeatureSet, JurisdictionAnswer
 
-        considered = list(jurisdictions)[:MAX_JURISDICTIONS]
-        dropped = list(jurisdictions)[MAX_JURISDICTIONS:]
+        cap = self._max_jurisdictions
+        considered = list(jurisdictions) if cap is None else list(jurisdictions)[:cap]
+        dropped = [] if cap is None else list(jurisdictions)[cap:]
 
         ladders = {j.id: self._ladders(kind, j) for j in considered}
         # Clipped here, after the memo, because a feed-scoped answer is shared by every
@@ -300,7 +310,7 @@ class AdapterRegistry:
                 jurisdiction=j.id,
                 name=j.name,
                 kind=kind,
-                reason=f"more than {MAX_JURISDICTIONS} jurisdictions on this route",
+                reason=f"more than {cap} jurisdictions on this route",
             )
             for j in dropped
         )
@@ -414,8 +424,8 @@ class AdapterRegistry:
         credential = key_of(adapter)
         if credential is None or credential.value() is not None:
             spent = self._fetches.get(kind, 0)
-            if spent >= MAX_ADAPTER_FETCHES:
-                note = f"adapter fetch ceiling ({MAX_ADAPTER_FETCHES} per kind) reached for {kind}"
+            if self._max_fetches is not None and spent >= self._max_fetches:
+                note = f"adapter fetch ceiling ({self._max_fetches} per kind) reached for {kind}"
                 if note not in self._budget.degradation:
                     self._budget.degradation.append(note)
                 return AdapterResult(reason=_ceiling_reason())
@@ -542,7 +552,7 @@ class AdapterRegistry:
         if result is None:
             live = bool(getattr(self._extractor, "live", True))
             spent = self._fetches.get(kind, 0)
-            if live and spent >= MAX_ADAPTER_FETCHES:
+            if live and self._max_fetches is not None and spent >= self._max_fetches:
                 result = AdapterResult(reason=_ceiling_reason())
             else:
                 if live:
@@ -596,6 +606,8 @@ def build_registry(
     *,
     offline: bool = False,
     extractor: Extractor | None = None,
+    max_jurisdictions: int | None = MAX_JURISDICTIONS,
+    max_fetches: int | None = MAX_ADAPTER_FETCHES,
 ) -> AdapterRegistry:
     """The registry a plan asks and the registry a cassette is recorded through - one
     constructor for both (M17).
@@ -604,7 +616,14 @@ def build_registry(
     The day tier 4 is wired into one and not the other, recording and planning ask
     different questions, and a golden replays a cassette that answers none of the plan's.
     """
-    return AdapterRegistry(cache, budget, offline=offline, extractor=extractor)
+    return AdapterRegistry(
+        cache,
+        budget,
+        offline=offline,
+        extractor=extractor,
+        max_jurisdictions=max_jurisdictions,
+        max_fetches=max_fetches,
+    )
 
 
 def _clipped(result: AdapterResult, polygon: Any) -> AdapterResult:
