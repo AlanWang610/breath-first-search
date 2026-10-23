@@ -68,6 +68,39 @@ def test_every_federal_code_is_uppercase() -> None:
     assert all(code == code.upper() for code in FEDERAL_AGENCY_CODES)
 
 
+def test_the_codes_pad_us_actually_uses_are_the_ones_listed() -> None:
+    """Measured 2026-09-24. The old list carried `ACE` and `BOR`, which PAD-US does not use
+    (it spells them `USACE` and `USBR`), so a Corps lake fragmented into one id per state."""
+    assert {"USACE", "USBR", "ARS", "DOE", "NOAA"} <= FEDERAL_AGENCY_CODES
+    assert not {"ACE", "BOR"} & FEDERAL_AGENCY_CODES
+    assert padus_id("USACE", "29") == "padus:USACE"
+    assert padus_id("SDOL", "04", "STAT") == "padus:SDOL:04"
+
+
+@pytest.mark.network
+def test_the_fallback_list_still_covers_what_the_service_calls_federal() -> None:
+    """Live. The list is only used when a row lacks `Mang_Type`, but when it is used it has
+    to agree with the service, and PAD-US adds codes between releases."""
+    import httpx
+
+    from longrun.core.data.padus import PADUS_ROOT
+
+    response = httpx.get(
+        PADUS_ROOT,
+        params={
+            "where": "Mang_Type = 'FED'",
+            "outFields": "Mang_Name",
+            "returnDistinctValues": "true",
+            "returnGeometry": "false",
+            "f": "json",
+        },
+        timeout=60.0,
+    )
+    response.raise_for_status()
+    live = {f["attributes"]["Mang_Name"] for f in response.json()["features"]}
+    assert live and live <= FEDERAL_AGENCY_CODES, sorted(live - FEDERAL_AGENCY_CODES)
+
+
 # --- containment, and the prefix trap ---------------------------------------
 
 

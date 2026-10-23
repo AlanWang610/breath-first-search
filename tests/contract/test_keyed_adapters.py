@@ -218,9 +218,14 @@ def test_phoenix_is_asked_of_both_arizona_feeds_because_they_are_peers() -> None
             "wzdx.azdot",
             "wzdx.maricopa",
         ]
-        assert sorted(registry._plan("closures", [phoenix])) == ["wzdx.azdot", "wzdx.maricopa"]
-        # Tucson is outside Maricopa County, so only the statewide feed covers it.
-        assert sorted(registry._plan("closures", [tucson])) == ["wzdx.azdot"]
+        asked = registry.fetch("closures", [phoenix, tucson], None, DAY).answers
+    by_id = {a.jurisdiction: a for a in asked}
+    assert sorted(a.adapter for a in by_id[phoenix.id].attempts[:2]) == [
+        "wzdx.azdot",
+        "wzdx.maricopa",
+    ]
+    # Tucson is outside Maricopa County, so only the statewide feed covers it.
+    assert [a.adapter for a in by_id[tucson.id].attempts if a.tier == 1] == ["wzdx.azdot"]
 
 
 def test_arizona_needs_no_key_at_all() -> None:
@@ -343,3 +348,66 @@ def test_every_key_this_module_defines_is_in_all_keys() -> None:
         "every ApiKey defined in adapters/keys.py must be in ALL_KEYS; missing: "
         f"{sorted(key.env_var for key in defined - set(ALL_KEYS))}"
     )
+
+
+# --- a missing key replays before it refuses (M17) ---------------------------
+
+
+@pytest.mark.parametrize(("short", "adapter", "key"), KEYED, ids=[k[0] for k in KEYED])
+def test_a_missing_key_with_nothing_recorded_is_marked_as_never_tried(
+    short: str, adapter: Any, key: Any
+) -> None:
+    """`key_missing` is what lets the registry treat this as a rung nobody climbed - no fetch
+    slot spent, and the next tier asked - rather than as a source that failed."""
+    with SqliteCache() as cache:
+        result = adapter.fetch(None, DAY, _ctx(cache))
+    assert result.key_missing
+    assert getattr(adapter, "key", None) is key, "the adapter declares the key it needs"
+
+
+def test_a_keyed_feed_replays_its_cassette_with_no_key() -> None:
+    """A cassette recorded by somebody with the key must replay for everybody without it -
+    which is every CI run. Refusing before looking made such a cassette unreplayable."""
+    from longrun.adapters.wzdx.client import wzdx_args
+
+    payload = {
+        "type": "FeatureCollection",
+        "feed_info": {"version": "4.2", "publisher": "511 SF Bay"},
+        "features": [],
+    }
+    with SqliteCache() as cache:
+        cache.put(
+            "adapter.wzdx.sfbay",
+            args_hash(wzdx_args("wzdx.sfbay", DAY)),
+            DAY.isoformat(),
+            payload,
+        )
+        ctx = _ctx(cache)
+        result = sfbay.CLOSURES.fetch(None, DAY, ctx)
+    assert result.answered and not result.key_missing
+    assert result.vintage == "wzdx-4.2"
+    assert ctx.budget.api_calls_used == 0
+
+
+def test_nps_replays_its_cassette_with_no_key() -> None:
+    """Alerts are US public domain, so an NPS payload is the one keyed recording this
+    project may commit - and it has to replay in keyless CI to be worth committing."""
+    payload = {"data": [{"title": "Trail closed", "category": "Park Closure", "url": ""}]}
+    with SqliteCache() as cache:
+        cache.put(
+            "adapter.portal.nps",
+            args_hash(nps_portal.nps_args(None, DAY)),
+            DAY.isoformat(),
+            payload,
+        )
+        result = nps_portal.TRAIL_STATUS.fetch(None, DAY, _ctx(cache))
+    assert result.answered and len(result.features) == 1
+
+
+def test_peek_is_none_on_a_miss_even_offline() -> None:
+    """The caller never meant to fetch, so an offline "not in the cassette" would misstate
+    why nothing came back - the key is why."""
+    from longrun.core.data.cache import peek
+
+    with SqliteCache(offline=True) as cache:
+        assert peek(cache, "adapter.anything", {"a": 1}, DAY) is None

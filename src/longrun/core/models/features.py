@@ -8,10 +8,10 @@ marked unverified in the coverage manifest.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from longrun.core.models.coverage import Confidence, CoverageEntry, Tier
 
@@ -32,10 +32,30 @@ class Feature(BaseModel):
     tier: Tier
     confidence: Confidence
     jurisdiction: str | None = None
+    #: **Naive UTC, always** (ADR 0046): the window is an instant, and every instant this
+    #: project stores is naive UTC (ADR 0045). An ETA is naive *local*; read one against the
+    #: other through `core.data.features.RouteFeatures`, never directly.
     start: datetime | None = None
     end: datetime | None = None
     source_url: str | None = None
     detail: str | None = None
+    #: The publisher's own id for the record, where it has one (a WZDx feature `id`). For
+    #: tracing a flag back to its source row; never used to match records across two
+    #: publishers, whose id spaces are their own.
+    ref: str | None = None
+
+    @field_validator("start", "end", mode="after")
+    @classmethod
+    def _naive_utc(cls, value: datetime | None) -> datetime | None:
+        """An aware stamp is converted, not refused and not stripped.
+
+        The backstop behind every adapter's own parsing. Stripping is the bug ADR 0045 and
+        ADR 0046 both record, and refusing would turn one publisher's offset into a feed
+        that answers nothing.
+        """
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(UTC).replace(tzinfo=None)
+        return value
 
     @model_validator(mode="after")
     def _check_extraction_confidence(self) -> Feature:
@@ -49,12 +69,61 @@ class Feature(BaseModel):
         return self
 
     def active_at(self, when: datetime) -> bool:
-        """Whether this record applies at a given instant. Open-ended bounds count."""
+        """Whether this record applies at a given naive-UTC instant. Open-ended bounds count.
+
+        A scorer holding a local ETA asks `RouteFeatures.active_at` instead, which converts.
+        """
         if self.start and when < self.start:
             return False
         if self.end and when > self.end:
             return False
         return True
+
+
+#: What happened when the registry asked one adapter about one jurisdiction (M17).
+#: `skipped`: its key is not set and nothing was recorded to replay, so nothing was tried.
+#: `ceiling`: the plan's fetch ceiling for this kind was reached before it could be asked.
+AttemptOutcome = Literal["answered", "failed", "skipped", "ceiling"]
+
+
+class Attempt(BaseModel):
+    """One rung of a ladder, as climbed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tier: Tier
+    adapter: str
+    outcome: AttemptOutcome
+    reason: str | None = None
+
+
+def render_attempts(attempts: tuple[Attempt, ...], *, checked: bool) -> str | None:
+    """The one sentence a coverage entry carries about everything that did not answer.
+
+    **A single tier of failures reads exactly as it always has** - the reasons themselves,
+    deduplicated and joined - so a jurisdiction that was only ever asked one question
+    reports that question's answer and nothing more. More than one tier names each, in the
+    order climbed: `tier 1 wzdx.sfbay: <key reason>. Then tier 4 extraction: <reason>`.
+    ". Then " rather than "; " because a key reason already contains a semicolon.
+
+    A *checked* answer names its failures the long way even when there is one, because
+    there the failure is not the answer - "peer wzdx.maricopa: not in the cassette" on a
+    jurisdiction AZDOT answered is a different claim from the bare reason alone.
+    """
+    failed = [a for a in attempts if a.outcome != "answered"]
+    if not failed:
+        return None
+    tiers: dict[int, list[Attempt]] = {}
+    for attempt in failed:
+        tiers.setdefault(int(attempt.tier), []).append(attempt)
+    if len(tiers) == 1 and not checked:
+        return "; ".join(dict.fromkeys(a.reason or "no reason given" for a in failed))
+    parts = []
+    for tier, group in sorted(tiers.items()):
+        names = ", ".join(dict.fromkeys(a.adapter for a in group))
+        reasons = "; ".join(dict.fromkeys(a.reason or "no reason given" for a in group))
+        parts.append(f"tier {tier} {names}: {reasons}")
+    return ". Then ".join(parts)
 
 
 class JurisdictionAnswer(BaseModel):
@@ -84,6 +153,10 @@ class JurisdictionAnswer(BaseModel):
     reason: str | None = None
     vintage: str | None = None
     confidence: Confidence | None = None
+    #: Every adapter asked, in the order the ladder was climbed (M17). `reason` is rendered
+    #: from these by `render_attempts`; they are kept whole so a caller can tell a skipped
+    #: key from a failed feed without parsing the sentence.
+    attempts: tuple[Attempt, ...] = ()
 
     def label(self) -> str:
         """How this jurisdiction is named in the plan sheet.
@@ -106,6 +179,7 @@ class JurisdictionAnswer(BaseModel):
             reason=self.reason,
             confidence=self.confidence,
             vintage=self.vintage,
+            covered_by=self.covered_by,
         )
 
 

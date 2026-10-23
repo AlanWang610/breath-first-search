@@ -20,6 +20,7 @@ and skipped by the gate; what runs in CI is the recorded half.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -254,9 +255,9 @@ def test_an_adopted_adapter_offline_is_a_reason_and_costs_nothing(short: str, ad
 def test_one_statewide_fetch_answers_for_every_place_inside_the_state() -> None:
     """The budget story, which is the whole reason sixteen adapters is affordable.
 
-    `MAX_ADAPTER_FETCHES` is 24 per plan and these are whole statewide files - none of
+    `MAX_ADAPTER_FETCHES` is 16 per kind and these are whole statewide files - none of
     the endpoints accepts a spatial filter, so `client.fetch_feed` pulls the lot. That is
-    only sane because `registry._plan` fans out **by adapter, not by jurisdiction**: a
+    only sane because the registry fans out **by adapter, not by jurisdiction**: a
     Wisconsin route crossing a county and eleven incorporated places is one request, not
     twelve, and adding a state to the set adds nothing to any plan outside it.
     """
@@ -270,14 +271,14 @@ def test_one_statewide_fetch_answers_for_every_place_inside_the_state() -> None:
         Jurisdiction(id=f"tiger:place:55{n:05d}", level="place", name=f"Place {n}", within=inside)
         for n in range(1, 12)
     ]
-    with SqliteCache() as cache:
+    with SqliteCache(offline=True) as cache:
         registry = AdapterRegistry(cache, Budget(), adapters=[wisdot.CLOSURES])
-        planned = registry._plan("closures", crossed)
-    assert sorted(planned) == ["wzdx.wisdot"]
-    assert len(planned["wzdx.wisdot"][1]) == len(crossed), (
-        "one fetch has to record every jurisdiction it covered, or the sheet implies "
-        "twelve requests were made"
-    )
+        found = registry.fetch("closures", crossed, None, date(2026, 9, 23))
+    assert registry._fetches == {"closures": 1}, "one feed, one fetch, twelve jurisdictions"
+    assert all(
+        [a.adapter for a in answer.attempts if a.tier == 1] == ["wzdx.wisdot"]
+        for answer in found.answers
+    ), "every jurisdiction it covered has to record it, or the sheet implies twelve requests"
 
 
 def test_no_two_adapters_claim_the_same_state() -> None:

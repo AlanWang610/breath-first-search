@@ -82,6 +82,10 @@ class Budget:
     raster_windows_used: int = 0
     model_calls_used: int = 0
     model_tokens_used: int = 0
+    #: What a ceiling cut short, in words a reader can act on, for `Manifest.degradation`.
+    #: Written by whatever hit the ceiling - the adapter registry, since M17 - because the
+    #: budget is the one object every such caller already holds.
+    degradation: list[str] = field(default_factory=list)
     #: Set when the budget is constructed, which is when the plan starts.
     started_at: float = field(default_factory=time.perf_counter, repr=False)
 

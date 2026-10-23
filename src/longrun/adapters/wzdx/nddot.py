@@ -36,6 +36,7 @@ class NdDotClosures:
     name = "wzdx.nddot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:38",)
     source = "wzdx_nddot"
     vintage: str | None = None

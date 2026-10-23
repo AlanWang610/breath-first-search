@@ -30,6 +30,7 @@ class MoDotClosures:
     name = "wzdx.modot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:29",)
     source = "wzdx_modot"
     vintage: str | None = None

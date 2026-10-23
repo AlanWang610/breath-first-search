@@ -37,6 +37,7 @@ class InDotClosures:
     name = "wzdx.indot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:18",)
     source = "wzdx_indot"
     vintage: str | None = None

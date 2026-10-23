@@ -38,6 +38,7 @@ class MdotShaClosures:
     name = "wzdx.mdotsha"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:24",)
     source = "wzdx_mdotsha"
     vintage: str | None = None

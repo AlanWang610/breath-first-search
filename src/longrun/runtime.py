@@ -86,7 +86,7 @@ def open_context(
         # entry-point scanning, and so a third-party adapter that will not import cannot
         # break a command that never asked for one. `discover()` reports rather than raises,
         # but the import itself is still work nobody asked for on most invocations.
-        from longrun.adapters.registry import AdapterRegistry
+        from longrun.adapters.registry import build_registry
 
         yield ScorerContext(
             layers=layers,
@@ -97,7 +97,7 @@ def open_context(
             profile=profile,
             budget=budget,
             snapshot=snapshot.layer_vintages,
-            features=AdapterRegistry(cache, budget, offline=offline),
+            features=build_registry(cache, budget, offline=offline),
             utc_offset_hours=utc_offset,
             start_window=start_window,
         )

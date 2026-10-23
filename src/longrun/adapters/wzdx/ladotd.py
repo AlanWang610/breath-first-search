@@ -33,6 +33,7 @@ class LaDotdClosures:
     name = "wzdx.ladotd"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:22",)
     source = "wzdx_ladotd"
     vintage: str | None = None

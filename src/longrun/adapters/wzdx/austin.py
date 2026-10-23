@@ -55,6 +55,7 @@ class AustinClosures:
     name = "wzdx.austin"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = (AUSTIN,)
     source = "wzdx_austin"
     vintage: str | None = None

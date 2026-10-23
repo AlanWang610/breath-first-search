@@ -29,6 +29,7 @@ class KDotClosures:
     name = "wzdx.kdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:20",)
     source = "wzdx_kdot"
     vintage: str | None = None

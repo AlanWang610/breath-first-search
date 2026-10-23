@@ -100,14 +100,24 @@ class NpsTrailStatus:
     tier = 3
     jurisdictions = ("padus:NPS",)
     source = "nps"
+    key = NPS
     vintage: str | None = None
 
     def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult:
-        from longrun.core.data.cache import fetch
+        from longrun.core.data.cache import fetch, peek
 
         key = NPS.value()
         if key is None:
-            return AdapterResult(reason=NPS.missing_reason(), source_url=URL)
+            # Peek before refusing (M17): alerts are US public domain, so a recorded payload
+            # may be committed, and a cassette CI could never replay is no cassette at all.
+            recorded = peek(ctx.cache, f"adapter.{self.name}", nps_args(None, day), day)
+            if recorded is None:
+                return AdapterResult(reason=NPS.missing_reason(), source_url=URL, key_missing=True)
+            return AdapterResult(
+                features=parse_alerts(recorded, source_url=URL),
+                vintage="nps-alerts",
+                source_url=URL,
+            )
 
         def produce() -> Any:
             import httpx

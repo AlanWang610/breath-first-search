@@ -71,17 +71,63 @@ def test_a_place_with_no_statefp_stays_unqualified_rather_than_guessing() -> Non
 
 
 def test_a_county_adapter_does_not_reach_a_place_whose_geoid_extends_it() -> None:
-    """The prefix trap, end to end. County `29095` is a lexical prefix of place `2909512`."""
+    """The prefix trap, end to end. County `29095` is a lexical prefix of place `2909512`;
+    containment comes from geometry, and these two do not overlap."""
+    from shapely.geometry import box
+
     found = jurisdictions_from_frames(
         _frame(
             [
                 _boundary("county", "29095", "Jackson County", "29"),
                 _boundary("place", "2909512", "Lookalike", "29"),
-            ]
+            ],
+            [box(0, 0, 1, 1), box(2, 0, 3, 1)],
         )
     )
     lookalike = next(j for j in found if j.name == "Lookalike")
     assert "tiger:county:29095" not in lookalike.ids
+
+
+def test_a_place_is_inside_the_counties_it_overlaps() -> None:
+    """M17. A county adapter - `wzdx.maricopa`, `wzdx.sfbay` - must answer for the cities
+    inside its county. Before this a place recorded its state and nothing else, so San
+    Francisco the county and San Francisco the city got two different answers on one piece
+    of ground. Kansas City lies in four counties, so more than one is ordinary."""
+    from shapely.geometry import box
+
+    found = jurisdictions_from_frames(
+        _frame(
+            [
+                _boundary("county", "29095", "Jackson County", "29"),
+                _boundary("county", "29047", "Clay County", "29"),
+                _boundary("county", "29165", "Platte County", "29"),
+                _boundary("place", "2938000", "Kansas City", "29"),
+            ],
+            [box(0, 0, 1, 1), box(0, 1, 1, 2), box(1, 2, 2, 3), box(0.2, 0.2, 0.8, 1.5)],
+        )
+    )
+    kc = next(j for j in found if j.name == "Kansas City")
+    assert kc.within == ("tiger:state:29", "tiger:county:29047", "tiger:county:29095")
+
+
+def test_a_county_that_only_touches_a_place_does_not_contain_it() -> None:
+    """By area, not `intersects`: a city that shares an edge with the next county is not
+    in it, and TIGER draws both from one topology so the shared edge has zero area."""
+    from shapely.geometry import box
+
+    found = jurisdictions_from_frames(
+        _frame(
+            [
+                _boundary("county", "06075", "San Francisco County", "06"),
+                _boundary("county", "06081", "San Mateo County", "06"),
+                _boundary("place", "0667000", "San Francisco", "06"),
+            ],
+            [box(0, 0, 1, 1), box(0, -1, 1, 0), box(0, 0, 1, 1)],
+        )
+    )
+    sf = next(j for j in found if j.id == "tiger:place:0667000")
+    assert "tiger:county:06075" in sf.within
+    assert "tiger:county:06081" not in sf.within
 
 
 # --- the state line ---------------------------------------------------------
@@ -133,6 +179,45 @@ def test_a_city_managed_park_carries_its_state() -> None:
     municipal park in America."""
     park = from_padus_row("CITY", "Golden Gate Park", "LOC", "06")
     assert park is not None and park.id == "padus:CITY:06"
+
+
+def test_one_agency_on_two_state_lines_sits_in_both_states() -> None:
+    """M17. One record per id is right - `padus:NPS` is one agency - but it used to keep
+    only the first row's state, so the Kansas unit of a Missouri-and-Kansas route was never
+    put to Kansas's feed. The first name is kept so the sheet's label cannot depend on the
+    order the rows arrived in."""
+    from shapely.geometry import box
+
+    found = jurisdictions_from_frames(
+        _frame(
+            [
+                _boundary("state", "29", "Missouri", "29"),
+                _boundary("state", "20", "Kansas", "20"),
+            ],
+            [box(0, 0, 1, 1), box(1, 0, 2, 1)],
+        ),
+        _frame(
+            [
+                {"agency": "NPS", "name": "First Unit", "agency_type": "FED"},
+                {"agency": "NPS", "name": "Second Unit", "agency_type": "FED"},
+            ],
+            [box(0.2, 0.2, 0.4, 0.4), box(1.2, 0.2, 1.4, 0.4)],
+        ),
+    )
+    nps = [j for j in found if j.id == "padus:NPS"]
+    assert len(nps) == 1
+    assert nps[0].name == "First Unit"
+    assert set(nps[0].within) == {"tiger:state:29", "tiger:state:20"}
+
+
+def test_the_source_s_own_manager_type_decides_who_is_federal() -> None:
+    """`Mang_Type` is PAD-US saying so; the code list is the fallback for a fixture frozen
+    without the column. A code the list has never heard of is still national when the row
+    says `FED`."""
+    federal = from_padus_row("BOEM", "Somewhere offshore", "FED", "12")
+    assert federal is not None and federal.id == "padus:BOEM"
+    corps = from_padus_row("USACE", "A Corps lake", None, "29")
+    assert corps is not None and corps.id == "padus:USACE"
 
 
 def test_a_park_managed_by_nobody_is_not_a_jurisdiction() -> None:

@@ -59,10 +59,15 @@ class Extractor(Protocol):
 class NullExtractor:
     """No model wired up: every answer is an honest `checked=False` at tier 4.
 
+    `live = False` tells the registry this reads nothing, so it spends no fetch slot: a
+    sentence about an absent model is not a fetch (M17).
+
     Not a stub in the pejorative sense, by the same argument `unavailable()` carries. A
     jurisdiction with no adapter and no extraction has been checked by nobody, and the plan
     sheet saying so is the truthful form of that answer.
     """
+
+    live = False
 
     reason = (
         "tier-4 extraction is not wired up: a model extractor exists "

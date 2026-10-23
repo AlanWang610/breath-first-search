@@ -34,6 +34,10 @@ class CoverageEntry(BaseModel):
     reason: str | None = None
     confidence: Confidence | None = None
     vintage: str | None = None
+    #: The coarser jurisdiction whose adapter answered for this one - a state's feed for a
+    #: city inside it. Carried from `JurisdictionAnswer` since M17; it used to stop there, so
+    #: the sheet could not say that one fetch had covered a dozen places.
+    covered_by: str | None = None
 
     def __str__(self) -> str:
         """One line of the plan sheet's coverage section.

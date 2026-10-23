@@ -39,6 +39,7 @@ class IowaDotClosures:
     name = "wzdx.iowadot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:19",)
     source = "wzdx_iowadot"
     vintage: str | None = None

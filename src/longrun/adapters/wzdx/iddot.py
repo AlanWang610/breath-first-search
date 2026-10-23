@@ -40,6 +40,7 @@ class IdDotClosures:
     name = "wzdx.iddot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:16",)
     source = "wzdx_iddot"
     vintage: str | None = None

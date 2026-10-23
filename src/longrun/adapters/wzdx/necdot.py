@@ -49,6 +49,7 @@ class NecDotClosures:
     name = "wzdx.necdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = NEW_ENGLAND
     source = "wzdx_necdot"
     vintage: str | None = None

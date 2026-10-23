@@ -363,6 +363,142 @@ def promote_adapter(
     typer.echo(f"  {draft.registration}")
 
 
+def adapter_coverage(
+    kind: str = typer.Option(
+        "all", "--kind", help="closures|trail_status|access_hours|speed_survey|all."
+    ),
+    state: str | None = typer.Option(
+        None, "--state", help="Two-digit FIPS: list every jurisdiction in one state."
+    ),
+    largest: int = typer.Option(
+        0, "--largest", help="Also list the N most populous places and their coverage."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="The full table, for a diff or a test."),
+) -> None:
+    """Which adapter claims every US state, county and place, and can it be asked (M17).
+
+    Nationwide is measured here, not asserted: a plan only resolves jurisdictions inside a
+    frozen fixture, so this is the one place an adapter outside the built regions is ever
+    counted. A key that is not set counts as not covered - the adapter exists and nothing
+    can ask it.
+    """
+    import json
+    from dataclasses import asdict
+    from typing import get_args
+
+    from longrun.adapters.registry import discover
+    from longrun.core.models.features import FeatureKind
+    from longrun.regions.coverage import (
+        claimed_agencies,
+        coverage_table,
+        load_table,
+        summarise,
+    )
+    from longrun.regions.coverage import (
+        largest as largest_places,
+    )
+
+    kinds = list(get_args(FeatureKind)) if kind == "all" else [kind]
+    if any(k not in get_args(FeatureKind) for k in kinds):
+        typer.echo(f"error: unknown kind {kind!r}", err=True)
+        raise typer.Exit(code=2)
+
+    adapters, failures = discover()
+    table = load_table()
+    rows = coverage_table(adapters, table, kinds)  # type: ignore[arg-type]
+    summary = summarise(rows, table)
+    agencies = {k: claimed_agencies(adapters, k) for k in kinds}  # type: ignore[arg-type]
+
+    if as_json:
+        typer.echo(
+            json.dumps(
+                {
+                    "summary": summary,
+                    "agencies": agencies,
+                    "failures": [asdict(f) for f in failures],
+                    "rows": [asdict(r) for r in rows if state is None or r.statefp == state],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return
+
+    names = {e.statefp: e.name for e in table if e.level == "state"}
+    for failure in failures:
+        typer.echo(f"load failure: {failure.name}: {failure.reason}")
+    for k in kinds:
+        typer.echo(f"\n{k}")
+        if k in ("trail_status", "access_hours"):
+            claimed = agencies[k]
+            if not claimed:
+                typer.echo("  no park agency is claimed by any adapter")
+            for entry in claimed:
+                flag = " (key not set)" if entry["key_missing"] else ""
+                typer.echo(f"  {entry['agency']}: {entry['adapter']}, tier {entry['tier']}{flag}")
+            continue
+        s = summary[k]
+        for tier, states in s["states_by_tier"].items():
+            if states:
+                typer.echo(f"  statewide at tier {tier}: {len(states)} - " + _states(states, names))
+        if s["states_key_missing"]:
+            typer.echo(
+                f"  statewide, key not set: {len(s['states_key_missing'])} - "
+                + _states(s["states_key_missing"], names)
+            )
+        typer.echo(
+            f"  no statewide claimant: {len(s['states_uncovered'])} - "
+            + _states(s["states_uncovered"], names)
+        )
+        typer.echo(
+            f"  population in a covered county: {s['county_population_share']:.1%}; "
+            f"places covered: {s['places_covered']} of {s['places_total']}"
+        )
+        if largest:
+            for row in largest_places(rows, k, largest):  # type: ignore[arg-type]
+                how = (
+                    "not covered"
+                    if row.tier is None
+                    else f"tier {row.tier} ({', '.join(row.adapters)})"
+                    + (", key not set" if row.key_missing else "")
+                )
+                typer.echo(f"    {row.name} ({row.population:,}): {how}")
+        if state is not None:
+            for row in rows:
+                if row.kind == k and row.statefp == state:
+                    how = "-" if row.tier is None else f"tier {row.tier} {', '.join(row.adapters)}"
+                    typer.echo(f"    {row.id} {row.name}: {how}")
+
+    townships = sum(summary["cousubs_uncoverable"].values())
+    typer.echo(
+        f"\n{townships:,} functioning county subdivisions (townships, New England towns) have "
+        "no jurisdiction id level, so no adapter can be registered against them."
+    )
+
+
+def _states(fips: list[str], names: dict[str, str]) -> str:
+    return ", ".join(names.get(f, f) for f in fips) or "none"
+
+
+def jurisdiction_table(
+    sub_est: Path = typer.Argument(..., help="PEP sub-county totals, e.g. sub-est2023.csv."),
+    co_est: Path = typer.Argument(..., help="PEP county totals, e.g. co-est2023-alldata.csv."),
+    out: Path | None = typer.Option(None, "--out", help="Defaults to the packaged table."),
+) -> None:
+    """Rebuild the national jurisdiction table `adapter-coverage` reads (M17).
+
+    From the Census Bureau's Population Estimates Program files, which are public domain:
+    https://www2.census.gov/programs-surveys/popest/datasets/ (cities/totals and
+    counties/totals). Deterministic, so a rebuild from the same files is the same bytes.
+    """
+    from longrun.regions.coverage import TABLE, build_table, write_table
+
+    rows = build_table(sub_est, co_est)
+    target = out or TABLE
+    write_table(rows, target)
+    typer.echo(f"wrote {len(rows)} jurisdictions to {target}")
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
     app.command("load-tiger")(load_tiger)
@@ -371,3 +507,5 @@ def register(app: typer.Typer) -> None:
     app.command("build-region")(build_region)
     app.command("region-config")(region_config)
     app.command("promote-adapter")(promote_adapter)
+    app.command("adapter-coverage")(adapter_coverage)
+    app.command("jurisdiction-table")(jurisdiction_table)

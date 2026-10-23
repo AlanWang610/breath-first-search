@@ -40,6 +40,7 @@ class NjDotClosures:
     name = "wzdx.njdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:34",)
     source = "wzdx_njdot"
     vintage: str | None = None

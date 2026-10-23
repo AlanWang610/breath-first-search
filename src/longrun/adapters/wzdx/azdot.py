@@ -51,6 +51,7 @@ class AzDotClosures:
     name = "wzdx.azdot"
     kind = "closures"
     tier = 1
+    scope = "feed"
     jurisdictions = ("tiger:state:04",)
     source = "wzdx_azdot"
     vintage: str | None = None

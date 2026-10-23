@@ -262,6 +262,9 @@ def _score_pass(
         # produced reported zero external calls whether or not it made any.
         manifest.api_calls_used = ctx.budget.api_calls_used
         manifest.imagery_tiles_used = ctx.budget.imagery_tiles_used
+        for note in ctx.budget.degradation:
+            if note not in manifest.degradation:
+                manifest.degradation.append(note)
 
     return ScoredRoute(
         route=route,

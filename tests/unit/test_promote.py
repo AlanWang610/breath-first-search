@@ -211,3 +211,14 @@ def test_adapter_lookup_spends_no_budget() -> None:
             "closures", Jurisdiction(id="tiger:state:29", level="state", name="Missouri")
         )
     assert budget.api_calls_used == 0
+
+
+def test_region_step_four_says_which_coverage_waits_on_a_key() -> None:
+    """M17. San Francisco County is claimed by 511 SF Bay, which needs a key CI never has;
+    a build that counted it as covered without saying so is the inflation the WZDx survey
+    refused ten keyed feeds to avoid. Missouri needs no key and is not listed."""
+    from longrun.regions.build import keyless_coverage
+
+    missouri = Jurisdiction(id="tiger:state:29", level="state", name="Missouri")
+    sf = Jurisdiction(id="tiger:county:06075", level="county", name="San Francisco County")
+    assert [j.name for j in keyless_coverage([missouri, sf])] == ["San Francisco County"]
