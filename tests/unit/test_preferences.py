@@ -249,3 +249,63 @@ def test_a_profile_found_by_the_environment_is_the_one_loaded_and_saved(
     target.write_text("traffic_tolerance:\n  value: 3\n  provenance: stated\n", encoding="utf-8")
     assert load_profile().traffic_tolerance.value == 3
     assert save_profile(load_profile()) == target
+
+
+# --- the routing entry (M24, ADR 0051) -------------------------------------------------
+
+
+def test_the_shipped_defaults_route_neutral() -> None:
+    """ADR 0021: NEUTRAL ships. A fresh install has no fit and must not imply one."""
+    routing = load_defaults().routing
+
+    assert routing.value.params.is_neutral
+    assert routing.provenance == Provenance.DEFAULT
+    assert routing.value.labeler is None
+
+
+def test_a_saved_fit_survives_the_round_trip_through_a_profile_file(tmp_path: Path) -> None:
+    from longrun.core.models.profile import FittedRouting
+    from longrun.core.routing.custom_model import CustomModelParams
+
+    fit = FittedRouting(
+        params=CustomModelParams(lts3=0.25, unpaved=2.0),
+        labeler="runner-1",
+        pairs=50,
+        held_out=0.649,
+        held_out_interval=(0.511, 0.767),
+        neutral_held_out=0.377,
+        rerouted=50,
+        followed_chosen=31,
+        followed_rejected=9,
+    )
+    profile = PreferenceProfile(routing=PreferenceEntry(value=fit, provenance=Provenance.INFERRED))
+
+    loaded = load_profile(save_profile(profile, tmp_path / "profile.yaml"))
+
+    assert loaded.routing == profile.routing
+    assert "provenance: inferred" in (tmp_path / "profile.yaml").read_text(encoding="utf-8")
+
+
+def test_a_stated_entry_still_beats_a_fitted_vector_on_merge() -> None:
+    """Scope 6.3's precedence holds for routing like any axis: a vector a runner wrote down
+    themselves is not replaced by one inferred from their answers."""
+    from longrun.core.models.profile import FittedRouting
+    from longrun.core.routing.custom_model import CustomModelParams
+
+    stated = PreferenceProfile(
+        routing=PreferenceEntry(
+            value=FittedRouting(params=CustomModelParams(lts4=0.25)),
+            provenance=Provenance.STATED,
+        )
+    )
+    inferred = PreferenceProfile(
+        routing=PreferenceEntry(
+            value=FittedRouting(params=CustomModelParams(lts3=0.5)),
+            provenance=Provenance.INFERRED,
+        )
+    )
+
+    merged, refused = merge(stated, inferred)
+
+    assert merged.routing == stated.routing
+    assert refused == ["routing"]

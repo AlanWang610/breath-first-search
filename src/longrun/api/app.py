@@ -66,6 +66,9 @@ class PlanSubmission(BaseModel):
     target_km: float | None = None
     rounds: int = 5
     avoid_high_stress: bool = False
+    #: `longrun plan --neutral` (M24): stock `foot_priority` for this plan, over the vector
+    #: the runner's profile holds. Here because the CLI has it, which is this model's rule.
+    neutral: bool = False
     #: Scope 6.4's two must-avoid forms, reaching `PlanRequest` for the first time from
     #: here. They arrived together in M12.3 and `longrun plan` grew `--avoid-name` and
     #: `--avoid-polygon` in the same commit, which is what the docstring above requires of
@@ -77,6 +80,13 @@ class PlanSubmission(BaseModel):
     #: because the refusal has to reach the runner who drew it.
     avoid_names: list[str] = Field(default_factory=list)
     avoid_polygons: list[dict[str, Any]] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _one_vector(self) -> PlanSubmission:
+        # The CLI refuses the pair before routing; a 422 here is the same refusal.
+        if self.neutral and self.avoid_high_stress:
+            raise ValueError("neutral and avoid_high_stress ask for two vectors; give one")
+        return self
 
 
 class ResumeAnswer(BaseModel):
@@ -710,7 +720,7 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
     from longrun.core.models.request import PlanRequest
     from longrun.core.preferences.store import load_profile
     from longrun.core.routing.cached import CachedRouter
-    from longrun.core.routing.custom_model import AVOID_HIGH_STRESS, NEUTRAL, to_custom_model
+    from longrun.core.routing.custom_model import drawn_with, to_custom_model
     from longrun.core.routing.graphhopper import GraphHopperRouter
     from longrun.runtime import PLAN_LATENCY_BUDGET_S, open_context
     from longrun.tools.base import ToolSettings
@@ -748,8 +758,10 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
             budget,
             graph=snapshot.graph_identity,
         )
-        params = AVOID_HIGH_STRESS if submission.avoid_high_stress else NEUTRAL
-        model = to_custom_model(params, profile) or None
+        drawn = drawn_with(
+            profile, neutral=submission.neutral, avoid_high_stress=submission.avoid_high_stress
+        )
+        model = to_custom_model(drawn.params, profile) or None
         report("routing")
         route = router.route(waypoints, custom_model=model)
         report(f"routed {route.length_m / 1000:.2f} km")
@@ -772,6 +784,7 @@ def _run_plan(submission: PlanSubmission, plans: Path, report: Any) -> Any:
                 router=router,
                 max_rounds=submission.rounds,
                 custom_model=model,
+                drawn_with=drawn,
                 # The CLI has passed this since M5 and this path passed nothing, so the
                 # HTTP surface was model-free even with a key set - which made "the UI adds
                 # no capability" true in one direction and false in the other (scope 3.9).

@@ -52,6 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.plan.arbitrate import Candidate
     from longrun.core.plan.pipeline import ScoredRoute
     from longrun.core.routing.base import CostingModel, Router
+    from longrun.core.routing.custom_model import DrawnWith
 
 #: Scope 8.1 step 6: "iterate up to 5 rounds or until no scorer flags above threshold".
 MAX_ROUNDS = 5
@@ -164,6 +165,7 @@ def plan_route(
     resume: Scratchpad | None = None,
     max_rounds: int = MAX_ROUNDS,
     custom_model: CostingModel | None = None,
+    drawn_with: DrawnWith | None = None,
 ) -> LoopOutcome:
     """Run scope 8.1 from a structured request to a plan, or to a question.
 
@@ -172,7 +174,9 @@ def plan_route(
     curve and says so, which is the honest degradation and already implemented.
     """
     pad = (
-        resume if resume is not None else _fresh(request, profile, snapshot, custom_model, ctx=ctx)
+        resume
+        if resume is not None
+        else _fresh(request, profile, snapshot, custom_model, ctx=ctx, drawn_with=drawn_with)
     )
     if resume is not None:
         _apply_answer(pad)
@@ -253,12 +257,16 @@ def _fresh(
     snapshot: SnapshotPins | None,
     custom_model: CostingModel | None = None,
     ctx: ScorerContext | None = None,
+    drawn_with: DrawnWith | None = None,
 ) -> Scratchpad:
     from longrun.core.models.plan import Manifest
     from longrun.core.models.profile import PreferenceProfile as Profile
 
     plan_id = uuid.uuid4().hex[:12]
     manifest = Manifest(snapshot=snapshot) if snapshot is not None else Manifest()
+    # On the manifest, which the scratchpad persists, so a resume in another process reports
+    # the vector the first half was drawn with rather than whatever the profile holds now.
+    manifest.drawn_with = drawn_with
     return Scratchpad(
         plan_id=plan_id,
         job_id=uuid.uuid4().hex[:12],

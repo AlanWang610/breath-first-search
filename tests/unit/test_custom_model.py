@@ -17,7 +17,12 @@ from pathlib import Path
 import pytest
 
 from longrun.core.models.geometry import LatLon
-from longrun.core.models.profile import PreferenceEntry
+from longrun.core.models.profile import (
+    FittedRouting,
+    PreferenceEntry,
+    PreferenceProfile,
+    Provenance,
+)
 from longrun.core.preferences.store import load_defaults
 from longrun.core.routing.custom_model import (
     AVOID_HIGH_STRESS,
@@ -27,6 +32,7 @@ from longrun.core.routing.custom_model import (
     PARAMETER_NAMES,
     CustomModelParams,
     describe,
+    drawn_with,
     to_custom_model,
 )
 from longrun.core.routing.graphhopper import route_body
@@ -252,3 +258,92 @@ def test_an_avoid_is_written_as_it_always_was() -> None:
             {"if": "lts == 4", "multiply_by": "0.2"},
         ]
     }
+
+
+# --- the vector a plan is drawn with (M24, ADR 0051) -----------------------------------
+
+FITTED = CustomModelParams(lts3=0.25, path_bonus=0.5)
+
+
+def _fitted_profile() -> PreferenceProfile:
+    from datetime import date
+
+    record = FittedRouting(
+        params=FITTED, labeler="runner-1", pairs=50, held_out=0.649, neutral_held_out=0.377
+    )
+    return PreferenceProfile(
+        routing=PreferenceEntry(
+            value=record, provenance=Provenance.INFERRED, updated=date(2026, 10, 23)
+        )
+    )
+
+
+def test_a_runner_with_no_saved_fit_is_drawn_neutral_and_told_so() -> None:
+    drawn = drawn_with(PreferenceProfile())
+
+    assert (drawn.params, drawn.source) == (NEUTRAL, "neutral")
+    assert drawn.text == describe(NEUTRAL)
+    assert drawn_with(None) == drawn
+
+
+def test_a_saved_fit_is_what_a_plan_is_drawn_with() -> None:
+    """ADR 0021: "the fitted vector becomes the default for the runner it was fitted for"."""
+    drawn = drawn_with(_fitted_profile())
+
+    assert (drawn.params, drawn.source) == (FITTED, "fitted")
+    assert drawn.text == (
+        "fitted for runner-1 on 2026-10-23 from 50 pairs: lts3=0.25, path_bonus=0.5; "
+        "held out 65% against neutral's 38%"
+    )
+
+
+def test_neutral_asked_for_over_a_fit_does_not_call_the_runner_unfitted() -> None:
+    """They have a fit and asked not to use it. "Unfitted" would be a false sentence."""
+    drawn = drawn_with(_fitted_profile(), neutral=True)
+
+    assert (drawn.params, drawn.source) == (NEUTRAL, "asked-neutral")
+    assert "your fitted vector (lts3=0.25, path_bonus=0.5) was not used" in drawn.text
+    assert "unfitted" not in drawn.text
+
+
+def test_the_flag_beats_a_fit_and_says_so() -> None:
+    drawn = drawn_with(_fitted_profile(), avoid_high_stress=True)
+
+    assert (drawn.params, drawn.source) == (AVOID_HIGH_STRESS, "avoid-high-stress")
+    assert drawn.text.endswith("was not used")
+    assert (
+        drawn_with(PreferenceProfile(), avoid_high_stress=True).text
+        == "avoid-high-stress, as asked: lts3=0.2, lts4=0.2"
+    )
+
+
+def test_two_named_vectors_at_once_is_refused() -> None:
+    with pytest.raises(ValueError, match="two different vectors"):
+        drawn_with(PreferenceProfile(), neutral=True, avoid_high_stress=True)
+
+
+def test_a_hand_written_vector_is_drawn_with_and_says_whose_word_it_is() -> None:
+    """No labeler, no fit record: somebody wrote six numbers into their profile. That is
+    theirs to do, and the sheet says the vector came from the profile as stated."""
+    profile = PreferenceProfile(
+        routing=PreferenceEntry(value=FittedRouting(params=FITTED), provenance=Provenance.STATED)
+    )
+
+    drawn = drawn_with(profile)
+
+    assert drawn.source == "fitted"
+    assert drawn.text == "from your profile (stated): lts3=0.25, path_bonus=0.5"
+
+
+def test_a_saved_fit_reaches_the_router_as_the_model_any_vector_would() -> None:
+    """Nothing new about the emitted body: the fitted vector goes through `to_custom_model`
+    with the profile, so the stated surface still multiplies on and a seek is still an
+    avoid on the complement (ADR 0021's amendment)."""
+    profile = _fitted_profile()
+
+    model = to_custom_model(drawn_with(profile).params, profile)
+
+    assert {"if": "lts == 3", "multiply_by": "0.25"} in model["priority"]
+    assert {"if": "road_class == PATH || road_class == FOOTWAY", "multiply_by": "0.5"} in model[
+        "priority"
+    ]

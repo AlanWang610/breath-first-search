@@ -250,6 +250,10 @@ def _coverage_section(plan: Plan) -> list[str]:
 def _manifest_section(plan: Plan) -> list[str]:
     """Data-snapshot pins and budgets used (scope 6.4, 9)."""
     out = ["## Manifest", ""]
+    # ADR 0021 promised this line in September and nothing wrote it: the vector the router
+    # drew with, said in words when it is neutral. Absent for a route nobody routed.
+    if plan.manifest.drawn_with is not None:
+        out.append(f"- Drawn with: {plan.manifest.drawn_with.text}")
     snapshot = plan.manifest.snapshot
     pins = {
         "OSM extract": snapshot.osm_extract_date,

@@ -41,34 +41,67 @@ def register(server: Any, settings: ToolSettings) -> None:
             ],
         }
 
+    def _vector(neutral: bool) -> tuple[Any, str]:
+        """The model these tools draw with: `custom_model.drawn_with`, as `plan` uses.
+
+        Both drew with no model until M24, so a runner's saved fit would never have reached
+        chat (scope 3.9: one surface). The profile is read per call, as `scoring_context`
+        reads it, so a `tune --save` applies without restarting the server.
+        """
+        from longrun.core.preferences.store import load_profile
+        from longrun.core.routing.custom_model import drawn_with, to_custom_model
+
+        profile = load_profile()
+        drawn = drawn_with(profile, neutral=neutral)
+        return to_custom_model(drawn.params, profile) or None, drawn.text
+
     @server.tool(name="route", description="Scope 7.1: draw a pedestrian route.")
-    def route(points: list[list[float]], profile: str = "foot") -> dict[str, Any]:
-        """`points` are [lat, lon], the order everything outside the router uses."""
+    def route(
+        points: list[list[float]], profile: str = "foot", neutral: bool = False
+    ) -> dict[str, Any]:
+        """`points` are [lat, lon], the order everything outside the router uses.
+
+        Drawn with the runner's saved vector unless `neutral` asks for stock foot_priority.
+        """
         from longrun.core.models.geometry import LatLon
         from longrun.core.routing.base import NoRouteError, RouterUnavailable
         from longrun.core.routing.graphhopper import GraphHopperRouter
 
         waypoints = [LatLon(lat=p[0], lon=p[1]) for p in points]
+        model, text = _vector(neutral)
         try:
-            drawn = GraphHopperRouter(settings.router_url).route(waypoints, profile=profile)
+            drawn = GraphHopperRouter(settings.router_url).route(
+                waypoints, profile=profile, custom_model=model
+            )
         except (RouterUnavailable, NoRouteError) as exc:
             return unavailable("route", f"{type(exc).__name__}: {exc}")
-        return {"route_id": drawn.id, "length_m": drawn.length_m, "points": len(drawn.points)}
+        return {
+            "route_id": drawn.id,
+            "length_m": drawn.length_m,
+            "points": len(drawn.points),
+            "drawn_with": text,
+        }
 
     @server.tool(name="alternatives", description="Scope 7.1: candidates to score.")
     def alternatives(
-        gpx_path: str, start_m: float | None = None, end_m: float | None = None, k: int = 3
+        gpx_path: str,
+        start_m: float | None = None,
+        end_m: float | None = None,
+        k: int = 3,
+        neutral: bool = False,
     ) -> dict[str, Any]:
         """A detour around a span, or whole-route alternatives when no span is given."""
         from longrun.core.routing.graphhopper import GraphHopperRouter
 
         around = None if start_m is None or end_m is None else (start_m, end_m)
+        model, text = _vector(neutral)
         found = GraphHopperRouter(settings.router_url).alternatives(
-            read_route(gpx_path), around, k=k
+            read_route(gpx_path), around, k=k, custom_model=model
         )
         return {
             "count": len(found),
             "candidates": [{"id": r.id, "length_m": r.length_m} for r in found],
+            "drawn_with": text,
         }
 
     @server.tool(name="map_match", description="Scope 7.1: snap a track to the graph.")
