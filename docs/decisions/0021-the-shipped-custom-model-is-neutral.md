@@ -79,3 +79,11 @@ it, and so would have learned a stated preference a second time. Both now read
 The evidence the ADR was waiting on has a source now: a person's own judgements, through
 `longrun label` (ADR 0048, 0049), recorded with whose they are so a vector can be fitted for
 one runner and never for everybody.
+
+## Amendment, 2026-10-23 (M24)
+
+"Becomes the default for the runner it was fitted for" now has a mechanism: **ADR 0051**. The
+vector lives in the runner's profile (`routing`), they save it with `longrun tune --save`,
+and only after six gates pass, the last of which re-draws every pair with the router. NEUTRAL
+still ships, and is still what anyone without a saved fit is drawn with. The sentence this ADR
+promised on the sheet is now written, for neutral and fitted vectors alike.
