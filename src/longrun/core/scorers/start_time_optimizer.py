@@ -58,9 +58,9 @@ from longrun.core.models.geometry import Route, Segment
 from longrun.core.models.measurement import ScorerResult, SegmentMeasurement
 from longrun.core.models.request import TimeWindow
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID
+from longrun.core.scorers._hours import is_open, sun_at
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.heat import wbgt_c
-from longrun.core.scorers.resupply_schedule import is_open
 from longrun.core.scorers.services import DEFAULT_BUFFER_M, all_kinds, category_of
 from longrun.core.scorers.transit import STOPS_LAYER, in_service
 
@@ -307,8 +307,11 @@ def _evaluate(
     if water is not None:
         # Arrival at each water point, not at the start: a shop that shuts at 18:00 is open
         # for a runner who reaches it at 17:40 and shut for one who reaches it at 18:20.
+        sun = sun_at(lat, lon, offset)
         open_now = sum(
-            1 for cum_m, hours in water if is_open(hours, _eta_at(route, etas, cum_m)) is not False
+            1
+            for cum_m, hours in water
+            if is_open(hours, _eta_at(route, etas, cum_m), sun) is not False
         )
 
     finish_served = None

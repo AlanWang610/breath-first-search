@@ -237,9 +237,14 @@ def test_several_rules_are_tried_in_turn() -> None:
 
 
 def test_a_dialect_this_parser_does_not_speak_is_unknown_not_closed() -> None:
-    """The load-bearing case. Reading it as closed would invent dry gaps out of syntax."""
+    """The load-bearing case. Reading it as closed would invent dry gaps out of syntax.
+
+    Both strings pinned here before M18 are now read - a season, and the sun given a
+    place - so the dialect here is one `_hours` still does not speak, and a sun-relative
+    rule asked with no sun to read it by."""
     assert is_open("sunrise-sunset", SATURDAY_NOON) is None
-    assert is_open("Apr-Oct 09:00-18:00", SATURDAY_NOON) is None
+    assert is_open("Th[4] 09:00-18:00", SATURDAY_NOON) is None
+    assert is_open("Apr-Oct 09:00-18:00", SATURDAY_NOON) is True
 
 
 def test_an_overnight_range_wraps_past_midnight() -> None:
