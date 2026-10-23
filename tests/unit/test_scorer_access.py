@@ -325,6 +325,52 @@ def test_a_closure_is_read_at_the_runners_arrival_there_not_at_an_earlier_point(
     assert [f.kind for f in result.flags] == [FlagKind.HARD]
 
 
+def test_a_closure_about_a_whole_jurisdiction_is_a_note_never_a_failure(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    """A portal or a page says "every trail in the county is closed through the 30th" and
+    names no place. It was dropped as off-route, so the jurisdiction read as checked and
+    the sheet said nothing (M18). Now it is one soft route-level note - and check 6, which
+    reads hard flags, cannot see it at any tier or confidence."""
+    _write_boundaries(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    county_wide = _feature(
+        geometry={}, tier=3, confidence=1.0, category="full-closure", jurisdiction="county"
+    )
+    result = cl.closures(route, segments, ctx_factory([county_wide]), [START] * len(segments))
+    assert [(f.kind, f.segment_id, f.reason_code) for f in result.flags] == [
+        (FlagKind.SOFT, "route", "closure_jurisdiction_wide")
+    ]
+    assert "all of county" in (result.flags[0].detail or "")
+    assert _summary(result)["jurisdiction_wide_closures"] == 1
+    assert _check6(result).status == "passed"
+
+
+def test_a_feed_record_with_no_geometry_is_still_dropped(ctx_factory: Any, tmp_path: Any) -> None:
+    """A structured feed does not publish county-wide closures; a tier-1 record with no
+    geometry is a fault in the feed, and no route grows a key for it."""
+    _write_boundaries(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    result = cl.closures(route, segments, ctx_factory([_feature()]), [START] * len(segments))
+    assert not result.flags
+    assert "jurisdiction_wide_closures" not in _summary(result)
+
+
+def test_a_jurisdiction_wide_closure_that_ended_before_the_run_is_not_a_note(
+    ctx_factory: Any, tmp_path: Any
+) -> None:
+    _write_boundaries(tmp_path)
+    route = _route()
+    segments = segment_route(route)
+    over = _feature(
+        geometry={}, tier=3, start=START - timedelta(days=9), end=START - timedelta(days=2)
+    )
+    result = cl.closures(route, segments, ctx_factory([over]), [START] * len(segments))
+    assert not result.flags
+
+
 def test_a_cross_street_closure_is_soft(ctx_factory: Any, tmp_path: Any) -> None:
     _write_boundaries(tmp_path)
     route = _route()
