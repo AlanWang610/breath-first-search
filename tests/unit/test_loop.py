@@ -186,6 +186,54 @@ def test_a_reroute_carries_the_model_the_route_was_drawn_with(
     assert all(call.get("custom_model") == model for call in router.detoured)
 
 
+def test_a_plan_says_which_vector_drew_it_on_both_sheets(tmp_path: Path, improving: None) -> None:
+    """ADR 0021 promised the sheet would name the vector that drew the route, and until M24
+    no sheet did. The record rides on the manifest, which the scratchpad persists, so a
+    resumed plan reports what its first half was drawn with."""
+    from longrun.core.export.sheet_html import render_html
+    from longrun.core.export.sheet_md import render_markdown
+    from longrun.core.routing.custom_model import CustomModelParams, DrawnWith, to_custom_model
+
+    drawn = DrawnWith(
+        params=CustomModelParams(lts3=0.25),
+        source="fitted",
+        text="fitted for runner-1 from 50 pairs: lts3=0.25",
+    )
+
+    outcome = plan_route(
+        _request(),
+        _ctx(tmp_path),
+        start_at=START,
+        route=_route(),
+        router=StubRouter(),
+        custom_model=to_custom_model(drawn.params),
+        drawn_with=drawn,
+    )
+
+    assert outcome.plan is not None
+    assert outcome.scratchpad.manifest.drawn_with == drawn
+    assert outcome.plan.manifest.drawn_with == drawn
+    assert "- Drawn with: fitted for runner-1 from 50 pairs: lts3=0.25" in render_markdown(
+        outcome.plan
+    )
+    assert "Drawn with fitted for runner-1 from 50 pairs: lts3=0.25." in render_html(outcome.plan)
+
+
+def test_a_plan_nobody_said_was_drawn_says_nothing_about_a_vector(
+    tmp_path: Path, improving: None
+) -> None:
+    """`None` is "not recorded", and the sheet does not fill it in with a guess."""
+    from longrun.core.export.sheet_md import render_markdown
+
+    outcome = plan_route(
+        _request(), _ctx(tmp_path), start_at=START, route=_route(), router=StubRouter()
+    )
+
+    assert outcome.plan is not None
+    assert outcome.plan.manifest.drawn_with is None
+    assert "Drawn with" not in render_markdown(outcome.plan)
+
+
 def test_an_avoid_polygon_reaches_every_call_the_loop_makes(
     tmp_path: Path, improving: None
 ) -> None:

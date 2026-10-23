@@ -44,7 +44,7 @@ from longrun.core.preferences.store import load_profile
 from longrun.core.routing.avoid import area_from_polygon
 from longrun.core.routing.base import NoRouteError, RouterUnavailable
 from longrun.core.routing.cached import CachedRouter
-from longrun.core.routing.custom_model import AVOID_HIGH_STRESS, NEUTRAL, to_custom_model
+from longrun.core.routing.custom_model import drawn_with, to_custom_model
 from longrun.runtime import PLAN_LATENCY_BUDGET_S
 
 
@@ -74,6 +74,11 @@ def plan(
     target_km: float | None = typer.Option(None, "--target-km", help="Target distance."),
     avoid_high_stress: bool = typer.Option(
         False, "--avoid-high-stress", help="Down-weight LTS 3 and 4 ways in the router."
+    ),
+    neutral: bool = typer.Option(
+        False,
+        "--neutral",
+        help="Draw with stock foot_priority, even if your profile holds a fitted vector.",
     ),
     avoid_name: list[str] = typer.Option(
         [], "--avoid-name", help="A way or place to stay off, by name. Repeatable."
@@ -128,6 +133,11 @@ def plan(
         raise typer.Exit(code=2)
     if date is None:
         typer.echo("error: give --date, or a request file with a `date` key", err=True)
+        raise typer.Exit(code=2)
+    if neutral and avoid_high_stress:
+        typer.echo(
+            "error: --neutral and --avoid-high-stress ask for two vectors; give one", err=True
+        )
         raise typer.Exit(code=2)
 
     waypoints = [_point(start_point, "from")]
@@ -191,14 +201,16 @@ def plan(
         )
         if chosen.region and snapshot.region is None:
             snapshot.region = chosen.region
-        # M6.1: the six scope 7.1 parameters as a vector rather than one dict literal.
-        # Still opt-in, and still neutral by default - ADR 0021, and risk R1 is the
-        # measurement behind it. A neutral vector emits no model at all, so the request
-        # body, and therefore every cache key, is what it was before this existed.
-        params = AVOID_HIGH_STRESS if avoid_high_stress else NEUTRAL
+        # M6.1 made the six scope 7.1 parameters a vector; M24 lets a runner's own fit be it.
+        # NEUTRAL unless their profile holds a vector they saved (`tune --save`, ADR 0051)
+        # or a flag names one - ADR 0021 ships neutral, and risk R1 is the measurement
+        # behind it. A neutral vector emits no model at all, so the request body, and
+        # therefore every cache key, is what it was before any of this existed.
         profile = load_profile(profile_path)
-        model = to_custom_model(params, profile) or None
+        drawn = drawn_with(profile, neutral=neutral, avoid_high_stress=avoid_high_stress)
+        model = to_custom_model(drawn.params, profile) or None
         typer.echo(f"routing {len(waypoints)} point(s) through {chosen.note}")
+        typer.echo(f"drawn with {drawn.text}")
 
         try:
             route = router.route(waypoints, custom_model=model)
@@ -255,6 +267,9 @@ def plan(
             "router": router,
             "cache": cache,
             "budget": budget,
+            # Every plan this command writes - the loop's, `--rounds 0`'s and each
+            # alternative's - was drawn with the same model, so each sheet says the same.
+            "drawn_with": drawn,
         }
 
         if rounds > 0:
@@ -363,6 +378,7 @@ def _iterate(
             snapshot=shared["snapshot"],
             max_rounds=rounds,
             custom_model=custom_model,
+            drawn_with=shared["drawn_with"],
             # Whatever the environment supports. With no key this is `NO_MODEL` and the
             # plan is identical apart from a terser trade-off line (ADR 0015).
             sites=call_sites_from_env(shared["budget"]),

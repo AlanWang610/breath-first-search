@@ -8,6 +8,7 @@ floors out of `PreferenceProfile` is that the separation holds mechanically.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -24,11 +25,13 @@ from longrun.core.preferences.floors import (
     check_water_gap,
 )
 from longrun.core.preferences.store import (
+    USER_PROFILE_PATH,
     ProfileError,
     apply_overrides,
     load_defaults,
     load_profile,
     merge,
+    profile_path_from_env,
     save_profile,
 )
 
@@ -225,3 +228,138 @@ def test_a_stored_profile_breaching_a_floor_is_rejected_at_load(tmp_path: Path) 
     path.write_text("traffic_tolerance:\n  value: 4\n", encoding="utf-8")
     with pytest.raises(FloorViolation):
         load_profile(path)
+
+
+def test_the_suite_never_reads_a_runners_real_profile() -> None:
+    """The conftest guard, checked from inside a test rather than trusted (M24)."""
+    assert profile_path_from_env() != USER_PROFILE_PATH
+    assert not profile_path_from_env().exists()
+
+
+def test_the_profile_lives_in_the_runners_home_unless_told_otherwise(tmp_path: Path) -> None:
+    assert profile_path_from_env({}) == Path.home() / ".longrun" / "profile.yaml"
+    target = tmp_path / "elsewhere.yaml"
+    assert profile_path_from_env({"LONGRUN_PROFILE_PATH": f" {target} "}) == target
+
+
+def test_a_profile_found_by_the_environment_is_the_one_loaded_and_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "configured.yaml"
+    monkeypatch.setenv("LONGRUN_PROFILE_PATH", str(target))
+    target.write_text("traffic_tolerance:\n  value: 3\n  provenance: stated\n", encoding="utf-8")
+    assert load_profile().traffic_tolerance.value == 3
+    assert save_profile(load_profile()) == target
+
+
+# --- the routing entry (M24, ADR 0051) -------------------------------------------------
+
+
+def test_the_shipped_defaults_route_neutral() -> None:
+    """ADR 0021: NEUTRAL ships. A fresh install has no fit and must not imply one."""
+    routing = load_defaults().routing
+
+    assert routing.value.params.is_neutral
+    assert routing.provenance == Provenance.DEFAULT
+    assert routing.value.labeler is None
+
+
+def test_a_saved_fit_survives_the_round_trip_through_a_profile_file(tmp_path: Path) -> None:
+    from longrun.core.models.profile import FittedRouting
+    from longrun.core.routing.custom_model import CustomModelParams
+
+    fit = FittedRouting(
+        params=CustomModelParams(lts3=0.25, unpaved=2.0),
+        labeler="runner-1",
+        pairs=50,
+        held_out=0.649,
+        held_out_interval=(0.511, 0.767),
+        neutral_held_out=0.377,
+        rerouted=50,
+        followed_chosen=31,
+        followed_rejected=9,
+    )
+    profile = PreferenceProfile(routing=PreferenceEntry(value=fit, provenance=Provenance.INFERRED))
+
+    loaded = load_profile(save_profile(profile, tmp_path / "profile.yaml"))
+
+    assert loaded.routing == profile.routing
+    assert "provenance: inferred" in (tmp_path / "profile.yaml").read_text(encoding="utf-8")
+
+
+def test_a_stated_entry_still_beats_a_fitted_vector_on_merge() -> None:
+    """Scope 6.3's precedence holds for routing like any axis: a vector a runner wrote down
+    themselves is not replaced by one inferred from their answers."""
+    from longrun.core.models.profile import FittedRouting
+    from longrun.core.routing.custom_model import CustomModelParams
+
+    stated = PreferenceProfile(
+        routing=PreferenceEntry(
+            value=FittedRouting(params=CustomModelParams(lts4=0.25)),
+            provenance=Provenance.STATED,
+        )
+    )
+    inferred = PreferenceProfile(
+        routing=PreferenceEntry(
+            value=FittedRouting(params=CustomModelParams(lts3=0.5)),
+            provenance=Provenance.INFERRED,
+        )
+    )
+
+    merged, refused = merge(stated, inferred)
+
+    assert merged.routing == stated.routing
+    assert refused == ["routing"]
+
+
+# --- writing one axis into a hand-kept file (M24, ADR 0051) ----------------------------
+
+
+def _fit_entry(lts3: float) -> PreferenceEntry[Any]:
+    from longrun.core.models.profile import FittedRouting
+    from longrun.core.routing.custom_model import CustomModelParams
+
+    return PreferenceEntry(
+        value=FittedRouting(params=CustomModelParams(lts3=lts3)), provenance=Provenance.INFERRED
+    )
+
+
+def test_an_entry_replaced_mid_file_leaves_the_next_entry_and_its_comment_alone(
+    tmp_path: Path,
+) -> None:
+    from longrun.core.preferences.store import save_entry
+
+    path = tmp_path / "profile.yaml"
+    head = "# mine\ntraffic_tolerance:\n  value: 2\n  provenance: stated\n\n"
+    tail = "\n# why I said 15\ndetour_tolerance_pct:\n  value: 15.0\n  provenance: stated\n"
+    path.write_text(head + "routing:\n  value:\n    params: {lts3: 0.5}\n" + tail, encoding="utf-8")
+
+    save_entry("routing", _fit_entry(0.25), path)
+
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith(head) and text.endswith(tail)
+    assert load_profile(path).routing == _fit_entry(0.25)
+    assert load_profile(path).detour_tolerance_pct.value == 15.0
+
+
+def test_an_entry_appended_to_a_file_without_a_last_newline_starts_on_its_own_line(
+    tmp_path: Path,
+) -> None:
+    from longrun.core.preferences.store import save_entry
+
+    path = tmp_path / "profile.yaml"
+    path.write_text("traffic_tolerance:\n  value: 2", encoding="utf-8")
+
+    save_entry("routing", _fit_entry(0.25), path, comment="saved by a test")
+
+    text = path.read_text(encoding="utf-8")
+    assert "  value: 2\n\n# saved by a test\nrouting:\n" in text
+    assert load_profile(path).traffic_tolerance.value == 2
+
+
+def test_an_entry_the_profile_does_not_have_is_refused(tmp_path: Path) -> None:
+    from longrun.core.preferences.store import save_entry
+
+    with pytest.raises(ProfileError, match="unknown preference"):
+        save_entry("routing_vector", _fit_entry(0.25), tmp_path / "profile.yaml")
+    assert not (tmp_path / "profile.yaml").exists()

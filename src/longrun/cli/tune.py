@@ -11,13 +11,18 @@ three pairs is noise that presents as a measurement (ADR 0021).
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import typer
 
 from longrun.core.labels.pairs_io import dump_pairs, read_pairs
+from longrun.core.routing.custom_model import describe
 from longrun.core.routing.tuning import fit
+
+if TYPE_CHECKING:  # pragma: no cover
+    from longrun.core.labels.reroute import RerouteReport
 
 #: Where a labelled set lives by default. Under `tests/` rather than in the package,
 #: because a preference set is evidence about a person and belongs beside the eval cases
@@ -90,14 +95,33 @@ def tune(
     holdout: int = typer.Option(
         0, "--holdout", help="K-fold held-out agreement, against neutral; 0 skips it."
     ),
+    save: bool = typer.Option(
+        False,
+        "--save",
+        help="Make this fit the vector your plans are drawn with, if every ADR 0051 gate passes.",
+    ),
+    reroute_check: bool = typer.Option(
+        False,
+        "--reroute",
+        help="Re-draw each pair once with the fit and report (ADR 0020's check); --save runs it.",
+    ),
+    router_url: str | None = typer.Option(
+        None, "--router", help="GraphHopper URL for the re-route check; default by region."
+    ),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
 ) -> None:
     """Fit the six scope 7.1 priority parameters against recorded preference pairs.
 
     A person's own answers are in `~/.longrun/labels/pairs` (`longrun label`, ADR 0049):
     `longrun tune --pairs ~/.longrun/labels/pairs --labeler NAME --holdout 5`.
+
+    `--save` writes the fit into your profile's `routing` entry, and `longrun plan` draws
+    with it from then on (ADR 0051). It refuses unless the fit beats neutral held out, buys
+    no detours, and the router re-drawing each pair lands on your choice more often than
+    not - and it is yours to run: adopting a fit is a decision about your routes.
     """
-    from longrun.core.preferences.store import load_profile
+    from longrun.core.labels.adopt import fitted_entry, refusals
+    from longrun.core.preferences.store import ProfileError, load_profile, save_entry
     from longrun.core.routing.preferences import pairs_from_edit
     from longrun.core.routing.tuning import evidence_by_parameter, holdout_agreement
 
@@ -128,11 +152,42 @@ def tune(
     result = fit(pairs, profile=profile)
     real = [pair for pair in pairs if pair.source != "synthetic"]
     evidence = evidence_by_parameter(real)
+    # `--save` needs the held-out line whether or not `--holdout` asked for it: gate 5.
+    folds = holdout if holdout > 0 else (5 if save else 0)
     held = (
-        holdout_agreement(real, folds=holdout, profile=profile)
-        if holdout > 0 and len(real) >= 2
+        holdout_agreement(real, folds=folds, profile=profile)
+        if folds > 0 and len(real) >= 2
         else None
     )
+    # Gates 1-5 first, so a fit that fails one never spends a routing call on gate 6.
+    problems = refusals(result, labeler=labeler, holdout=held) if save else []
+    report = (
+        _reroute(real, result.params, profile, router_url)
+        if real and not result.params.is_neutral and (reroute_check or (save and not problems))
+        else None
+    )
+    if save and report is not None:
+        problems.extend(report.problems())
+    elif save and not problems:
+        problems.append("the re-route check did not run")
+    saved: Path | None = None
+    if save and not problems:
+        assert labeler is not None and held is not None and report is not None
+        today = date.today()
+        try:
+            saved = save_entry(
+                "routing",
+                fitted_entry(result, labeler=labeler, holdout=held, report=report, today=today),
+                profile_path,
+                comment=(
+                    f"Scope 7.1's routing vector, fitted to {labeler}'s answers and saved by\n"
+                    f"`longrun tune --save` on {today:%Y-%m-%d} (ADR 0051). `longrun plan` "
+                    "draws with it;\n`longrun plan --neutral` draws without. Delete this block "
+                    "to go back to neutral."
+                ),
+            )
+        except ProfileError as exc:
+            problems.append(str(exc))
 
     if as_json:
         typer.echo(
@@ -158,28 +213,99 @@ def tune(
                         "interval": [round(v, 4) for v in held.interval],
                         "beats_neutral": held.beats_neutral,
                     },
+                    "reroute": None
+                    if report is None
+                    else {
+                        "rerouted": len(report.rows),
+                        "unchecked": report.unchecked,
+                        "chosen": report.count("chosen"),
+                        "rejected": report.count("rejected"),
+                        "neither": report.count("neither"),
+                        "refused": report.count("refused"),
+                        "over_tolerance": len(report.over_tolerance),
+                        "passed": report.passed,
+                    },
+                    "saved": None if saved is None else str(saved),
+                    "not_saved_because": problems,
                 },
                 indent=2,
             )
         )
-        return
+    else:
+        typer.echo(str(result))
+        for caveat in result.caveats:
+            typer.echo(f"  {caveat}")
+        if real:
+            # A parameter no pair ever separated two lines on has a fitted value that is the
+            # grid's tie-break talking, not the runner.
+            typer.echo(
+                "  evidence, metres of difference each parameter has seen: "
+                + ", ".join(f"{name} {metres:.0f}" for name, metres in evidence.items())
+            )
+        if held is not None:
+            typer.echo(f"  {held}")
+        elif folds > 0:
+            typer.echo("  too few pairs from a person to hold any out")
+        if report is not None:
+            typer.echo(f"  {report}")
+        elif reroute_check:
+            typer.echo("  nothing to re-draw: the fit is neutral, which is what plans already use")
+        if not pairs:
+            typer.echo(f"  no pairs found in {pairs_dir}; see docs/tuning.md for how to record one")
+        if saved is not None:
+            typer.echo(
+                f"saved to {saved}: `longrun plan` now draws with {describe(result.params)}; "
+                "`--neutral` draws without it"
+            )
+        for problem in problems:
+            typer.echo(f"  not saved: {problem}", err=True)
+    if problems:
+        raise typer.Exit(code=1)
 
-    typer.echo(str(result))
-    for caveat in result.caveats:
-        typer.echo(f"  {caveat}")
-    if real:
-        # A parameter no pair ever separated two lines on has a fitted value that is the
-        # grid's tie-break talking, not the runner.
-        typer.echo(
-            "  evidence, metres of difference each parameter has seen: "
-            + ", ".join(f"{name} {metres:.0f}" for name, metres in evidence.items())
+
+def _reroute(pairs: list[Any], params: Any, profile: Any, router_url: str | None) -> RerouteReport:
+    """Gate 6: each pair's ends from the ledger, routed once with the fitted vector.
+
+    Built like `label seed`'s routers: resolved per task's region, each checked for a
+    health answer once, so a stopped container is "start the router", not 50 refusals.
+    """
+    import httpx
+
+    from longrun.core.labels.ledger import Ledger, labels_dir_from_env
+    from longrun.core.labels.reroute import reroute
+    from longrun.core.models.geometry import LatLon
+    from longrun.core.routing.base import RouterUnavailable
+    from longrun.core.routing.custom_model import to_custom_model
+    from longrun.core.routing.graphhopper import GraphHopperRouter
+    from longrun.regions.routers import resolve
+
+    routers: dict[str, GraphHopperRouter] = {}
+
+    def router_for(task: Any) -> GraphHopperRouter:
+        ends = [LatLon(lat=lat, lon=lon) for lat, lon in task.ends]
+        resolved = resolve(ends, region=task.region, explicit=router_url)
+        if resolved.url not in routers:
+            try:
+                httpx.get(f"{resolved.url}/health", timeout=5.0).raise_for_status()
+            except httpx.HTTPError as exc:
+                raise RouterUnavailable(
+                    f"no router answering at {resolved.url} ({exc}); start it with "
+                    f"`./deploy/graphhopper/run.ps1 -Region {resolved.region or 'bayarea'}`"
+                ) from None
+            routers[resolved.url] = GraphHopperRouter(resolved.url)
+        return routers[resolved.url]
+
+    try:
+        return reroute(
+            pairs,
+            Ledger(labels_dir_from_env()).tasks(),
+            router_for,
+            to_custom_model(params, profile) or None,
+            tolerance_pct=float(profile.detour_tolerance_pct.value),
         )
-    if held is not None:
-        typer.echo(f"  {held}")
-    elif holdout > 0:
-        typer.echo("  too few pairs from a person to hold any out")
-    if not pairs:
-        typer.echo(f"  no pairs found in {pairs_dir}; see docs/tuning.md for how to record one")
+    except RouterUnavailable as exc:
+        typer.echo(f"error: the re-route check needs the router: {exc}", err=True)
+        raise typer.Exit(code=3) from exc
 
 
 def register(app: typer.Typer) -> None:

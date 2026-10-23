@@ -500,8 +500,13 @@ def _manifest_block(plan: Plan) -> str:
     if carried:
         spend += f". {carried} scorer result(s) were carried from an earlier pass, not re-measured"
     degraded = "".join(f"<li>{_e(line)}</li>" for line in manifest.degradation)
+    drawn = (
+        f"<p>Drawn with {_e(manifest.drawn_with.text)}.</p>"
+        if manifest.drawn_with is not None
+        else ""
+    )
     return (
-        "<h2>Manifest</h2>"
+        f"<h2>Manifest</h2>{drawn}"
         f"<table><thead><tr><th>Pin</th><th>Vintage</th></tr></thead><tbody>{rows}</tbody></table>"
         f"<p>{_e(spend)}.</p>" + (f"<ul>{degraded}</ul>" if degraded else "")
     )

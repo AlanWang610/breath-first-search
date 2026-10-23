@@ -258,3 +258,59 @@ def test_the_render_tool_is_now_blocked_on_work_not_on_a_decision() -> None:
     render = next(t for t in server._tool_manager.list_tools() if t.name == "render")
 
     assert render.fn()["blocked_on"] == "work"
+
+
+# --- route, drawn with the runner's vector (M24) ---------------------------------------
+
+
+def test_the_route_tool_draws_with_the_runners_saved_vector(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chat routed with no model at all until M24, so a saved fit would never have reached
+    that surface - nor had `--avoid-high-stress` (scope 3.9: one surface, one vector)."""
+    from longrun.core.models.geometry import Route, RoutePoint
+    from longrun.core.models.profile import (
+        FittedRouting,
+        PreferenceEntry,
+        PreferenceProfile,
+        Provenance,
+    )
+    from longrun.core.preferences.store import save_profile
+    from longrun.core.routing.custom_model import CustomModelParams, to_custom_model
+    from longrun.tools.base import ToolSettings
+    from longrun.tools.server import build_server
+
+    fitted = CustomModelParams(unpaved=2.0)
+    profile = PreferenceProfile(
+        routing=PreferenceEntry(
+            value=FittedRouting(params=fitted, labeler="runner-1"),
+            provenance=Provenance.INFERRED,
+        )
+    )
+    path = save_profile(profile, tmp_path / "profile.yaml")
+    monkeypatch.setenv("LONGRUN_PROFILE_PATH", str(path))
+    sent: list[Any] = []
+
+    class _Router:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def route(self, waypoints: list[Any], **kwargs: Any) -> Route:
+            sent.append(kwargs.get("custom_model"))
+            points = [
+                RoutePoint(lat=w.lat, lon=w.lon, cum_dist_m=index * 100.0)
+                for index, w in enumerate(waypoints)
+            ]
+            return Route(id="r", points=points)
+
+    monkeypatch.setattr("longrun.core.routing.graphhopper.GraphHopperRouter", _Router)
+    server = build_server(ToolSettings(router_url="http://router.invalid"))
+    tool = next(t for t in server._tool_manager.list_tools() if t.name == "route")
+    ends = [[37.7955, -122.3937], [37.7715, -122.4686]]
+
+    fitted_answer = tool.fn(points=ends)
+    neutral_answer = tool.fn(points=ends, neutral=True)
+
+    assert sent == [to_custom_model(fitted, profile), None]
+    assert fitted_answer["drawn_with"] == "fitted for runner-1: unpaved=2"
+    assert "was not used" in neutral_answer["drawn_with"]

@@ -22,6 +22,7 @@ from longrun.core.models.request import PlanRequest
 from longrun.core.models.routing import CueSheet
 from longrun.core.models.verification import VerifyReport
 from longrun.core.models.waypoint import PlanWaypoint
+from longrun.core.routing.custom_model import DrawnWith
 
 PlanStatus = Literal["complete", "needs_input", "failed"]
 
@@ -92,6 +93,10 @@ class Manifest(BaseModel):
     model_calls_used: int = 0
     model_tokens_used: int = 0
     degradation: list[str] = Field(default_factory=list)
+    #: The vector the router drew this plan's lines with, and why (ADR 0021, 0051). `None`
+    #: for a route nobody routed - repair mode scores the runner's own line - and for a plan
+    #: stored before M24, which said nothing about it either.
+    drawn_with: DrawnWith | None = None
 
     def record(self, call: ToolCall) -> None:
         self.tool_calls.append(call)
