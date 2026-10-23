@@ -118,6 +118,22 @@ def _labels_stay_out_of_home(
     monkeypatch.setenv("LONGRUN_LABELS_DIR", str(tmp_path / "labels"))
 
 
+@pytest.fixture(autouse=True)
+def _profile_stays_out_of_home(
+    _clear_longrun_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Point the default preference profile at a file this test does not have.
+
+    The same hole as the ledger's, one directory over: with nothing set, `load_profile()`
+    reads `~/.longrun/profile.yaml`, and since M24 that can hold a vector fitted to a runner's
+    own answers. A test that planned a route would draw it with that vector - a request no
+    cassette recorded - and pass in CI while failing on the one machine that has labels.
+    A subdirectory, so a test that writes its own `tmp_path / "profile.yaml"` and passes it
+    explicitly is not also reading it by default.
+    """
+    monkeypatch.setenv("LONGRUN_PROFILE_PATH", str(tmp_path / "home" / "profile.yaml"))
+
+
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
