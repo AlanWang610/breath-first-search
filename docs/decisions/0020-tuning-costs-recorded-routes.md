@@ -60,3 +60,34 @@ and posted speeds and reaches a better LTS than GraphHopper can; the router sees
 `road_class`, `surface` and the `lts` encoded value. `WayClass` deliberately carries only
 what the router can match on, because fitting a parameter against an attribute the router
 cannot read produces a vector that does nothing and reports that it helped.
+
+## Amendment, 2026-09-29 (M23): a routed line is summarised from the router's own details
+
+The decision is unchanged: a pair stores two `RouteSummary`s, and a vector is scored by the
+priority it implies over routes that exist. What changed is where a summary of a line the
+**router** drew comes from.
+
+Until M23 the only summariser was `tune --edit`'s: match a GPX against a ways layer, read
+OSM tags, classify. That is right for a line a person drew, and it is unavailable wherever
+there is no ways layer, which is every built region outside a golden's fixtures. So no pair
+could be made on ground a person actually runs.
+
+GraphHopper already carries `lts`, `surface` and `road_class` on every edge it serves, and
+answers them as path `details` when asked (ADR 0001 measured `details=["lts"]`). So
+`Router.route_summaries` asks for all three and `graphhopper.path_way_classes` reads them
+off the path, per edge, on the router's raw points. This is also the more faithful reading
+for a pair about router lines: the summary is in exactly the vocabulary the custom model's
+terms match on, rather than an OSM reading of it that has to be kept in step by hand.
+
+Keeping it in step by hand had already failed once. The fitter counted `compacted`,
+`fine_gravel` and `grass` as unpaved and the router's `unpaved` term did not, so a vector
+fitted to prefer Marin's compacted fire roads would have been costed on ways its own term
+never touched. `custom_model` now holds one list of GraphHopper `Surface` names - the three
+added were read from the 11.0 jar, and a contract test has the server accept them - plus the
+jar's own alias table (`earth` is `DIRT` on import), and `preferences` derives its OSM
+spellings from those. The path and collector classes are one tuple each, used both to emit
+the terms and to count ways.
+
+Asking for details is a different question from not asking, so it has its own cache key;
+`route_args` adds `details` only when present, and every cassette recorded before this keeps
+its key.

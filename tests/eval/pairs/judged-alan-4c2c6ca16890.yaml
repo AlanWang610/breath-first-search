@@ -1,0 +1,25 @@
+pairs:
+- a:
+    length_m: 13514.8
+    metres_by_class:
+      1|false|false|false: 3094.9
+      1|false|true|false: 1308.3
+      1|true|false|false: 1579.4
+      1|true|true|false: 7408.7
+      2|false|false|false: 123.6
+    name: 20e0e5005af6
+  b:
+    length_m: 13805.8
+    metres_by_class:
+      1|false|false|false: 1259.4
+      1|false|true|false: 930.6
+      1|true|false|false: 5337.0
+      1|true|true|false: 5777.1
+      2|false|false|false: 169.0
+      2|true|false|false: 286.1
+      4|false|false|false: 46.5
+    name: e44014b2a092
+  labeler: alan
+  preferred: a
+  source: judged
+  weight: 1.0

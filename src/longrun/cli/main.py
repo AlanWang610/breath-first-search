@@ -17,6 +17,7 @@ from longrun.cli import (
     freeze,
     history,
     jobs,
+    label,
     metrics,
     plan,
     refresh,
@@ -65,6 +66,7 @@ serve.register(app)
 history.register(app)
 metrics.register(app)
 tune.register(app)
+label.register(app)
 api.register(app)
 
 

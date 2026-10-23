@@ -18,4 +18,11 @@ reason: >-
 bounds:
   fraction_lts3_plus_max: 0.02
   lts4_count_max: 0
-  detour_ratio_max: 1.15
+
+note: >-
+  This case stated `detour_ratio_max: 1.15` from M6 to M23, and it never ran. The 1.043x
+  in the reason came from `longrun metrics --router` against a live GraphHopper
+  (docs/tuning.md); the golden digest does not carry a detour ratio and a golden's router is
+  a port nothing listens on, so the eval suite skipped the bound as unmeasured every time.
+  `test_no_bound_names_a_number_its_route_does_not_have` now refuses a bound like that, and
+  the number lives here, where it is a record rather than a check.

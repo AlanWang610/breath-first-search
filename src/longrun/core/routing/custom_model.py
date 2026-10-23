@@ -75,7 +75,52 @@ PARAMETER_NAMES: tuple[str, ...] = (
 #: first draft of this module used: `UNPAVED` and `GROUND` are both common in OSM and
 #: omitting them would have left the unpaved multiplier silently not applying to most of
 #: the ways it is about.
-UNPAVED_SURFACES: tuple[str, ...] = ("UNPAVED", "GRAVEL", "DIRT", "GROUND", "SAND")
+#:
+#: M23 added the last three, and the reason is the same failure one layer down: the fitter
+#: (`preferences.UNPAVED_SURFACES`) counted `compacted`, `fine_gravel` and `grass` as
+#: unpaved and this list did not, so a vector fitted to prefer Marin's compacted fire roads
+#: would have been costed on ways its own `unpaved` term never touched. All three are
+#: `Surface` enum names in GraphHopper 11 (read from the jar, not assumed), and the order
+#: appends rather than sorts so the emitted condition changes only by what was added.
+UNPAVED_SURFACES: tuple[str, ...] = (
+    "UNPAVED",
+    "GRAVEL",
+    "DIRT",
+    "GROUND",
+    "SAND",
+    "COMPACTED",
+    "FINE_GRAVEL",
+    "GRASS",
+)
+
+#: OSM spellings GraphHopper folds into one of its own `Surface` values on import -
+#: `Surface.SURFACE_MAP` in the 11.0 jar, disassembled rather than remembered. A way tagged
+#: `surface=earth` is `DIRT` to the router, so it has to be unpaved to the fitter too.
+SURFACE_ALIASES: dict[str, str] = {
+    "metal": "PAVED",
+    "sett": "COBBLESTONE",
+    "unhewn_cobblestone": "COBBLESTONE",
+    "earth": "DIRT",
+    "pebblestone": "GRAVEL",
+    "grass_paver": "GRASS",
+}
+
+#: The `road_class` values the path bonus matches, and the ones the missing-sidewalk
+#: multiplier does. Named so the emitted conditions and anything that *counts* ways by
+#: class - a fitter, a route summary - read one list rather than two that agree today.
+PATH_ROAD_CLASSES: tuple[str, ...] = ("PATH", "FOOTWAY")
+COLLECTOR_ROAD_CLASSES: tuple[str, ...] = ("SECONDARY", "TERTIARY")
+
+
+def osm_unpaved_surfaces() -> frozenset[str]:
+    """`UNPAVED_SURFACES` as OSM spells them, aliases included."""
+    return frozenset(value.lower() for value in UNPAVED_SURFACES) | frozenset(
+        alias for alias, target in SURFACE_ALIASES.items() if target in UNPAVED_SURFACES
+    )
+
+
+def _any_of(field: str, values: tuple[str, ...]) -> str:
+    return " || ".join(f"{field} == {value}" for value in values)
 
 
 class CustomModelParams(BaseModel):
@@ -138,9 +183,33 @@ def _lts_terms(params: CustomModelParams) -> list[dict[str, str]]:
     """
     terms: list[dict[str, str]] = []
     for level, value in ((2, params.lts2), (3, params.lts3), (4, params.lts4)):
-        if value != 1.0:
-            terms.append({"if": f"lts == {level}", "multiply_by": _number(value)})
+        terms.extend(_term(f"lts == {level}", value))
     return terms
+
+
+def _term(condition: str, value: float) -> list[dict[str, str]]:
+    """One rule saying "ways matching `condition` are worth `value` times the rest".
+
+    **GraphHopper refuses a priority above 1** - "maximum of value '4' cannot be larger than
+    1" - and it refuses the whole request, which reaches a caller as "no pedestrian route".
+    Until M23 a seek (`value > 1`) was emitted as `multiply_by: "4"`, so every vector that
+    sought anything, and every profile saying `surface: dirt`, was a request the router
+    turned down; found the first time one was sent to a live graph. It had never been sent
+    because nothing but the fitter's grid produces one and nothing consumes a fitted vector.
+
+    So a seek is written as an avoid on the complement: "paths are worth 4x the rest" is
+    `!(paths) * 0.25`. Every ratio between two ways is the same, which is all a priority
+    means and all `tuning.cost` reasons about, and no way's priority exceeds the server's
+    own. What is not identical is the ratio to `distance_influence`, which scales the other
+    way - the cost of a route is a priority-weighted time plus a distance term, and making
+    the rest dearer is not the same as making paths cheaper. That is the only form the
+    server accepts, and the direction it errs in is towards the runner's preference.
+    """
+    if value == 1.0:
+        return []
+    if value < 1.0:
+        return [{"if": condition, "multiply_by": _number(value)}]
+    return [{"if": f"!({condition})", "multiply_by": _number(1.0 / value)}]
 
 
 def _number(value: float) -> str:
@@ -151,6 +220,36 @@ def _number(value: float) -> str:
     bound to stay where it is.
     """
     return f"{round(value, 4):g}"
+
+
+def effective_params(
+    params: CustomModelParams, profile: PreferenceProfile | None
+) -> CustomModelParams:
+    """The multipliers the router actually applies: the fitted ones, with the profile's
+    stated surface term multiplied on (scope 7.1 splits them; see `_surface_terms`).
+
+    One function because two readers need the same answer. `_surface_terms` emits these,
+    and `tuning.fit` has to cost pairs with them too: a runner who stated "dirt" already has
+    unpaved ways rewarded at query time, and a fit that ignored that would learn the same
+    preference again and have it applied twice. Clamped to the multiplier bounds, which the
+    emitted terms were not below `MIN_MULTIPLIER` until M23 - a stated "paved" on a fitted
+    0.01 wrote 0.0001, an exclusion wearing a preference's clothes.
+    """
+    unpaved, path_bonus = params.unpaved, params.path_bonus
+    if profile is not None:
+        surface, weight = profile.surface.value, profile.surface.weight
+        if surface == "dirt":
+            unpaved *= 1.0 + weight
+            path_bonus *= 1.0 + weight
+        elif surface == "paved":
+            unpaved *= max(MIN_MULTIPLIER, 1.0 - weight)
+
+    def bounded(value: float) -> float:
+        return min(max(value, MIN_MULTIPLIER), MAX_MULTIPLIER)
+
+    return params.model_copy(
+        update={"unpaved": bounded(unpaved), "path_bonus": bounded(path_bonus)}
+    )
 
 
 def _surface_terms(
@@ -164,33 +263,13 @@ def _surface_terms(
     replacing it - and a profile that says nothing leaves the fitted value exactly as it
     was, which is what keeps a neutral vector emitting no term at all.
     """
-    unpaved = params.unpaved
-    path_bonus = params.path_bonus
+    applied = effective_params(params, profile)
+    unpaved, path_bonus = applied.unpaved, applied.path_bonus
 
-    if profile is not None:
-        surface = profile.surface.value
-        weight = profile.surface.weight
-        if surface == "dirt":
-            unpaved *= 1.0 + weight
-            path_bonus *= 1.0 + weight
-        elif surface == "paved":
-            unpaved *= max(MIN_MULTIPLIER, 1.0 - weight)
-
-    unpaved = min(unpaved, MAX_MULTIPLIER)
-    path_bonus = min(path_bonus, MAX_MULTIPLIER)
-
-    terms: list[dict[str, str]] = []
-    if unpaved != 1.0:
-        condition = " || ".join(f"surface == {value}" for value in UNPAVED_SURFACES)
-        terms.append({"if": condition, "multiply_by": _number(unpaved)})
-    if path_bonus != 1.0:
-        terms.append(
-            {
-                "if": "road_class == PATH || road_class == FOOTWAY",
-                "multiply_by": _number(path_bonus),
-            }
-        )
-    return terms
+    return [
+        *_term(_any_of("surface", UNPAVED_SURFACES), unpaved),
+        *_term(_any_of("road_class", PATH_ROAD_CLASSES), path_bonus),
+    ]
 
 
 def _sidewalk_terms(params: CustomModelParams) -> list[dict[str, str]]:
@@ -202,14 +281,7 @@ def _sidewalk_terms(params: CustomModelParams) -> list[dict[str, str]]:
     router gets the class-level approximation and the plan sheet gets the real one. That is
     the LTS-scoring / LTS-routing split ADR 0001 drew, for the same reason.
     """
-    if params.missing_sidewalk == 1.0:
-        return []
-    return [
-        {
-            "if": "road_class == SECONDARY || road_class == TERTIARY",
-            "multiply_by": _number(params.missing_sidewalk),
-        }
-    ]
+    return _term(_any_of("road_class", COLLECTOR_ROAD_CLASSES), params.missing_sidewalk)
 
 
 def to_custom_model(
@@ -258,6 +330,11 @@ __all__: list[str] = [
     "NEUTRAL",
     "PARAMETER_NAMES",
     "UNPAVED_SURFACES",
+    "SURFACE_ALIASES",
+    "PATH_ROAD_CLASSES",
+    "COLLECTOR_ROAD_CLASSES",
+    "osm_unpaved_surfaces",
+    "effective_params",
     "CustomModelParams",
     "describe",
     "to_custom_model",

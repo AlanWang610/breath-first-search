@@ -37,7 +37,13 @@ from longrun.core.geo.gpx import DEFAULT_DEDUPE_M, cumulative_after_normalize
 from longrun.core.models.geometry import LatLon, Route, RouteSource
 from longrun.core.models.routing import NOT_REQUESTED, NOT_RETURNED, Cue, CueSheet
 from longrun.core.routing.base import CostingModel, NoRouteError, RouterUnavailable
+from longrun.core.routing.custom_model import (
+    COLLECTOR_ROAD_CLASSES,
+    PATH_ROAD_CLASSES,
+    UNPAVED_SURFACES,
+)
 from longrun.core.routing.detour import detour_area, detour_waypoints
+from longrun.core.routing.tuning import RouteSummary, WayClass
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Sequence
@@ -56,6 +62,12 @@ FOOT_PROFILE = "foot"
 CAR_PROFILE = "car"
 
 
+#: The path details a route summary is read from: the three encoded values
+#: `tuning.WayClass` is made of, asked for in the router's own vocabulary so a summary
+#: counts exactly what a custom model's terms can match (ADR 0020, amended in M23).
+SUMMARY_DETAILS: tuple[str, ...] = ("lts", "surface", "road_class")
+
+
 def url_from_env(env: dict[str, str] | None = None) -> str:
     import os
 
@@ -71,6 +83,7 @@ def route_body(
     alternatives: int = 0,
     *,
     instructions: bool = False,
+    details: Sequence[str] = (),
 ) -> dict[str, Any]:
     """The POST body for one routing request.
 
@@ -120,7 +133,73 @@ def route_body(
     if alternatives > 0:
         body["algorithm"] = "alternative_route"
         body["alternative_route.max_paths"] = alternatives
+    if details:
+        # Per-interval values of the named encoded values, indexed into `points`. Absent
+        # unless asked for, and keyed in `cached.route_args` only when present, so every
+        # request recorded before M23 hashes as it always did.
+        body["details"] = list(details)
     return body
+
+
+def path_way_classes(path: dict[str, Any]) -> list[tuple[WayClass, float]]:
+    """A routed path as `(WayClass, metres)` per edge, read off its own `details`.
+
+    Pure, and deliberately on the router's **raw** points, before `path_to_route`
+    normalises and densifies them: the detail intervals index those points, and a summary
+    read against any others would attribute metres to the wrong class.
+
+    An interval is `[from, to, value]` over point indices, covering edges `from..to-1`.
+    Three spellings are reconciled here and nowhere else:
+
+    * `lts` 0 is `None`. The importer stores 0 on ways it could not score (docs/tuning.md),
+      and charging those the LTS 2 multiplier would fit a parameter to missing data.
+    * `surface` and `road_class` arrive lowercase; custom-model expressions spell them
+      upper case. Compared upper case, against the very tuples the terms are built from.
+    * A detail the path does not carry is unknown on every edge, never a default.
+    """
+    from longrun.core.geo.gpx import haversine_m
+
+    coordinates = (path.get("points") or {}).get("coordinates") or []
+    edges = max(len(coordinates) - 1, 0)
+    details = path.get("details") or {}
+
+    def per_edge(name: str) -> list[Any]:
+        values: list[Any] = [None] * edges
+        for start, end, value in details.get(name) or []:
+            for index in range(max(int(start), 0), min(int(end), edges)):
+                values[index] = value
+        return values
+
+    lts, surface, road_class = per_edge("lts"), per_edge("surface"), per_edge("road_class")
+    out: list[tuple[WayClass, float]] = []
+    for index in range(edges):
+        (lon_a, lat_a), (lon_b, lat_b) = coordinates[index][:2], coordinates[index + 1][:2]
+        metres = haversine_m(float(lat_a), float(lon_a), float(lat_b), float(lon_b))
+        level = lts[index]
+        klass = str(road_class[index] or "").upper()
+        out.append(
+            (
+                WayClass(
+                    lts=int(level) if level not in (None, 0, "0") else None,
+                    unpaved=str(surface[index] or "").upper() in UNPAVED_SURFACES,
+                    is_path=klass in PATH_ROAD_CLASSES,
+                    is_collector=klass in COLLECTOR_ROAD_CLASSES,
+                ),
+                metres,
+            )
+        )
+    return out
+
+
+def path_to_summary(path: dict[str, Any], name: str) -> RouteSummary:
+    """A routed path as metres per way class - what a preference pair stores (ADR 0020)."""
+    return RouteSummary.from_ways(name, path_way_classes(path))
+
+
+def summary_details(*, has_lts: bool) -> tuple[str, ...]:
+    """What to ask for. A graph built without the LTS importer has no `lts` to report, and
+    asking for it is a routing error rather than an empty column."""
+    return SUMMARY_DETAILS if has_lts else tuple(d for d in SUMMARY_DETAILS if d != "lts")
 
 
 def path_to_route(path: dict[str, Any], route_id: str, source: RouteSource = "generated") -> Route:
@@ -188,6 +267,33 @@ class GraphHopperRouter:
         body = route_body(waypoints, profile, avoid_polygons, custom_model, instructions=True)
         paths = self.paths(body, waypoints)
         return path_to_route(paths[0], route_id="generated"), cue_sheet_of(paths[0])
+
+    def route_summaries(
+        self,
+        waypoints: list[LatLon],
+        profile: str = FOOT_PROFILE,
+        avoid_polygons: list[dict[str, Any]] | None = None,
+        custom_model: CostingModel | None = None,
+        *,
+        alternatives: int = 0,
+        has_lts: bool = True,
+        name: str = "route",
+    ) -> list[tuple[Route, RouteSummary]]:
+        """Each line, and what it is made of, from one request (M23).
+
+        The summary is read off the same path the line is, for the reason `route_cues`
+        gives: asking twice would draw a second line and the summary would describe neither.
+        `alternatives` is a total including the primary, and only between two points.
+        """
+        body = route_body(
+            waypoints,
+            profile,
+            avoid_polygons,
+            custom_model,
+            alternatives=alternatives if len(waypoints) == 2 else 0,
+            details=summary_details(has_lts=has_lts),
+        )
+        return summaries_of(self.paths(body, waypoints), name)
 
     def alternatives(
         self,
@@ -333,6 +439,15 @@ class GraphHopperRouter:
         if not paths:
             raise NoRouteError(waypoints[0], waypoints[-1], detail="the router returned no paths")
         return list(paths)
+
+
+def summaries_of(paths: list[dict[str, Any]], name: str) -> list[tuple[Route, RouteSummary]]:
+    """Every path as its `Route` and its summary; the primary is `name`, the rest `name-altN`."""
+    out: list[tuple[Route, RouteSummary]] = []
+    for index, path in enumerate(paths):
+        label = name if index == 0 else f"{name}-alt{index}"
+        out.append((path_to_route(path, route_id=label), path_to_summary(path, label)))
+    return out
 
 
 def _routing_error(response: Any, waypoints: Sequence[LatLon]) -> Exception:

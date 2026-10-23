@@ -1,0 +1,23 @@
+pairs:
+- a:
+    length_m: 6073.0
+    metres_by_class:
+      1|false|false|false: 2999.2
+      1|false|true|false: 1092.0
+      1|true|false|false: 97.7
+      1|true|true|false: 903.9
+      2|false|false|true: 690.8
+      3|false|false|true: 289.5
+    name: 8dcdc692ce40
+  b:
+    length_m: 6130.6
+    metres_by_class:
+      1|false|false|false: 2552.8
+      1|false|true|false: 913.5
+      1|true|true|false: 903.9
+      2|false|false|true: 1760.5
+    name: ac93fd37afdc
+  labeler: alan
+  preferred: a
+  source: judged
+  weight: 0.5

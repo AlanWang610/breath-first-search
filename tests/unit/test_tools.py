@@ -101,6 +101,42 @@ def test_the_routing_and_editing_tools_the_scope_names_are_present(tools: dict[s
         assert name in tools
 
 
+def test_the_agents_door_has_no_way_to_record_a_label(tools: dict[str, Any]) -> None:
+    """ADR 0048: every other capability lands here first, and this one never does.
+
+    `tools/` is the surface the planner acts through on a person's behalf, and saying what a
+    person thinks of a route is the one thing it must not do on their behalf (ADR 0022). So
+    two checks, because either alone has a way round it: no tool is *named* like one, and no
+    module under `tools/` *imports* the label core under any name.
+    """
+    import ast
+    from pathlib import Path
+
+    import longrun.tools
+
+    named = sorted(
+        name
+        for name in tools
+        if any(word in name for word in ("label", "verdict", "judge", "prefer", "ledger"))
+    )
+    assert not named, f"tools that look like a way to record a label: {named}"
+
+    importers = []
+    for path in Path(longrun.tools.__file__).parent.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            modules = (
+                [alias.name for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [node.module or ""]
+                if isinstance(node, ast.ImportFrom)
+                else []
+            )
+            if any(module.startswith("longrun.core.labels") for module in modules):
+                importers.append(path.name)
+    assert not importers, f"tools/ modules importing the label core: {sorted(importers)}"
+
+
 def test_a_tool_answers_rather_than_raising(tmp_path: Any) -> None:
     """Scope 3.6 at the one surface where the caller is a program.
 

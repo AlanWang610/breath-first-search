@@ -1,0 +1,22 @@
+pairs:
+- a:
+    length_m: 5092.7
+    metres_by_class:
+      1|false|false|false: 2602.9
+      1|false|true|false: 43.5
+      2|false|false|false: 2382.2
+      2|false|false|true: 44.0
+      3|false|false|false: 10.2
+      4|false|false|false: 9.9
+    name: 7cde506749a5
+  b:
+    length_m: 5108.9
+    metres_by_class:
+      1|false|false|false: 155.8
+      1|false|true|false: 3434.6
+      1|true|true|false: 1519.6
+    name: 8dc217dcdcca
+  labeler: alan
+  preferred: b
+  source: judged
+  weight: 1.0

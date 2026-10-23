@@ -13,6 +13,8 @@
  * keep unknown and absent apart (scope 3.6), so `null` is threaded all the way to the
  * label.
  */
+import type { AnswerBody } from "./lib/review";
+import type { MetricRow, VerdictBody } from "./lib/verdict";
 
 export interface Health {
   ok: boolean;
@@ -175,6 +177,77 @@ export interface Region {
   steps?: Record<string, boolean>;
 }
 
+/**
+ * What a verdict's bounds can name and this plan's value for each (ADR 0048).
+ *
+ * `value: null` is a metric this plan has no number for, and the panel offers no bound on
+ * it: the server would refuse one, because a bound that can never be checked is the silent
+ * bound ADR 0022 exists to prevent.
+ */
+export interface Measured {
+  metrics: MetricRow[];
+  residual_flags: number | null;
+  goldens: string[];
+  /** Who the server records verdicts under, or `null` when it was started without one. */
+  labeler: string | null;
+  /** Verdicts on these exact bytes: an edit makes it a plan nobody has judged. */
+  judged: { id: string; would_run: string; labelled_at: string; via: string; golden: string | null }[];
+}
+
+export interface VerdictReceipt {
+  id: string;
+  subject: string;
+  would_run: string;
+  golden: string | null;
+  labeler: string;
+  /** Whether `longrun label publish` can take it into `tests/eval` — only with a golden. */
+  publishable: boolean;
+}
+
+/**
+ * One line of a pair as the Review page may see it (ADR 0049): where it goes, how long it
+ * is, and where it leaves the other. Never which vector drew it.
+ */
+export interface ReviewLine {
+  /** (lat, lon) pairs — the ledger's order, not GeoJSON's. */
+  points: [number, number][];
+  length_m: number;
+  diverges: [number, number][][];
+}
+
+export interface LineShares {
+  lts3_plus: number;
+  unpaved: number;
+  path: number;
+}
+
+export interface ReviewTask {
+  id: string;
+  region: string | null;
+  /** A question asked before, with A and B swapped. The page does not say which. */
+  probe: boolean;
+  a: ReviewLine;
+  b: ReviewLine;
+  answer: {
+    prefer: "a" | "b" | "none" | "cant";
+    strength: "slight" | "clear" | null;
+    reason: string | null;
+    labelled_at: string;
+    via: string;
+  } | null;
+  /** `null` until answered: the numbers come after the choice, never before it. */
+  shares: { a: LineShares; b: LineShares } | null;
+}
+
+export interface LabelQueue {
+  pending: number;
+  answered: number;
+  next: string | null;
+  labeler: string | null;
+  counts: { a: number; b: number; none: number; cant: number };
+  probes: { agree: number; total: number };
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { "content-type": "application/json" },
@@ -212,6 +285,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ choice }),
     }),
+  /** The HTML sheet of the plan as it stands, for reading before judging it. */
+  sheetUrl: (id: string) => `/api/plans/${encodeURIComponent(id)}/sheet`,
+  measured: (id: string) => call<Measured>(`/api/plans/${encodeURIComponent(id)}/measured`),
+  /**
+   * A person's verdict. Not a job: it changes no plan, and its refusal — every sentence
+   * `check_verdict` has about it, one per line — belongs in the answer to the click.
+   */
+  verdict: (id: string, body: VerdictBody) =>
+    call<VerdictReceipt>(`/api/plans/${encodeURIComponent(id)}/verdict`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Preference pairs (ADR 0049): the queue, one question, and an answer to it. */
+  labels: {
+    queue: () => call<LabelQueue>("/api/labels/queue"),
+    task: (id: string) => call<ReviewTask>(`/api/labels/tasks/${encodeURIComponent(id)}`),
+    answer: (id: string, body: AnswerBody) =>
+      call<ReviewTask>(`/api/labels/tasks/${encodeURIComponent(id)}/answer`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  },
   /**
    * The five gestures (scope 10.3), each one a POST to a plan **id**.
    *

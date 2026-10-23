@@ -67,6 +67,46 @@ different one; patching an area into the policy the first half of a line was dra
 would buy a line that is half one thing and half another. The honest option is a whole
 re-route, which is a routing call — `longrun edit reroute`, from a shell with a router.
 
+## What it records about you (M23)
+
+The **Judge** panel records whether you would run the plan on screen — a verdict, into your
+own ledger at `~/.longrun/labels/` (ADR 0048). It is the one panel that records something
+about a *person* rather than a route, and three rules follow:
+
+- **The server decides whether a verdict stands.** `POST /api/plans/{id}/verdict` answers
+  with `check_verdict`'s own sentences, one per line — "a 'no' has to breach one of its own
+  bounds" arrives while the route is still on the screen. `lib/verdict.ts` checks only what
+  was typed.
+- **A limit starts empty.** Each metric's value for this plan is shown beside the box and
+  never copied into it: a limit pre-filled from the plan makes a `no` breach itself.
+- **It is not a job.** A verdict changes no plan and has no scratchpad to return, so it is a
+  synchronous `201` — an addendum to ADR 0036, which is otherwise unchanged.
+
+"Read the plan sheet" opens `GET /api/plans/{id}/sheet`, rendered from the plan as it stands.
+The server records under `LONGRUN_LABELER`, and without it the panel says so and does not
+submit. A verdict with no golden stays in the ledger; `longrun label publish` is the only way
+anything reaches `tests/eval`, and you run it.
+
+## Review: which of two lines would you rather run? (M23)
+
+The **Review** tab answers preference pairs (ADR 0049) - two lines the router drew between
+the same ends, queued by `longrun label seed` while the region's router runs. It has its own
+map (`PairMap`), because nothing about planning belongs on the page a person chooses on, and
+`MapView`'s camera rules and gesture handlers are a risk to share.
+
+- **Blind, and numbers after.** `GET /api/labels/tasks/{id}` sends two lines, their lengths
+  and where they part - never which vector drew them, and no shares of LTS 3+, unpaved or
+  path until the task has an answer. The server enforces both; the page cannot show what it
+  was not sent.
+- **Four answers.** A or B with a strength (slightly = weight 0.5, clearly = 1.0), no
+  preference, or can't judge. The last two are kept and counted, and are never a pair.
+- **A first answer stands.** A second look is a probe the queue asks later, A and B swapped.
+- The lines are offset a few pixels each way, so a shared stretch reads as two lines side by
+  side, and the stretches where they part are drawn heavier.
+
+Answers go to `~/.longrun/labels/`; a choice is a tune-format pair there at once
+(`longrun tune --pairs ~/.longrun/labels/pairs`).
+
 ## Two decisions worth knowing
 
 **The basemap is USGS The National Map, drawn as a layer under the route** (ADR 0023).

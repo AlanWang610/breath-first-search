@@ -11,7 +11,7 @@
  *
  * So it is produced the way the golden suite produces one: `longrun repair` over
  * `tests/golden/routes/synthetic-hazards`, with `LONGRUN_OFFLINE=1` and every input pinned
- * in the route directory. `tests/golden/harness.py` owns that argv and this mirrors it
+ * in the route directory. `src/longrun/goldens.py` owns that argv and this mirrors it
  * exactly, down to `--target-km` and `--utc-offset`, so a change to how a golden is entered
  * shows up here as a failure rather than as a quiet divergence.
  *
@@ -46,7 +46,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLANS_DIR, WORK_DIR } from "./playwright.config";
+import { LABELS_DIR, PLANS_DIR, WORK_DIR } from "./playwright.config";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -110,6 +110,10 @@ export default async function globalSetup(): Promise<void> {
     if (entry === "jobs") continue;
     fs.rmSync(path.join(PLANS_DIR, entry), { recursive: true, force: true });
   }
+
+  // Verdicts from an earlier run: the server writes this directory only when a test judges
+  // something, so emptying it under a live server removes nothing the server is holding.
+  fs.rmSync(LABELS_DIR, { recursive: true, force: true });
 
   fs.rmSync(SEED_DIR, { recursive: true, force: true });
   fs.mkdirSync(SEED_DIR, { recursive: true });
@@ -178,4 +182,33 @@ export function seedPlan(planId: string, route: SeedRoute = "synthetic-hazards")
   fs.mkdirSync(directory, { recursive: true });
   fs.copyFileSync(seedPlanPath(route), path.join(directory, "plan.json"));
   return planId;
+}
+
+/**
+ * Empty the suite's preference-pair queue and put `count` fresh tasks in it (ADR 0049).
+ *
+ * Per test, because the Review page always shows the *next* unanswered task and every test
+ * answers some: a queue shared across tests would make each one's question depend on what
+ * ran before it. `seed_review.py` writes them with the real schema, from this run's own
+ * seeded plan. Verdicts live in a sibling directory and are left alone.
+ */
+export function seedReviewTasks(count = 2): void {
+  for (const directory of ["queue", "answers", "pairs"]) {
+    fs.rmSync(path.join(LABELS_DIR, directory), { recursive: true, force: true });
+  }
+  execFileSync(
+    "uv",
+    [
+      "run",
+      "python",
+      path.join("ui", "gestures", "seed_review.py"),
+      "--plan",
+      seedPlanPath("synthetic-hazards"),
+      "--labels",
+      LABELS_DIR,
+      "--count",
+      String(count),
+    ],
+    { cwd: REPO_ROOT, stdio: "pipe", shell: process.platform === "win32" },
+  );
 }

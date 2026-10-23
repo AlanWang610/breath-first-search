@@ -89,3 +89,14 @@ the kind of speculative generality this project has avoided elsewhere.
 is no endpoint for it in M12 and the UI names the command instead. When there is one it
 will take an id like the rest; what it will also need is a router the API is allowed to
 reach, and that is a deployment question rather than an addressing one.
+
+## Addendum, 2026-09-29 (M23): a label write is synchronous
+
+`POST /api/plans/{id}/verdict` takes an id like every write here, and resolves it through
+the same `_plan_path`. It is the first write that is **not a job**, and the reason is what
+a job is for: every other write changes a stored plan and returns the scratchpad that did
+it, and a verdict changes no plan and has nothing to return but a receipt. Its refusal — a
+`no` whose bounds all hold, a bound on a number the plan does not have — is something the
+person acts on while the route is still on the screen, which is the argument this ADR
+already makes for the refusals that *are* synchronous. It answers `201` or `422` with
+`check_verdict`'s sentences, and writes into the ledger (ADR 0048), never into `plans/`.

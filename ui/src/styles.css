@@ -132,3 +132,25 @@ ul, ol { margin: 0; padding-left: 1.1rem; }
   .layout { grid-template-columns: 1fr; }
   .side { border-right: none; border-bottom: 1px solid var(--line); }
 }
+
+/* The Judge panel (ADR 0048). */
+.judge textarea, .judge input:not([type]), .judge input[inputmode] { width: 100%; box-sizing: border-box; }
+.judge .stack { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.5rem 0; }
+.judge .bound { align-items: center; margin-bottom: 0.35rem; }
+.judge .bound input { width: 5rem; }
+.judge h3 { margin: 0.75rem 0 0.25rem; color: var(--muted); font-weight: 600; }
+.judge .choice { display: inline-flex; align-items: center; gap: 0.2rem; }
+.problems { padding-left: 1rem; margin: 0.5rem 0; }
+
+/* Plan and Review (ADR 0049). */
+.tabs { display: inline-flex; gap: 0.25rem; margin-left: 1rem; }
+.tab { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.tab.active { color: var(--text); border-color: var(--muted); }
+.legend { list-style: none; padding: 0; margin: 0.5rem 0; }
+.legend li { display: flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0; }
+.swatch { display: inline-block; width: 1.4rem; height: 0.35rem; border-radius: 2px; }
+.review .stack { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.5rem 0; }
+.review .choice { display: inline-flex; align-items: center; gap: 0.2rem; }
+.shares th { text-align: right; color: var(--muted); font-weight: 500; }
+.shares td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.pair-map { height: calc(100vh - 3rem); }

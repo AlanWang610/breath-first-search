@@ -215,6 +215,35 @@ def test_no_scorer_emits_two_measurements_with_the_same_id(
 
 
 @pytest.mark.parametrize("name", ROUTE_NAMES)
+def test_a_label_reads_the_same_numbers_from_a_plan_as_from_its_digest(
+    name: str, golden_run: harness.GoldenRunner
+) -> None:
+    """A verdict is checked twice, by two readings of one set of numbers (ADR 0048).
+
+    `longrun label` checks it against the live plan a person is looking at
+    (`measured_from_plan`); `tests/eval` re-checks it on every run against the golden's
+    `expected.json` (`measured_from_digest`). If the two readings disagreed, a verdict
+    accepted at the moment of writing could fail the suite with nothing having changed, or
+    the reverse - so they are compared here, over every golden, on the plan that produced
+    the digest. Within the digest's rounding, which is the only difference allowed.
+    """
+    from longrun.core.labels.bounds import measured_from_digest, measured_from_plan
+
+    run = golden_run(name)
+    expected = json.loads((harness.ROUTES_DIR / name / "expected.json").read_text("utf-8"))
+
+    from_plan = measured_from_plan(run.plan)
+    from_digest = measured_from_digest(expected)
+
+    assert from_plan.keys() == from_digest.keys()
+    for metric, value in from_digest.items():
+        if value is None or from_plan[metric] is None:
+            assert value == from_plan[metric], f"{name}: {metric} measured on one side only"
+        else:
+            assert from_plan[metric] == pytest.approx(value, abs=1e-3), f"{name}: {metric}"
+
+
+@pytest.mark.parametrize("name", ROUTE_NAMES)
 def test_every_recorded_source_has_a_licence(name: str, golden_run: harness.GoldenRunner) -> None:
     """Scope 14 is an obligation, and `LICENCE NOT RECORDED` is what an unmet one looks like.
 

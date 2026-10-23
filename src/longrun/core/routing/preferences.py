@@ -24,6 +24,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from longrun.core.routing.custom_model import (
+    COLLECTOR_ROAD_CLASSES,
+    PATH_ROAD_CLASSES,
+    osm_unpaved_surfaces,
+)
 from longrun.core.routing.lts import lts_from_tags
 from longrun.core.routing.tuning import PreferencePair, RouteSummary, WayClass
 
@@ -32,20 +37,22 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from longrun.core.models.geometry import Segment
 
-#: OSM `highway` values that `to_custom_model`'s path bonus matches on. Kept in step with
-#: `road_class == PATH || road_class == FOOTWAY` there rather than with `lts.py`'s wider
+#: OSM `highway` values that `to_custom_model`'s path bonus matches on, derived from the
+#: router's `PATH_ROAD_CLASSES` rather than kept beside it - and not `lts.py`'s wider
 #: `SEPARATED_HIGHWAYS`: this is the router's vocabulary, and fitting a parameter against
 #: ways the router cannot recognise would produce a vector that does nothing.
-PATH_HIGHWAYS = frozenset({"path", "footway"})
+PATH_HIGHWAYS = frozenset(value.lower() for value in PATH_ROAD_CLASSES)
 
-#: What the missing-sidewalk-on-collector multiplier matches: the two classes GraphHopper
-#: calls SECONDARY and TERTIARY.
-COLLECTOR_HIGHWAYS = frozenset({"secondary", "secondary_link", "tertiary", "tertiary_link"})
-
-#: `surface` values the unpaved multiplier matches, as OSM spells them.
-UNPAVED_SURFACES = frozenset(
-    {"unpaved", "gravel", "dirt", "ground", "sand", "fine_gravel", "compacted", "earth", "grass"}
+#: What the missing-sidewalk-on-collector multiplier matches. GraphHopper strips `_link`
+#: into its own encoded value, so `secondary_link` is `SECONDARY` to the router.
+COLLECTOR_HIGHWAYS = frozenset(
+    name for value in COLLECTOR_ROAD_CLASSES for name in (value.lower(), f"{value.lower()}_link")
 )
+
+#: `surface` values the unpaved multiplier matches, as OSM spells them. Derived from the
+#: router's list since M23: the two were written separately, and this one counted
+#: `compacted`, `fine_gravel` and `grass` as unpaved while the router's term skipped them.
+UNPAVED_SURFACES = osm_unpaved_surfaces()
 
 
 def way_class(tags: dict[str, Any] | None) -> WayClass:

@@ -137,9 +137,12 @@ def test_a_runner_who_says_dirt_gets_unpaved_and_paths_rewarded() -> None:
     model = to_custom_model(NEUTRAL, profile)
     terms = {term["if"]: float(term["multiply_by"]) for term in model["priority"]}
 
+    # Rewarded by making everything else dearer: a priority above 1 is a request the router
+    # refuses outright (see `test_no_vector_asks_the_router_for_a_priority_above_one`).
     unpaved = next(value for condition, value in terms.items() if "DIRT" in condition)
     paths = next(value for condition, value in terms.items() if "FOOTWAY" in condition)
-    assert unpaved > 1.0 and paths > 1.0
+    assert unpaved == pytest.approx(1 / 1.5, abs=1e-4) and paths == pytest.approx(1 / 1.5, abs=1e-4)
+    assert all(condition.startswith("!(") for condition in terms)
 
 
 def test_a_runner_who_says_paved_gets_unpaved_penalised_and_no_path_bonus() -> None:
@@ -202,3 +205,50 @@ def test_a_multiplier_never_reaches_the_router_in_exponent_form() -> None:
     model = to_custom_model(CustomModelParams(lts4=MIN_MULTIPLIER))
 
     assert "e-" not in str(model)
+
+
+# --- what the router will accept ---------------------------------------------
+
+
+def _grid_vectors() -> list[CustomModelParams]:
+    """Every pairing of an extreme, a middle and a neutral level, across all six fields."""
+    levels = (MIN_MULTIPLIER, 0.25, 1.0, 2.0, 4.0, MAX_MULTIPLIER)
+    return [
+        CustomModelParams(lts2=a, lts3=b, lts4=a, unpaved=b, path_bonus=a, missing_sidewalk=b)
+        for a in levels
+        for b in levels
+    ]
+
+
+@pytest.mark.parametrize("surface", ["dirt", "paved", "mixed"])
+def test_no_vector_asks_the_router_for_a_priority_above_one(surface: str) -> None:
+    """GraphHopper answers a priority above 1 with "maximum of value cannot be larger than
+    1" and no route at all. Found in M23 on the first seek vector ever sent to a live graph:
+    until then every vector that sought anything, and every `surface: dirt` profile, was a
+    request the router refused - and nothing had sent one."""
+    profile = load_defaults().model_copy(
+        update={"surface": PreferenceEntry(value=surface, weight=1.0)}
+    )
+    for params in _grid_vectors():
+        for term in to_custom_model(params, profile).get("priority", []):
+            assert 0.0 < float(term["multiply_by"]) <= 1.0, (params, term)
+
+
+def test_a_seek_keeps_the_ratio_it_states() -> None:
+    """ "Paths are worth 4x the rest" is `!(paths) * 0.25`: the same ratio between a path and
+    anything else, which is all a priority means and all `tuning.cost` reasons about."""
+    (term,) = to_custom_model(CustomModelParams(path_bonus=4.0))["priority"]
+
+    assert term["if"] == "!(road_class == PATH || road_class == FOOTWAY)"
+    assert float(term["multiply_by"]) == 0.25
+
+
+def test_an_avoid_is_written_as_it_always_was() -> None:
+    """Every recorded request carries only avoids - a seek was refused, so none was ever
+    recorded - and an avoid's body, and so its cache key, must not move."""
+    assert to_custom_model(AVOID_HIGH_STRESS) == {
+        "priority": [
+            {"if": "lts == 3", "multiply_by": "0.2"},
+            {"if": "lts == 4", "multiply_by": "0.2"},
+        ]
+    }

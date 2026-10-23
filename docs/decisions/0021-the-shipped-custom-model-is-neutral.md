@@ -51,3 +51,31 @@ never globally, because a preference is a property of a person.
 (`config-*-lts.yml`), a query model is merged with it rather than replacing it, and no vector
 in the grid can reach them. A fitter that could turn off the motorway exclusion would buy
 agreement on a pair by routing down a motorway.
+
+## Amendment, 2026-09-30 (M23)
+
+The decision stands: NEUTRAL ships. Three things about what would change it were wrong, and
+the first two would have made the change impossible or misleading.
+
+**1. "Agreement meaningfully above 0.5" is the wrong bar.** NEUTRAL costs a route by its
+length, so it is not a coin flip - it is "prefer the shorter line", and it agrees with every
+runner who chose the shorter line. A fitted vector earns its place by beating *that*, on pairs
+it was not fitted to. `tuning.holdout_agreement` measures it: K-fold, folds fixed by the
+pairs' own names, pooled, with a 95% Wilson interval, and NEUTRAL and AVOID_HIGH_STRESS
+scored on the same folds. The bar is now: **the interval's floor above NEUTRAL's held-out
+agreement**, with at least `MIN_PAIRS` real pairs and a detour penalty of zero.
+
+**2. A fitted vector that sought anything could not have shipped.** GraphHopper refuses a
+priority above 1 and refuses the whole request, so every seek - half the grid, and any
+profile saying `surface: dirt` - came back "no route". It was never noticed because nothing
+consumed a fitted vector. Seeks are now written as avoids on the complement, which keeps
+every ratio the fit reasons about (A CORRECTION, M23).
+
+**3. The fit ignored a stated surface.** `_surface_terms` multiplies the fitted `unpaved`
+and `path_bonus` by the profile's stated surface at query time; the fit costed pairs without
+it, and so would have learned a stated preference a second time. Both now read
+`custom_model.effective_params`.
+
+The evidence the ADR was waiting on has a source now: a person's own judgements, through
+`longrun label` (ADR 0048, 0049), recorded with whose they are so a vector can be fitted for
+one runner and never for everybody.

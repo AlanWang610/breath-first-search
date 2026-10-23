@@ -1,0 +1,21 @@
+pairs:
+- a:
+    length_m: 6476.0
+    metres_by_class:
+      1|false|false|false: 1331.7
+      1|false|true|false: 4046.5
+      1|true|false|false: 636.8
+      2|false|false|false: 461.0
+    name: 34dde745e12d
+  b:
+    length_m: 6406.6
+    metres_by_class:
+      1|false|false|false: 2210.7
+      1|false|true|false: 3808.6
+      2|false|false|false: 381.4
+      4|false|false|false: 5.9
+    name: fa4016214acb
+  labeler: alan
+  preferred: a
+  source: judged
+  weight: 0.5
