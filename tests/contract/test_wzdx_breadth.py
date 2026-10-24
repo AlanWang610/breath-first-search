@@ -7,7 +7,7 @@ it makes ADR 0038's licence rule executable rather than a paragraph somebody has
 remember.
 
 **The rule, as a test:** a cassette may be committed only for a feed whose own
-`feed_info.license` declares CC0. `test_every_committed_cassette_declares_cc0` scans the
+`feed_info.license` declares CC0. `test_payload_licences.py` scans the
 directory rather than a list, so a cassette added later without a licence fails here
 instead of being noticed by nobody. That is the executable half of ADR 0006's "a source
 that cannot be redistributed cannot back a committed cassette".
@@ -116,26 +116,6 @@ def _licence_of(payload: dict[str, Any]) -> str | None:
 
 
 # --- ADR 0038, as something that runs ---------------------------------------
-
-
-def test_every_committed_cassette_declares_cc0() -> None:
-    """The rule, applied to the directory rather than to a list.
-
-    ADR 0006 says a source that cannot be redistributed cannot back a committed cassette,
-    and ADR 0038 says the only redistribution grant this project acts on is the one the
-    publisher ships inside the payload. A cassette is a redistribution of somebody's feed
-    into a public repository, so it needs that grant and nothing weaker.
-
-    Scanning the directory rather than iterating `COMMITTABLE` is deliberate: a list can be
-    extended without thinking, a directory cannot be added to without this failing.
-    """
-    for path in sorted(CASSETTES.glob("wzdx_*.json")):
-        licence = _licence_of(json.loads(path.read_text(encoding="utf-8")))
-        assert licence is not None, f"{path.name} declares no licence and must not be committed"
-        assert licence.rstrip("/") == CC0, (
-            f"{path.name} declares {licence!r}, which is not the CC0 dedication ADR 0038 "
-            f"requires of a committed cassette"
-        )
 
 
 @pytest.mark.parametrize(("short", "adapter"), UNCOMMITTABLE, ids=[u[0] for u in UNCOMMITTABLE])
