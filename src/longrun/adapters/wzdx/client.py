@@ -43,6 +43,9 @@ if TYPE_CHECKING:  # pragma: no cover
 #: endpoint does not eat the plan's three-minute budget (scope 6.4).
 HTTP_TIMEOUT_S = 20.0
 
+#: How many bytes of a WZDx feed are read before it is refused (M18, `adapters.http`).
+MAX_FEED_BYTES = 32 * 1024 * 1024
+
 
 def wzdx_args(adapter: str, day: date | str) -> dict[str, Any]:
     """The cache key's arguments, as a named function so a hash-stability test can pin it.
@@ -62,27 +65,26 @@ def fetch_feed(
     kind: FeatureKind = "closures",
     params: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
+    timeout_s: float = HTTP_TIMEOUT_S,
+    max_bytes: int = MAX_FEED_BYTES,
 ) -> AdapterResult:
-    """One WZDx feed, cached, parsed, and never raised out of."""
+    """One WZDx feed, cached, parsed, and never raised out of.
+
+    Read through `adapters.http.get_json` (M18): streamed, refused past `max_bytes` rather
+    than truncated, and on the plan's clock.
+    """
+    from longrun.adapters.http import get_json
     from longrun.core.data.cache import fetch
 
     def produce() -> Any:
-        import httpx
-
         ctx.budget.spend_api_call()
         # `headers` carries a credential for the feeds that need one in a header rather
         # than a query parameter. Deliberately kept out of `wzdx_args`, which is the cache
         # key: a recorded cassette must not depend on whose key fetched it, and a key in a
         # cache key would also put a secret in a committed fixture's filename.
-        response = httpx.get(
-            url,
-            params=params,
-            headers=headers,
-            timeout=HTTP_TIMEOUT_S,
-            follow_redirects=True,
+        payload = get_json(
+            url, ctx, params=params, headers=headers, timeout_s=timeout_s, max_bytes=max_bytes
         )
-        response.raise_for_status()
-        payload = response.json()
         # `cache.fetch` raises on a producer returning None, deliberately: "no data here"
         # has to be a structured empty payload so the absence stays reportable.
         return payload if isinstance(payload, dict) else {"type": "FeatureCollection"}
@@ -125,16 +127,25 @@ def _result(payload: Any, url: str, kind: FeatureKind) -> AdapterResult:
     """A payload, fetched or replayed, as one adapter's answer."""
     version = feed_version(payload)
     features = parse_wzdx(payload, kind=kind, source_url=url)
+    published = payload.get("features") if isinstance(payload, dict) else None
     # "No envelope AND no features" is a feed that did not answer - a 200 carrying an error
     # page, most likely. An envelope-less feed that parsed 480 work zones answered fine, and
     # calling it unavailable would discard a whole state's closures over a metadata key.
+    reason = (
+        None
+        if (features or version or feed_publisher(payload))
+        else "the feed returned no WZDx envelope and no features"
+    )
+    if not features and isinstance(published, list) and published:
+        # Records that all failed to parse are not an empty feed (M18): it is the hole ADR
+        # 0039 describes, a CWZ feed read as WZDx answering "checked, nothing here" while
+        # carrying every work zone in the state.
+        reason = f"the feed carried {len(published)} record(s) and none read as WZDx"
     return AdapterResult(
         features=features,
         vintage=f"wzdx-{version}" if version else "wzdx-unversioned",
         source_url=url,
-        reason=None
-        if (features or version or feed_publisher(payload))
-        else "the feed returned no WZDx envelope and no features",
+        reason=reason,
     )
 
 

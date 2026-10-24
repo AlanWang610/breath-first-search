@@ -48,6 +48,7 @@ from longrun.adapters.base import (
     valid_jurisdiction_id,
 )
 from longrun.adapters.extraction.seam import ExtractionRequest, Extractor, NullExtractor
+from longrun.core.models.context import DEADLINE_REASON
 
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import date
@@ -712,6 +713,10 @@ def _outcome(result: AdapterResult) -> AttemptOutcome:
     if result.key_missing:
         return "skipped"
     if result.reason == _ceiling_reason():
+        return "ceiling"
+    if (result.reason or "").startswith(DEADLINE_REASON):
+        # The plan's clock, not the source (M18): a ceiling ends the climb (ADR 0047 §3),
+        # because passing it down would spend the time that ran out on the next tier.
         return "ceiling"
     return "failed"
 
