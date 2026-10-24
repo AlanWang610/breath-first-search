@@ -32,15 +32,21 @@ def conn() -> Iterator[Any]:
         connection = psycopg.connect(DSN, connect_timeout=5)
     except psycopg.OperationalError as exc:
         pytest.skip(f"no PostGIS at {DSN}: {exc}")
+    with connection.cursor() as cur:
+        cur.execute("SELECT to_regnamespace('speed_survey')")
+        row = cur.fetchone()
+    existed = bool(row and row[0])
     try:
         yield connection
     finally:
         with connection.cursor() as cur:
-            cur.execute("SELECT to_regclass('speed_survey.way_speed')")
-            row = cur.fetchone()
-            if row and row[0]:
-                cur.execute("DELETE FROM speed_survey.way_speed WHERE region = %s", (REGION,))
             cur.execute("DELETE FROM meta.layer_vintage WHERE region = %s", (REGION,))
+            if existed:
+                cur.execute("DELETE FROM speed_survey.way_speed WHERE region = %s", (REGION,))
+            else:
+                # Left as found: a database no build has merged a survey into has no schema,
+                # and an empty one would put two null columns on every frozen `ways` layer.
+                cur.execute("DROP SCHEMA IF EXISTS speed_survey CASCADE")
         connection.commit()
         connection.close()
 
