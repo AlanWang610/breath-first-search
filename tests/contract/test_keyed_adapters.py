@@ -42,7 +42,15 @@ KEYED = [
     ("sfbay", sfbay.CLOSURES, SF_BAY_511),
     ("massdot", massdot.CLOSURES, MASSDOT),
     ("nps", nps_portal.TRAIL_STATUS, NPS),
+    ("nps_hours", nps_portal.ACCESS_HOURS, NPS),
 ]
+
+#: The corridor a live check asks with, where an adapter needs one: the NPS adapters ask per
+#: park, and a corridor that meets none is a reason, not an answer (M18).
+LIVE_CORRIDORS: dict[str, Any] = {
+    "nps": box(-91.6, 37.0, -91.2, 37.3),
+    "nps_hours": box(-91.6, 37.0, -91.2, 37.3),
+}
 
 
 def _ctx(cache: Any) -> AdapterContext:
@@ -324,9 +332,25 @@ def test_the_live_endpoint_answers_when_a_key_is_present(
     if not key.value(dict(os.environ)):
         pytest.skip(f"{key.env_var} is not set")
 
+    from datetime import date as calendar
+
+    corridor = LIVE_CORRIDORS.get(short)
     with SqliteCache() as cache:
-        result = adapter.fetch(None, DAY, AdapterContext(cache=cache, budget=Budget()))
+        result = adapter.fetch(
+            corridor, calendar.today(), AdapterContext(cache=cache, budget=Budget())
+        )
     assert result.answered, result.reason
+
+
+@pytest.mark.network
+def test_a_live_test_keeps_the_keys_it_needs() -> None:
+    """The conftest clears every `LONGRUN_*` variable - except, for a `network` test, the
+    keys in `ALL_KEYS`. If it did not, the live check above could never run anywhere."""
+    import sys
+
+    conftest = sys.modules.get("conftest")
+    assert conftest is not None, "the root conftest is loaded as `conftest`"
+    assert conftest.live_test_credentials() == {k.env_var for k in ALL_KEYS}
 
 
 def test_every_key_this_module_defines_is_in_all_keys() -> None:
