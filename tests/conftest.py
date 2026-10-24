@@ -91,7 +91,9 @@ def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureR
     different behaviour from CI, and the difference would look like a flaky test rather
     than a stale shell. A test that wants one of these sets it explicitly.
     """
-    for name in [key for key in os.environ if key.startswith("LONGRUN_")]:
+    live = request.node.get_closest_marker("network") is not None
+    kept = live_test_credentials() if live else frozenset()
+    for name in [key for key in os.environ if key.startswith("LONGRUN_") and key not in kept]:
         monkeypatch.delenv(name, raising=False)
     # `ANTHROPIC_API_KEY` does not start with `LONGRUN_`, so the loop above never saw it -
     # and a developer with a real key exported would have had tests reaching a model that
@@ -99,8 +101,22 @@ def _clear_longrun_env(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureR
     #
     # Kept for `network` tests, which are the ones allowed to use it: a live test that
     # cleared the credential it needs would skip forever and look like it was passing.
-    if not request.node.get_closest_marker("network"):
+    if not live:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
+def live_test_credentials() -> frozenset[str]:
+    """Every key a `network` test may keep: the env var of each `keys.ALL_KEYS` entry (M18).
+
+    The reasoning that spared `ANTHROPIC_API_KEY`, applied to the rest. Until M18 every
+    `LONGRUN_*` key was cleared for live tests too, so the keyed live check in
+    `test_keyed_adapters` skipped on every machine, a key exported or not - "verified live
+    with the key" was a claim no test could make. A non-`network` test still sees none of
+    them, so CI and a developer with keys exported run the same offline suite.
+    """
+    from longrun.adapters.keys import ALL_KEYS
+
+    return frozenset(key.env_var for key in ALL_KEYS)
 
 
 @pytest.fixture(autouse=True)

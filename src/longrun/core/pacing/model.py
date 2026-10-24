@@ -12,6 +12,7 @@ segments would make re-segmentation after a reroute a re-interpolation problem.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field
@@ -43,18 +44,7 @@ class ETAVector(BaseModel):
 
     def at_distance(self, distance_m: float, route: Route) -> datetime:
         """The ETA at an arbitrary distance along the route, linearly interpolated."""
-        points = route.points
-        if distance_m <= points[0].cum_dist_m:
-            return self.etas[0]
-        for i in range(1, len(points)):
-            if points[i].cum_dist_m >= distance_m:
-                span = points[i].cum_dist_m - points[i - 1].cum_dist_m
-                if span <= 0:
-                    return self.etas[i]
-                fraction = (distance_m - points[i - 1].cum_dist_m) / span
-                delta = (self.etas[i] - self.etas[i - 1]) * fraction
-                return self.etas[i - 1] + delta
-        return self.etas[-1]
+        return eta_at_distance(route, self.etas, distance_m)
 
     def for_segments(self, segments: list[Segment], route: Route) -> list[datetime]:
         """ETA at each segment's midpoint.
@@ -64,6 +54,32 @@ class ETAVector(BaseModel):
         minutes early.
         """
         return [self.at_distance(s.cum_start_m + s.length_m / 2.0, route) for s in segments]
+
+
+def eta_at_distance(route: Route, etas: Sequence[datetime], distance_m: float) -> datetime:
+    """The ETA at a distance along the route, interpolated between the points either side.
+
+    What a scorer holding the bare `etas` list - one per route **point**, as the module
+    docstring says - should call instead of indexing it. Three scorers indexed it by
+    *segment* number, which reads segment *k* at point *k*'s arrival: always early, and on
+    a 244-point route cut into 98 segments, early by more than half the run (M18).
+
+    A list shorter than the route is read as far as it goes and then held at its last
+    value rather than refused. Tests pass one ETA per segment, and a scorer should not be
+    the place that discovers the vector was built for a different resolution.
+    """
+    points = route.points
+    last = min(len(points), len(etas)) - 1
+    if last <= 0 or distance_m <= points[0].cum_dist_m:
+        return etas[0]
+    for i in range(1, last + 1):
+        if points[i].cum_dist_m >= distance_m:
+            span = points[i].cum_dist_m - points[i - 1].cum_dist_m
+            if span <= 0:
+                return etas[i]
+            fraction = (distance_m - points[i - 1].cum_dist_m) / span
+            return etas[i - 1] + (etas[i] - etas[i - 1]) * fraction
+    return etas[last]
 
 
 def pacing_model(

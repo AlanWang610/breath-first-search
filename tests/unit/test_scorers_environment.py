@@ -14,7 +14,7 @@ could not tell", and collapsing either into a boolean is how "unknown" quietly b
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
@@ -24,6 +24,7 @@ from longrun.core.geo.solar import (
     CIVIL_TWILIGHT_DEG,
     clear_sky,
     solar_positions,
+    sun_events,
     utc_offset_from_longitude,
 )
 from longrun.core.preferences.floors import DRY_GAP_HARD_MIN, WBGT_HARD_C
@@ -126,6 +127,56 @@ def test_an_hour_of_offset_error_moves_the_sun_more_than_fifteen_degrees() -> No
     assert 15.0 < drift < 40.0, drift
 
 
+def test_sunrise_and_sunset_agree_with_pvlibs_almanac() -> None:
+    """The oracle `sun_events` is held to, and the reason it is not the code path: the
+    almanac knows no twilight, and a gate that "closes at dusk" needs one (M18)."""
+    import pandas as pd
+    import pvlib
+
+    day = date(2026, 6, 21)
+    events = sun_events(SF_LAT, SF_LON, day, -7.0)
+    noon = pd.Timestamp(f"{day.isoformat()} 12:00", tz="Etc/GMT+7")  # fixed UTC-7
+    almanac = pvlib.solarposition.sun_rise_set_transit_spa(pd.DatetimeIndex([noon]), SF_LAT, SF_LON)
+    for ours, column in ((events.sunrise, "sunrise"), (events.sunset, "sunset")):
+        theirs = almanac[column].iloc[0].tz_localize(None).floor("s").to_pydatetime()
+        assert ours is not None
+        assert abs((ours - theirs).total_seconds()) < 60, (column, ours, theirs)
+    # USNO's table for San Francisco: 05:48 and 20:35 PDT.
+    assert events.sunrise is not None and events.sunrise.strftime("%H:%M") in {"05:47", "05:48"}
+
+
+def test_civil_twilight_brackets_the_day() -> None:
+    events = sun_events(SF_LAT, SF_LON, date(2026, 9, 15), -7.0)
+    assert events.dawn and events.sunrise and events.sunset and events.dusk
+    assert events.dawn < events.sunrise < events.sunset < events.dusk
+    # About half an hour at this latitude in September.
+    assert 20 < (events.sunrise - events.dawn).total_seconds() / 60 < 40
+    assert 20 < (events.dusk - events.sunset).total_seconds() / 60 < 40
+
+
+def test_dusk_is_the_minute_lighting_calls_dark() -> None:
+    """One sun for both questions: a gate shut at dusk and a segment gone dark must not
+    disagree by a model's worth (M18)."""
+    from datetime import timedelta
+
+    dusk = sun_events(SF_LAT, SF_LON, date(2026, 9, 15), -7.0).dusk
+    assert dusk is not None
+    before, after = dusk - timedelta(minutes=2), dusk + timedelta(minutes=2)
+    lit = solar_positions([before, after], SF_LAT, SF_LON, -7.0).is_daylight
+    assert list(lit) == [True, False]
+
+
+def test_a_polar_day_has_no_sunset_and_a_polar_night_can_still_have_a_dawn() -> None:
+    """Utqiagvik: the sun never sets at the June solstice, and in December it peaks at
+    about -4.7 degrees - below the horizon, above civil twilight."""
+    lat, lon = 71.29, -156.79
+    june = sun_events(lat, lon, date(2026, 6, 21), -8.0)
+    assert (june.dawn, june.sunrise, june.sunset, june.dusk) == (None, None, None, None)
+    december = sun_events(lat, lon, date(2026, 12, 21), -9.0)
+    assert december.sunrise is None and december.sunset is None
+    assert december.dawn is not None and december.dusk is not None
+
+
 def test_longitude_gives_pacific_time_for_san_francisco() -> None:
     """Right to the hour in winter, an hour out in summer — which is why it is reported."""
     assert utc_offset_from_longitude(SF_LON) == -8.0
@@ -186,9 +237,14 @@ def test_several_rules_are_tried_in_turn() -> None:
 
 
 def test_a_dialect_this_parser_does_not_speak_is_unknown_not_closed() -> None:
-    """The load-bearing case. Reading it as closed would invent dry gaps out of syntax."""
+    """The load-bearing case. Reading it as closed would invent dry gaps out of syntax.
+
+    Both strings pinned here before M18 are now read - a season, and the sun given a
+    place - so the dialect here is one `_hours` still does not speak, and a sun-relative
+    rule asked with no sun to read it by."""
     assert is_open("sunrise-sunset", SATURDAY_NOON) is None
-    assert is_open("Apr-Oct 09:00-18:00", SATURDAY_NOON) is None
+    assert is_open("Th[4] 09:00-18:00", SATURDAY_NOON) is None
+    assert is_open("Apr-Oct 09:00-18:00", SATURDAY_NOON) is True
 
 
 def test_an_overnight_range_wraps_past_midnight() -> None:

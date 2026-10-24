@@ -76,9 +76,13 @@ FCC_ERRAND_REASON = (
 #: graph", and step 2 is what loads OSM into PostGIS. Scoring per way in PostGIS therefore
 #: depends on a step that comes after it, which the scope cannot have meant. `way_lts` runs
 #: after `layers` because that is the only order in which it can run at all.
+#:
+#: `speed_surveys` (M18) sits between them: it needs `osm.ways` and the TIGER boundaries
+#: that `layers` loads, and `way_lts` scores with what it writes (ADR 0053).
 STEPS: tuple[str, ...] = (
     "osm_graph",
     "layers",
+    "speed_surveys",
     "way_lts",
     "terrain",
     "jurisdictions",
@@ -370,6 +374,65 @@ def step_layers(ctx: BuildContext) -> StepRecord:
     )
 
 
+def step_speed_surveys(ctx: BuildContext) -> StepRecord:
+    """M18: speed surveys merged onto the ways they measured, before `way_lts` scores them.
+
+    At build and never at plan time, because LTS is computed once and the router's graph is
+    built from it (ADR 0025, 0053): a survey read at plan time would move the scorer's level
+    and not the graph's. The jurisdictions asked are `jurisdictions_for("speed_survey")`'s,
+    the same rule a plan would use, narrowed to those an adapter claims - so a region with
+    no survey adapter asks nobody and spends nothing.
+
+    `blocked` until something claims one, which is every region until M21. A merge that
+    changed anything clears `way_lts`'s record, so the same build rescores with it.
+    """
+    from datetime import UTC
+    from datetime import datetime as clock
+
+    from longrun.adapters.registry import build_registry
+    from longrun.core.data.cache import SqliteCache
+    from longrun.core.data.jurisdictions import JurisdictionScan, jurisdictions_for
+    from longrun.core.models.context import Budget
+    from longrun.regions import speed_surveys
+
+    asked = jurisdictions_for("speed_survey", JurisdictionScan(jurisdictions=jurisdictions_in(ctx)))
+    with SqliteCache() as cache:
+        registry = build_registry(
+            cache, Budget(), offline=False, max_jurisdictions=None, max_fetches=None
+        )
+        claimed = [j for j in asked if registry.adapters_for("speed_survey", j)]
+        if not claimed:
+            return StepRecord(
+                status="blocked",
+                detail=(
+                    f"no speed-survey adapter claims any of {len(asked)} jurisdiction(s); "
+                    "nothing to merge"
+                ),
+                counts={"asked": len(asked)},
+            )
+        found = registry.fetch("speed_survey", claimed, ctx.spec.shape(), clock.now(UTC).date())
+
+    report = speed_surveys.compute(
+        ctx.connection, region=ctx.spec.name, surveys=found.features, log=ctx.log
+    )
+    if report.changed and ctx.manifest.steps.pop("way_lts", None) is not None:
+        ctx.log("  way_lts will rescore: the surveys it was scored with have changed")
+    unanswered = sum(1 for answer in found.answers if not answer.checked)
+    silent = f"; {unanswered} claimed jurisdiction(s) did not answer" if unanswered else ""
+    return StepRecord(
+        status="done",
+        detail=report.summary() + silent,
+        counts={
+            "asked": len(asked),
+            "claimed": len(claimed),
+            "unanswered": unanswered,
+            "surveys": report.surveys,
+            "usable": report.usable,
+            "merged": report.merged,
+        },
+    )
+
+
 def step_way_lts(ctx: BuildContext) -> StepRecord:
     """§13 step 1's middle clause: the offline LTS score per way, into `osm_lts.way_lts`.
 
@@ -562,6 +625,7 @@ def step_coverage_report(ctx: BuildContext) -> StepRecord:
 STEP_FUNCTIONS: dict[str, Callable[[BuildContext], StepRecord]] = {
     "osm_graph": step_osm_graph,
     "layers": step_layers,
+    "speed_surveys": step_speed_surveys,
     "way_lts": step_way_lts,
     "terrain": step_terrain,
     "jurisdictions": step_jurisdictions,

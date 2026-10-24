@@ -156,11 +156,13 @@ uv run longrun plan --from "37.1508,-91.3576" --to "37.1497,-91.4436" `
 key is the extract *and* the LTS rules; `--graph` on the freeze and `graph_identity` on the
 replay must agree or the cassette misses loudly.
 
-Recorded with **no keys in the environment**, deliberately. `uv run` does not load `.env` and
-`tests/conftest._clear_longrun_env` deletes every `LONGRUN_*` variable before each test, so a
-cassette recorded with `LONGRUN_NPS_API_KEY` set would hold an NPS response the golden can
-never replay — and the route would pin a different answer on a developer's machine from the
-one CI sees.
+Recorded with **no keys in the environment**, deliberately: `uv run` does not load `.env`, so
+the route pins the answer a keyless machine gets. A cassette recorded *with*
+`LONGRUN_NPS_API_KEY` set would no longer be unreplayable, as this note used to say - since
+M17 a keyed adapter with no key peeks the cassette before refusing, and since M18 the NPS
+adapters record one row per park (`ozar` here). Recording one would move this golden's NPS
+lines from "key not set" to OZAR's own alerts and hours; that is a deliberate re-record, not
+something to do in passing.
 
 ## Known weakness
 

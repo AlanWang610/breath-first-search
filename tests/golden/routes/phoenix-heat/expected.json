@@ -447,7 +447,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "f54ee531b672dccfb958b88e85bf4e7b61b83e06c2f3d86cc36180de9ca1a108",
+  "measurements_sha256": "0824d6654b7199ec8a54a5217a3e3d25928076eb31d40ede21b396098aa2acb8",
   "pacing": {
     "duration_s": 1884.2,
     "finish": "2026-07-15T12:31:24"
@@ -2303,7 +2303,7 @@
         "wbgt_used_c": 33.22
       },
       "waypoints": {
-        "food": 37,
+        "food": 38,
         "toilet": 1,
         "water": 13
       },
@@ -2566,8 +2566,7 @@
     "by_scorer": {
       "crew_points": 201,
       "hazards": 2,
-      "resupply_schedule": 51,
-      "services_along": 1
+      "resupply_schedule": 52
     },
     "max_offset_m": 398.0,
     "total": 255

@@ -229,7 +229,19 @@ def jurisdictions_from_frames(
     is what the two traps deserve: a park whose state cannot be resolved, and a place whose
     GEOID extends a county's.
     """
+    return _from_frames(boundaries, parks)[0]
+
+
+def _from_frames(
+    boundaries: GeoDataFrame | None, parks: GeoDataFrame | None
+) -> tuple[list[Jurisdiction], list[tuple[Any, str]]]:
+    """The records, and each park polygon paired with the id it was folded into.
+
+    The pairs are what `_merged` cannot keep: one `padus:NPS` record stands for every NPS
+    unit on the route, so *where* each unit is has to be carried beside it (M18).
+    """
     found: dict[str, Jurisdiction] = {}
+    park_rows: list[tuple[Any, str]] = []
     counties = _county_lookup(boundaries)
 
     if boundaries is not None and len(boundaries):
@@ -271,10 +283,67 @@ def jurisdictions_from_frames(
             )
             if park is not None:
                 found[park.id] = _merged(found.get(park.id), park)
+                park_rows.append((getattr(row, "geometry", None), park.id))
 
-    return sorted(
+    records = sorted(
         found.values(), key=lambda j: (LEVELS.index(j.level) if j.level in LEVELS else 9, j.id)
     )
+    return records, park_rows
+
+
+def park_spans(
+    route: Route, rows: list[tuple[Any, str]]
+) -> dict[str, tuple[tuple[float, float], ...]]:
+    """Where along the route each park agency's ground is, as `(start_m, end_m)` runs.
+
+    Why it exists: a park-wide rule ("the park closes at dusk") arrives with no geometry,
+    and was tested at 0 m - the route's *start* - wherever the park actually was (M18).
+    Read here instead, at each run's entry.
+
+    A run is consecutive route points inside one park polygon, so a loop through a park
+    twice is two runs. A park the route only passes - the parks layer is asked with a
+    500 m corridor - gets a zero-length run at the nearest route point, because its gate
+    is still on the runner's way. An invalid geometry is skipped, never fatal.
+    """
+    import numpy as np
+    import shapely
+
+    if not rows or not route.points:
+        return {}
+    lons = np.array([p.lon for p in route.points], dtype=float)
+    lats = np.array([p.lat for p in route.points], dtype=float)
+    cum = [p.cum_dist_m for p in route.points]
+    points: Any = None
+    found: dict[str, set[tuple[float, float]]] = {}
+    for geometry, jurisdiction in rows:
+        if geometry is None or geometry.is_empty:
+            continue
+        try:
+            inside = shapely.contains_xy(geometry, lons, lats)
+            runs = _runs([bool(flag) for flag in inside], cum)
+            if not runs:
+                points = shapely.points(lons, lats) if points is None else points
+                nearest = int(np.argmin(shapely.distance(geometry, points)))
+                runs = [(cum[nearest], cum[nearest])]
+        except Exception:  # noqa: BLE001, S112 - an invalid park polygon places nothing
+            continue
+        found.setdefault(jurisdiction, set()).update(runs)
+    return {jurisdiction: tuple(sorted(runs)) for jurisdiction, runs in found.items()}
+
+
+def _runs(inside: list[bool], cum: list[float]) -> list[tuple[float, float]]:
+    """Consecutive `True` stretches, as the distances of their first and last points."""
+    runs: list[tuple[float, float]] = []
+    start: int | None = None
+    for index, flag in enumerate(inside):
+        if flag and start is None:
+            start = index
+        elif not flag and start is not None:
+            runs.append((cum[start], cum[index - 1]))
+            start = None
+    if start is not None:
+        runs.append((cum[start], cum[-1]))
+    return runs
 
 
 def _merged(existing: Jurisdiction | None, park: Jurisdiction) -> Jurisdiction:
@@ -313,6 +382,9 @@ class JurisdictionScan:
     #: `padus:CITY` matches a city-parks adapter in any of the fifty states, so this is a
     #: correctness hazard the moment such an adapter exists - reported, never inferred.
     unqualified_agencies: list[str] = field(default_factory=list)
+    #: Where each park agency's ground lies along the route, by id - `park_spans`. Kept
+    #: beside the records because one `padus:NPS` record stands for every NPS unit crossed.
+    spans: dict[str, tuple[tuple[float, float], ...]] = field(default_factory=dict)
 
     @property
     def answered(self) -> bool:
@@ -340,7 +412,7 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
     except Exception as exc:  # noqa: BLE001
         reasons.append(f"no parks layer: {_describe(exc)}")
 
-    found = jurisdictions_from_frames(boundaries, parks)
+    found, park_rows = _from_frames(boundaries, parks)
     # A park agency that could not be tied to a state is reportable, not silent. Its id
     # claims national scope, so an adapter registered for one state's city parks would
     # match it - the coverage manifest has to say which agencies are in that state.
@@ -359,6 +431,7 @@ def route_jurisdictions(route: Route, ctx: ScorerContext) -> JurisdictionScan:
         reasons=reasons,
         unattributed_parks=max(0, len(parks) - named) if parks is not None else 0,
         unqualified_agencies=unqualified,
+        spans=park_spans(route, park_rows),
     )
 
 
@@ -421,6 +494,7 @@ __all__ = [
     "from_padus_row",
     "from_tiger_row",
     "jurisdictions_from_frames",
+    "park_spans",
     "unqualified_reason",
     "route_jurisdictions",
 ]

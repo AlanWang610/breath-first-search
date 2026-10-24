@@ -182,7 +182,7 @@
       "checked": false,
       "jurisdiction": null,
       "kind": "opening_hours",
-      "reason": "5 service(s) carry opening_hours this parser does not read; counted as available rather than closed",
+      "reason": "1 service(s) carry opening_hours this parser does not read; counted as available rather than closed",
       "source": "nodes",
       "tier": null,
       "vintage": null
@@ -411,7 +411,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "5ded1034dc00df7f2f8d97e5ca0557d5a86a2e1b9dac0becdb63daccdafac017",
+  "measurements_sha256": "58c431893dfb21769dc977442be3f5b0e6d8f31a9765893c3d016700497fb5e0",
   "pacing": {
     "duration_s": 2864.0,
     "finish": "2026-09-15T08:47:44"
@@ -748,14 +748,14 @@
         "max_dry_gap_min": 39.923,
         "max_food_gap_min": 28.78,
         "max_toilet_gap_min": 36.545,
-        "services_with_unreadable_hours": 5,
+        "services_with_unreadable_hours": 1,
         "suggested_carry_ml": 399.234,
         "water_hard_threshold_min": 150.0,
         "water_soft_threshold_min": 90.0,
         "wbgt_used_c": 18.43
       },
       "waypoints": {
-        "food": 198,
+        "food": 195,
         "toilet": 11,
         "water": 6
       },
@@ -986,8 +986,8 @@
     "by_scorer": {
       "bailouts": 5,
       "crew_points": 109,
-      "resupply_schedule": 215,
-      "services_along": 54
+      "resupply_schedule": 212,
+      "services_along": 57
     },
     "max_offset_m": 422.4,
     "total": 383

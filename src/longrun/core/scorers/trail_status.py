@@ -29,6 +29,7 @@ from longrun.core.data.jurisdictions import (
 )
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, SegmentMeasurement, Tier
+from longrun.core.pacing.model import eta_at_distance
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, segment_at
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -138,7 +139,8 @@ def trail_status(
         cum_m, offset_m = placed
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
-        when = etas[min(segments.index(segment), len(etas) - 1)] if etas and segment else None
+        # At the alert's own distance; this indexed the per-point ETAs by segment number.
+        when = eta_at_distance(route, etas, cum_m) if etas else None
         # `False` only: an alert whose timing cannot be read against the arrival is still
         # an alert about ground the runner is on.
         if when is not None and clock.active_at(feature, when) is False:

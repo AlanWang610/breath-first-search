@@ -30,7 +30,13 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from longrun.core.routing.lts import LTS_VERSION, lts_from_tags
+from longrun.core.routing.lts import (
+    LTS_VERSION,
+    SURVEY_SOURCE_COLUMN,
+    SURVEY_SPEED_COLUMN,
+    lts_from_tags,
+    survey_speed_of,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable, Iterator
@@ -44,6 +50,12 @@ TABLE = "way_lts"
 #: 0012 found no unauthenticated HPMS endpoint - and the table below must be correct and
 #: useful with `aadt IS NULL` on every row, which `lts_from_tags(tags, aadt=None)` already is.
 AADT_TABLE = "osm.way_aadt"
+
+#: The region build's speed-survey merge (M18, `regions/speed_surveys.py`), left-joined when
+#: it exists. Its speed is merged into a way's tags under `SURVEY_SPEED_COLUMN` - the name the
+#: plan-time `ways` layer carries it under - so this table and the scorer read one value.
+SURVEY_TABLE = "speed_survey.way_speed"
+SURVEY_SCHEMA = "speed_survey"
 
 #: Same reasoning as `osm.BATCH_ROWS`: peak memory is a property of this number rather than of
 #: the region. 1.8 M ways are loaded across the five regions built so far.
@@ -74,18 +86,29 @@ def create_statements(schema: str = SCHEMA) -> list[str]:
         "aadt_source text, "
         "lts_version text NOT NULL)",
         f"CREATE INDEX IF NOT EXISTS {TABLE}_version_idx ON {schema}.{TABLE} (lts_version)",
+        # M18: the surveyed speed a level was computed with, so a re-run can tell a way whose
+        # survey changed from one already scored at it. Added rather than declared above so a
+        # table built before M18 gains them in place.
+        f"ALTER TABLE {schema}.{TABLE} ADD COLUMN IF NOT EXISTS operating_speed_kph real",
+        f"ALTER TABLE {schema}.{TABLE} ADD COLUMN IF NOT EXISTS speed_source text",
     ]
 
 
-def composite_vintage(extract_vintage: str, version: int = LTS_VERSION) -> str:
-    """`<extract>+lts<version>` — the graph identity a route cache keys on.
+def composite_vintage(
+    extract_vintage: str, version: int = LTS_VERSION, survey: str | None = None
+) -> str:
+    """`<extract>+lts<version>[+ss<survey>]` — the graph identity a route cache keys on.
 
     The extract date pins the *input* and says nothing about the rules applied to it. A graph
     is built once and served for a week (scope §7), so "the router steered on rules this
     process no longer holds" is a state the system can be in, and this is the only thing that
     can make it visible.
+
+    `+ss<survey>` only for a region with merged speed surveys (M18): a survey is another
+    input, and two graphs from one extract under the same rules differ if one merged it. A
+    region with none keeps the identity it always had, so nothing it cached is re-keyed.
     """
-    return f"{extract_vintage}+lts{version}"
+    return f"{extract_vintage}+lts{version}" + (f"+ss{survey}" if survey else "")
 
 
 @dataclass
@@ -106,6 +129,7 @@ class LtsReport:
     #: a mainline railway in the graph at the same stress as a residential street.
     not_highway: int = 0
     with_aadt: int = 0
+    with_survey: int = 0
     levels: collections.Counter[int] = field(default_factory=collections.Counter)
     elapsed_s: float = 0.0
 
@@ -122,7 +146,7 @@ class LtsReport:
         return (
             f"{self.covered:,} way(s) at {self.vintage} ({scored}), "
             f"{self.not_highway:,} without a highway tag skipped, "
-            f"{self.with_aadt:,} with a volume"
+            f"{self.with_aadt:,} with a volume, {self.with_survey:,} with a surveyed speed"
         )
 
 
@@ -134,6 +158,32 @@ def _aadt_available(connection: Any) -> bool:
     return bool(row and row[0])
 
 
+def _survey_available(connection: Any) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass(%s)", (SURVEY_TABLE,))
+        row = cursor.fetchone()
+    return bool(row and row[0])
+
+
+def survey_vintage(connection: Any, region: str) -> str | None:
+    """The vintage the speed-survey merge recorded for this region, if it ran."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT vintage FROM meta.layer_vintage WHERE layer_schema = %s AND region = %s "
+            "ORDER BY loaded_at DESC LIMIT 1",
+            (SURVEY_SCHEMA, region),
+        )
+        found = cursor.fetchone()
+    return None if found is None else str(found[0])
+
+
+def with_survey(tags: dict[str, Any], speed: float | None, source: str | None) -> dict[str, Any]:
+    """A way's tags with its surveyed speed merged in, under the plan-time column's name."""
+    if speed is None:
+        return tags
+    return {**tags, SURVEY_SPEED_COLUMN: speed, SURVEY_SOURCE_COLUMN: source or "survey"}
+
+
 def resolve_aadt(tags: dict[str, Any], conflated: float | None) -> tuple[float | None, str | None]:
     """Which volume to score with, and where it came from.
 
@@ -142,13 +192,17 @@ def resolve_aadt(tags: dict[str, Any], conflated: float | None) -> tuple[float |
     a table that ignored the tag would disagree with the scorer on **precisely the ways that
     carry a volume** — the ones where the answer is least likely to be a guess.
 
-    The forward hazard, recorded in ADR 0025: the day something writes `osm.way_aadt`, the
-    scorer has to read it too, or the two part company again on every conflated way.
+    The forward hazard, recorded in ADR 0025 - the day something writes `osm.way_aadt`, the
+    scorer has to read it too - is closed since M18: the plan-time `ways` layer carries the
+    conflation as `aadt_conflated`, which `aadt_of` reads before the tag, so a conflated
+    volume reaches the scorer in the same precedence it is scored with here.
     """
-    from longrun.core.scorers._common import aadt_of
+    from longrun.core.routing.lts import AADT_CONFLATED_COLUMN, aadt_of
 
     if conflated is not None:
         return conflated, "conflated"
+    if tags.get(AADT_CONFLATED_COLUMN) is not None:
+        return aadt_of(tags), "conflated"
     tagged = aadt_of(tags)
     return (tagged, "osm_tag") if tagged is not None else (None, None)
 
@@ -163,6 +217,8 @@ class WayLts:
     reasons: list[str]
     aadt: float | None
     aadt_source: str | None
+    operating_speed_kph: float | None = None
+    speed_source: str | None = None
 
 
 def score_way(way_id: int, tags: dict[str, Any], conflated: float | None = None) -> WayLts | None:
@@ -182,7 +238,8 @@ def score_way(way_id: int, tags: dict[str, Any], conflated: float | None = None)
     if not tags.get("highway"):
         return None
     aadt, source = resolve_aadt(tags, conflated)
-    result = lts_from_tags(tags, aadt=aadt)
+    surveyed = survey_speed_of(tags)
+    result = lts_from_tags(tags, aadt=aadt, operating_speed_kph=surveyed)
     return WayLts(
         way_id=way_id,
         lts=result.level,
@@ -190,6 +247,8 @@ def score_way(way_id: int, tags: dict[str, Any], conflated: float | None = None)
         reasons=result.reasons,
         aadt=aadt,
         aadt_source=source,
+        operating_speed_kph=surveyed,
+        speed_source=str(tags.get(SURVEY_SOURCE_COLUMN)) if surveyed is not None else None,
     )
 
 
@@ -200,7 +259,8 @@ def _rows(
     force: bool,
     version: int,
     with_aadt: bool,
-) -> Iterator[tuple[int, dict[str, Any], float | None]]:
+    with_speed: bool = False,
+) -> Iterator[tuple[int, dict[str, Any], float | None, float | None, str | None]]:
     """Ways to score, streamed through a server-side cursor.
 
     Incremental by default: a way already carrying a row at this `lts_version` is skipped, so
@@ -219,10 +279,22 @@ def _rows(
     else:
         select.append(", NULL::real AS aadt")
 
+    if with_speed:
+        select.append(", s.speed_85_kph, s.source")
+        joins.append(f"LEFT JOIN {SURVEY_TABLE} s ON s.way_id = w.way_id")
+    else:
+        select.append(", NULL::real AS speed_85_kph, NULL::text AS source")
+
     if not force:
         joins.append(f"LEFT JOIN {SCHEMA}.{TABLE} l ON l.way_id = w.way_id AND l.lts_version = %s")
         params.append(f"{version}")
-        where.append("l.way_id IS NULL")
+        # A way scored before its survey arrived - or under a survey since replaced - is not
+        # done: its level was computed from a speed that is no longer the input (M18).
+        where.append(
+            "(l.way_id IS NULL OR l.operating_speed_kph IS DISTINCT FROM s.speed_85_kph)"
+            if with_speed
+            else "l.way_id IS NULL"
+        )
 
     if polygon_wkt is not None:
         where.append(f"ST_Intersects(w.geom, ST_GeomFromText(%s, {WGS84}))")
@@ -251,6 +323,10 @@ def compute(
 ) -> LtsReport:
     """Score every unscored way and write `osm_lts.way_lts`.
 
+    A way with a surveyed speed (`speed_survey.way_speed`, M18) is scored with it merged into
+    its tags under the plan-time column's name, a way whose survey changed since it was scored
+    is scored again, and the vintage gains `+ss<survey>` when the region has one.
+
     **Scoring is global; only the count is per region.** `region_wkt` narrows `covered`, which
     is what a build log should report, and narrows nothing else. Scoping the *scoring* to the
     region polygon is the obvious economy and it opens a coverage gap that would surface as a
@@ -266,8 +342,6 @@ def compute(
     there when it is — `load_extract`'s rule, for the same reason.
     """
     started = time.perf_counter()
-    vintage = composite_vintage(extract_vintage, version)
-    report = LtsReport(vintage=vintage)
 
     with connection.cursor() as cursor:
         for statement in create_statements():
@@ -278,13 +352,19 @@ def compute(
     log(
         f"  aadt: {AADT_TABLE} present" if with_aadt else f"  aadt: no {AADT_TABLE} (ADR 0012)",
     )
+    with_speed = _survey_available(connection)
+    survey = survey_vintage(connection, region) if with_speed else None
+    log(f"  speed surveys: {SURVEY_TABLE} at {survey}" if survey else "  speed surveys: none")
+    vintage = composite_vintage(extract_vintage, version, survey)
+    report = LtsReport(vintage=vintage)
 
     staging = "stage_way_lts"
     with connection.cursor() as writer:
         writer.execute(f"DROP TABLE IF EXISTS pg_temp.{staging}")
         writer.execute(
             f"CREATE TEMP TABLE {staging} (way_id bigint, lts smallint, confidence real, "
-            "reasons text[], aadt real, aadt_source text, lts_version text)"
+            "reasons text[], aadt real, aadt_source text, lts_version text, "
+            "operating_speed_kph real, speed_source text)"
         )
 
         buffer: list[tuple[Any, ...]] = []
@@ -293,23 +373,26 @@ def compute(
             if not buffer:
                 return
             statement = (
-                f"COPY pg_temp.{staging} "
-                "(way_id, lts, confidence, reasons, aadt, aadt_source, lts_version) FROM STDIN"
+                f"COPY pg_temp.{staging} (way_id, lts, confidence, reasons, aadt, "
+                "aadt_source, lts_version, operating_speed_kph, speed_source) FROM STDIN"
             )
             with writer.copy(statement) as copy:
-                copy.set_types(["bigint", "smallint", "real", "text[]", "real", "text", "text"])
+                copy.set_types(
+                    ["bigint", "smallint", "real", "text[]", "real", "text", "text", "real", "text"]
+                )
                 for row in buffer:
                     copy.write_row(row)
             buffer.clear()
 
-        for way_id, tags, conflated in _rows(
+        for way_id, tags, conflated, speed, speed_source in _rows(
             connection,
             polygon_wkt=None,
             force=force,
             version=version,
             with_aadt=with_aadt,
+            with_speed=with_speed,
         ):
-            row = score_way(way_id, tags, conflated)
+            row = score_way(way_id, with_survey(tags, speed, speed_source), conflated)
             if row is None:
                 report.not_highway += 1
                 continue
@@ -317,6 +400,8 @@ def compute(
             report.levels[row.lts] += 1
             if row.aadt is not None:
                 report.with_aadt += 1
+            if row.operating_speed_kph is not None:
+                report.with_survey += 1
             buffer.append(
                 (
                     row.way_id,
@@ -326,6 +411,8 @@ def compute(
                     row.aadt,
                     row.aadt_source,
                     f"{version}",
+                    row.operating_speed_kph,
+                    row.speed_source,
                 )
             )
             if len(buffer) >= BATCH_ROWS:
@@ -335,14 +422,17 @@ def compute(
 
         if report.scored:
             writer.execute(
-                f"INSERT INTO {SCHEMA}.{TABLE} "
-                "(way_id, lts, confidence, reasons, aadt, aadt_source, lts_version) "
+                f"INSERT INTO {SCHEMA}.{TABLE} (way_id, lts, confidence, reasons, aadt, "
+                "aadt_source, lts_version, operating_speed_kph, speed_source) "
                 "SELECT DISTINCT ON (way_id) way_id, lts, confidence, reasons, aadt, "
-                f"aadt_source, lts_version FROM pg_temp.{staging} ORDER BY way_id "
+                "aadt_source, lts_version, operating_speed_kph, speed_source "
+                f"FROM pg_temp.{staging} ORDER BY way_id "
                 "ON CONFLICT (way_id) DO UPDATE SET lts = EXCLUDED.lts, "
                 "confidence = EXCLUDED.confidence, reasons = EXCLUDED.reasons, "
                 "aadt = EXCLUDED.aadt, aadt_source = EXCLUDED.aadt_source, "
-                "lts_version = EXCLUDED.lts_version"
+                "lts_version = EXCLUDED.lts_version, "
+                "operating_speed_kph = EXCLUDED.operating_speed_kph, "
+                "speed_source = EXCLUDED.speed_source"
             )
         writer.execute(f"DROP TABLE IF EXISTS pg_temp.{staging}")
 
@@ -400,6 +490,7 @@ __all__ = [
     "AADT_TABLE",
     "BATCH_ROWS",
     "SCHEMA",
+    "SURVEY_TABLE",
     "TABLE",
     "LtsReport",
     "WayLts",
@@ -409,4 +500,6 @@ __all__ = [
     "lookup",
     "resolve_aadt",
     "score_way",
+    "survey_vintage",
+    "with_survey",
 ]

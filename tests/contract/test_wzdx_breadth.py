@@ -7,7 +7,7 @@ it makes ADR 0038's licence rule executable rather than a paragraph somebody has
 remember.
 
 **The rule, as a test:** a cassette may be committed only for a feed whose own
-`feed_info.license` declares CC0. `test_every_committed_cassette_declares_cc0` scans the
+`feed_info.license` declares CC0. `test_payload_licences.py` scans the
 directory rather than a list, so a cassette added later without a licence fails here
 instead of being noticed by nobody. That is the executable half of ADR 0006's "a source
 that cannot be redistributed cannot back a committed cassette".
@@ -116,26 +116,6 @@ def _licence_of(payload: dict[str, Any]) -> str | None:
 
 
 # --- ADR 0038, as something that runs ---------------------------------------
-
-
-def test_every_committed_cassette_declares_cc0() -> None:
-    """The rule, applied to the directory rather than to a list.
-
-    ADR 0006 says a source that cannot be redistributed cannot back a committed cassette,
-    and ADR 0038 says the only redistribution grant this project acts on is the one the
-    publisher ships inside the payload. A cassette is a redistribution of somebody's feed
-    into a public repository, so it needs that grant and nothing weaker.
-
-    Scanning the directory rather than iterating `COMMITTABLE` is deliberate: a list can be
-    extended without thinking, a directory cannot be added to without this failing.
-    """
-    for path in sorted(CASSETTES.glob("wzdx_*.json")):
-        licence = _licence_of(json.loads(path.read_text(encoding="utf-8")))
-        assert licence is not None, f"{path.name} declares no licence and must not be committed"
-        assert licence.rstrip("/") == CC0, (
-            f"{path.name} declares {licence!r}, which is not the CC0 dedication ADR 0038 "
-            f"requires of a committed cassette"
-        )
 
 
 @pytest.mark.parametrize(("short", "adapter"), UNCOMMITTABLE, ids=[u[0] for u in UNCOMMITTABLE])
@@ -281,20 +261,32 @@ def test_one_statewide_fetch_answers_for_every_place_inside_the_state() -> None:
     ), "every jurisdiction it covered has to record it, or the sheet implies twelve requests"
 
 
-def test_no_two_adapters_claim_the_same_state() -> None:
+def test_no_two_complete_adapters_race_for_one_jurisdiction() -> None:
     """Two feeds over one jurisdiction is legitimate - Arizona has two and
-    `test_keyed_adapters` explains why - but it must be a decision. Arizona is the only
-    place this project has made it, so any second one here is an accident.
+    `test_keyed_adapters` explains why - but it must be a decision.
+
+    Since M18 the ladder makes two more shapes legitimate by construction (ADR 0047): a
+    tier-2 source over a tier-1 state is asked only when tier 1 fails, and a partial network
+    (`complete = False`, a turnpike's own roads) adds its records without ending the climb.
+    What stays an accident is two *complete* claimants of one id, on one facet, at one tier:
+    they answer the same question and the registry takes both, so the second is either
+    redundant or a mistake about the first.
     """
     from collections import Counter
 
+    from longrun.adapters.base import facet_of, is_complete
     from longrun.adapters.registry import discover
 
     found, failures = discover()
     assert not failures, failures
-    counts = Counter(i for a in found if a.kind == "closures" for i in a.jurisdictions)
-    doubled = {i for i, n in counts.items() if n > 1}
-    assert doubled == set(), f"more than one closure adapter claims {sorted(doubled)}"
+    counts = Counter(
+        (i, facet_of(a), int(a.tier))
+        for a in found
+        if a.kind == "closures" and is_complete(a)
+        for i in a.jurisdictions
+    )
+    doubled = sorted(key for key, n in counts.items() if n > 1)
+    assert doubled == [], f"more than one complete closure adapter claims {doubled}"
 
 
 def test_every_m14_adapter_is_reachable_through_entry_points() -> None:

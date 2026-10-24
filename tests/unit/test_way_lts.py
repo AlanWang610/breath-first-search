@@ -161,3 +161,76 @@ class TestReport:
         summary = LtsReport(vintage="2026-09-13+lts1", covered=1600, scored=0).summary()
         assert "1,600 way(s)" in summary
         assert "nothing new to score" in summary
+
+
+# --- speed surveys (M18, ADR 0053) -------------------------------------------
+
+
+def test_a_surveyed_way_gets_the_level_the_scorer_gives_it() -> None:
+    """ADR 0025's forward hazard, closed for speed surveys: the build merges a survey into a
+    way's tags under the column the plan-time `ways` layer carries it in, and both sides then
+    read it through one function - so the row and the scorer cannot disagree."""
+    from longrun.core.routing.lts import SURVEY_SPEED_COLUMN, lts_for_way
+    from longrun.regions.lts import with_survey
+
+    tags = {"highway": "secondary", "maxspeed": "40", "sidewalk": "both"}
+    merged = with_survey(tags, 66.0, "portal.socrata.kcmo-speeds")
+    row = score_way(12, merged)
+    scorer = lts_for_way({**tags, SURVEY_SPEED_COLUMN: 66.0})
+    assert row is not None
+    assert (row.lts, row.confidence, row.reasons) == (
+        scorer.level,
+        scorer.confidence,
+        scorer.reasons,
+    )
+    assert row.operating_speed_kph == 66.0
+    assert row.speed_source == "portal.socrata.kcmo-speeds"
+
+
+def test_a_way_without_a_survey_records_none() -> None:
+    from longrun.regions.lts import with_survey
+
+    tags = {"highway": "residential"}
+    assert with_survey(tags, None, None) is tags
+    row = score_way(13, tags)
+    assert row is not None
+    assert row.operating_speed_kph is None and row.speed_source is None
+
+
+def test_the_graph_identity_names_a_survey_only_when_there_is_one() -> None:
+    """A region with no survey keeps the identity it always had, so nothing cached is
+    re-keyed; one with a survey is a different graph from the same extract."""
+    assert composite_vintage("2026-09-14") == f"2026-09-14+lts{LTS_VERSION}"
+    assert composite_vintage("2026-09-14", survey=None) == f"2026-09-14+lts{LTS_VERSION}"
+    assert composite_vintage("2026-09-14", survey="a1b2c3d4") == (
+        f"2026-09-14+lts{LTS_VERSION}+ssa1b2c3d4"
+    )
+
+
+def test_a_table_built_before_m18_gains_the_survey_columns_in_place() -> None:
+    statements = " ".join(create_statements())
+    assert "ADD COLUMN IF NOT EXISTS operating_speed_kph" in statements
+    assert "ADD COLUMN IF NOT EXISTS speed_source" in statements
+
+
+# --- a conflated volume (M18, ADR 0025's forward hazard) ---------------------
+
+
+def test_a_conflated_volume_reaches_the_scorer_in_the_order_the_table_uses() -> None:
+    """The table prefers `osm.way_aadt` to OSM's own tag. The plan-time `ways` layer now
+    carries the conflation as `aadt_conflated`, read first by `aadt_of` - so the scorer and
+    the table agree on a conflated way, which was the hazard ADR 0025 recorded."""
+    from longrun.core.routing.lts import AADT_CONFLATED_COLUMN, aadt_of, lts_for_way
+
+    tags = {"highway": "tertiary", "maxspeed": "50", "sidewalk": "both", "aadt": "1200"}
+    row = score_way(14, tags, conflated=30_000.0)
+    scorer = lts_for_way({**tags, AADT_CONFLATED_COLUMN: 30_000.0})
+    assert row is not None
+    assert (row.lts, row.reasons, row.aadt, row.aadt_source) == (
+        scorer.level,
+        scorer.reasons,
+        30_000.0,
+        "conflated",
+    )
+    assert aadt_of({**tags, AADT_CONFLATED_COLUMN: 30_000.0}) == 30_000.0
+    assert resolve_aadt({**tags, AADT_CONFLATED_COLUMN: 30_000.0}, None) == (30_000.0, "conflated")

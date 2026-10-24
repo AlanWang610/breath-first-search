@@ -163,6 +163,45 @@ def test_statewide_closure_coverage_never_falls() -> None:
     assert len(usable) >= 20, sorted(usable)
 
 
+def test_statewide_closure_coverage_with_every_key_set_never_falls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The keyed half of the ratchet (M18). CI has no keys, so the ratchet above can only
+    ever be raised by a keyless feed; a keyed adoption is counted here instead. Every key is
+    set to a placeholder - `coverage_table` asks nobody, it only counts who could be asked.
+    M18 measured 21: the 20 above and Massachusetts."""
+    from longrun.adapters.keys import ALL_KEYS
+    from longrun.adapters.registry import discover
+
+    for key in ALL_KEYS:
+        monkeypatch.setenv(key.env_var, "set-for-counting")
+    adapters, _ = discover()
+    table = load_table(TABLE)
+    summary = summarise(coverage_table(adapters, table, ["closures"]), table)["closures"]
+    usable = summary["states_by_tier"]["1"] + summary["states_by_tier"]["2"]
+    assert len(usable) >= 21, sorted(usable)
+
+
+def test_a_claim_and_an_answer_are_counted_apart(tmp_path: Path) -> None:
+    """A keyed tier-1 feed with no key, over a keyless tier-2 one, is a jurisdiction answered
+    at tier 2 - what a plan gets - with a better claimant waiting. A partial network never
+    covers anything (M18)."""
+    path = tmp_path / "t.csv.gz"
+    write_table(build_table(*_census(tmp_path)), path)
+    table = load_table(path)
+    keyed = _Fake("wzdx.keyed", ("tiger:state:29",), tier=1, key=_Key())
+    fallback = _Fake("state511.mo", ("tiger:state:29",), tier=2)
+    turnpike = _Fake("wzdx.turnpike", ("tiger:state:29",), tier=1)
+    turnpike.complete = False
+    by_id = {r.id: r for r in coverage_table([keyed, fallback, turnpike], table, ["closures"])}
+    missouri = by_id["tiger:state:29"]
+    assert (missouri.tier, missouri.claimed_tier, missouri.key_missing) == (2, 1, True)
+    assert missouri.partial == ("wzdx.turnpike",)
+
+    only_partial = coverage_table([turnpike], table, ["closures"])
+    assert {r.id: r.claimed_tier for r in only_partial}["tiger:state:29"] is None
+
+
 def test_the_command_reports_as_json() -> None:
     from typer.testing import CliRunner
 

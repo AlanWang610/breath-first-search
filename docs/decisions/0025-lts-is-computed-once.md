@@ -119,3 +119,10 @@ the answer matters most.
 - ADR 0001's consequence still holds: **LTS scoring and LTS routing remain separate
   deliverables.** `core/` computes levels in pure Python and never reads this table; a Java
   problem still cannot block the core library. What changed is that the two now agree.
+
+## Amended
+
+By [ADR 0053](0053-a-speed-survey-merges-at-region-build-through-one-column.md) (M18): the
+forward hazard above is closed for a conflated volume and for a surveyed speed alike. Both
+ride the plan-time `ways` layer as columns (`aadt_conflated`, `survey_speed_85_kph`) under the
+names the build's `way_lts` pass reads, and `lts_for_way` is the one reader on both sides.
