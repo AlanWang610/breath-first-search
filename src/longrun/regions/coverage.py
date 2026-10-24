@@ -90,12 +90,20 @@ class CoverageRow:
     name: str
     statefp: str
     population: int | None
-    #: The best tier any claimant holds, or `None` if nobody claims it.
+    #: The best tier a claimant that **can be asked** holds - a complete one whose key is
+    #: set or not needed - or `None`. What a plan would get today (M18).
     tier: int | None
     adapters: tuple[str, ...]
-    #: Every claimant at the best tier needs a key that is not set, so nothing there can
-    #: be asked. Distinct from `tier is None`: somebody has written the adapter.
+    #: A better claimant exists and waits on a key that is not set: either nothing can be
+    #: asked (`tier is None`) or only a worse tier can. Distinct from no claimant at all.
     key_missing: bool
+    #: The best tier any complete claimant holds, key or not - what this jurisdiction would
+    #: get with every key set. Counted apart from `tier` so a keyed feed shows up somewhere
+    #: in CI, which has no keys (M18).
+    claimed_tier: int | None = None
+    #: Claimants declaring `complete = False` (a turnpike's own roads). They add records and
+    #: never end a ladder, so they never count as covering the jurisdiction (ADR 0047).
+    partial: tuple[str, ...] = ()
 
 
 # --- building the table -----------------------------------------------------
@@ -250,8 +258,12 @@ def coverage_table(
     counts exactly what a plan would find, and park kinds are skipped because no census
     jurisdiction is a park agency.
     """
-    from longrun.adapters.base import key_of
+    from longrun.adapters.base import is_complete, key_of
     from longrun.adapters.registry import matches
+
+    def askable(adapter: Adapter) -> bool:
+        key = key_of(adapter)
+        return key is None or key.value() is not None
 
     rows: list[CoverageRow] = []
     for kind in kinds:
@@ -261,8 +273,9 @@ def coverage_table(
             if entry.jurisdiction is None:
                 continue
             claimants = [a for a in adapters if matches(a, kind, entry.jurisdiction)]
-            tier = min((int(a.tier) for a in claimants), default=None)
-            best = [a for a in claimants if int(a.tier) == tier]
+            complete = [a for a in claimants if is_complete(a)]
+            claimed = min((int(a.tier) for a in complete), default=None)
+            tier = min((int(a.tier) for a in complete if askable(a)), default=None)
             rows.append(
                 CoverageRow(
                     kind=kind,
@@ -273,8 +286,9 @@ def coverage_table(
                     population=entry.population,
                     tier=tier,
                     adapters=tuple(sorted(a.name for a in claimants)),
-                    key_missing=bool(best)
-                    and all((key := key_of(a)) is not None and key.value() is None for a in best),
+                    key_missing=claimed is not None and (tier is None or claimed < tier),
+                    claimed_tier=claimed,
+                    partial=tuple(sorted(a.name for a in claimants if not is_complete(a))),
                 )
             )
     return rows
@@ -311,7 +325,12 @@ def summarise(
     and places do not: summing covered place populations would count a city twice where it
     spans two counties and miss everyone outside a city. A county counts at the best tier
     that claims it, and a key that is not set counts as not covered - the adapter exists and
-    cannot be asked, which is what `key_missing` is for.
+    cannot be asked, which is what `key_missing` is for. A jurisdiction answered at tier 2
+    while a keyed tier 1 waits counts at tier 2: that is what a plan would get.
+
+    `states_claimed` counts what every key would buy (M18): CI has none, so the ratchet on
+    usable states can only ever be raised by keyless feeds, and a keyed adoption needs a
+    number of its own to be visible at all.
     """
     total = sum(e.population or 0 for e in jurisdictions if e.level == "county")
     cousubs: dict[str, int] = {}
@@ -322,7 +341,7 @@ def summarise(
     out: dict[str, Any] = {"population_total": total, "cousubs_uncoverable": cousubs}
     for kind in sorted({r.kind for r in rows}):
         of_kind = [r for r in rows if r.kind == kind]
-        usable = [r for r in of_kind if r.tier is not None and not r.key_missing]
+        usable = [r for r in of_kind if r.tier is not None]
         states = {r.statefp: r for r in of_kind if r.level == "state"}
         counties = [r for r in usable if r.level == "county"]
         by_tier: dict[str, int] = {}
@@ -330,11 +349,11 @@ def summarise(
             by_tier[str(r.tier)] = by_tier.get(str(r.tier), 0) + (r.population or 0)
         out[kind] = {
             "states_by_tier": {
-                str(t): sorted(s for s, r in states.items() if r.tier == t and not r.key_missing)
-                for t in (1, 2, 3, 4)
+                str(t): sorted(s for s, r in states.items() if r.tier == t) for t in (1, 2, 3, 4)
             },
             "states_key_missing": sorted(s for s, r in states.items() if r.key_missing),
-            "states_uncovered": sorted(s for s, r in states.items() if r.tier is None),
+            "states_claimed": sorted(s for s, r in states.items() if r.claimed_tier is not None),
+            "states_uncovered": sorted(s for s, r in states.items() if r.claimed_tier is None),
             "county_population_by_tier": dict(sorted(by_tier.items())),
             "county_population_share": round(sum(by_tier.values()) / total, 4) if total else 0.0,
             "places_covered": sum(1 for r in usable if r.level == "place"),

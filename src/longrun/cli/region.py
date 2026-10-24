@@ -443,9 +443,10 @@ def adapter_coverage(
                 typer.echo(f"  statewide at tier {tier}: {len(states)} - " + _states(states, names))
         if s["states_key_missing"]:
             typer.echo(
-                f"  statewide, key not set: {len(s['states_key_missing'])} - "
+                f"  statewide, a better claimant's key not set: {len(s['states_key_missing'])} - "
                 + _states(s["states_key_missing"], names)
             )
+        typer.echo(f"  statewide with every key set: {len(s['states_claimed'])}")
         typer.echo(
             f"  no statewide claimant: {len(s['states_uncovered'])} - "
             + _states(s["states_uncovered"], names)
@@ -456,24 +457,32 @@ def adapter_coverage(
         )
         if largest:
             for row in largest_places(rows, k, largest):  # type: ignore[arg-type]
-                how = (
-                    "not covered"
-                    if row.tier is None
-                    else f"tier {row.tier} ({', '.join(row.adapters)})"
-                    + (", key not set" if row.key_missing else "")
-                )
-                typer.echo(f"    {row.name} ({row.population:,}): {how}")
+                typer.echo(f"    {row.name} ({row.population:,}): {_how(row)}")
         if state is not None:
             for row in rows:
                 if row.kind == k and row.statefp == state:
-                    how = "-" if row.tier is None else f"tier {row.tier} {', '.join(row.adapters)}"
-                    typer.echo(f"    {row.id} {row.name}: {how}")
+                    typer.echo(f"    {row.id} {row.name}: {_how(row)}")
 
     townships = sum(summary["cousubs_uncoverable"].values())
     typer.echo(
         f"\n{townships:,} functioning county subdivisions (townships, New England towns) have "
         "no jurisdiction id level, so no adapter can be registered against them."
     )
+
+
+def _how(row: Any) -> str:
+    """One jurisdiction's coverage as a phrase: what answers, and what waits on a key."""
+    if row.claimed_tier is None:
+        how = "not covered"
+    elif row.tier is None:
+        how = f"claimed at tier {row.claimed_tier} ({', '.join(row.adapters)}), key not set"
+    else:
+        how = f"tier {row.tier} ({', '.join(row.adapters)})"
+        if row.key_missing:
+            how += f"; tier {row.claimed_tier} waits on a key"
+    if row.partial:
+        how += f"; partial: {', '.join(row.partial)}"
+    return how
 
 
 def _states(fips: list[str], names: dict[str, str]) -> str:
