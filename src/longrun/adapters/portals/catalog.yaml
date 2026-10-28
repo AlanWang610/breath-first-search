@@ -1,0 +1,16 @@
+# Tier 3: open-data portal datasets, as data (M21, ADR 0060). Read by `catalog.py`.
+#
+# `adopted:` rows become adapters through one entry point. Each says where the dataset is,
+# how its columns map onto a `Feature` - in five mapping kinds and no more: field, const,
+# map, template, point - what its own metadata declared as a licence on the day it was read,
+# and what the adopting survey measured.
+#
+# `refused:` rows are decisions too. Every one of the fifty largest places has, for closures
+# and for speed surveys, an adoption or a refusal with a reason from the closed set in
+# `catalog.RefusalReason` and what was checked (`test_largest_places_are_decided.py`).
+#
+# `longrun survey-portal` prints a stub for an adopted row; it never writes this file.
+
+adopted: []
+
+refused: []

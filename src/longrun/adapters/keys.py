@@ -86,6 +86,17 @@ ANTHROPIC = ApiKey(
     register_at="https://console.anthropic.com/settings/keys",
 )
 
-ALL_KEYS = (SF_BAY_511, MASSDOT, NPS, ANTHROPIC)
+#: A Socrata app token (M21). **Optional even where it is used**, and the only key here that
+#: no adapter declares as its `key`: Socrata answers anonymous queries at a lower rate limit,
+#: so a catalog dataset is asked whether or not this is set. Declaring it would make the
+#: registry skip every Socrata rung on a machine without one - which is every CI run - for
+#: a credential that changes no answer.
+SOCRATA = ApiKey(
+    env_var="LONGRUN_SOCRATA_APP_TOKEN",
+    service="Socrata open-data portals (a higher rate limit only)",
+    register_at="https://dev.socrata.com/docs/app-tokens.html",
+)
 
-__all__ = ["ALL_KEYS", "MASSDOT", "NPS", "SF_BAY_511", "ApiKey"]
+ALL_KEYS = (SF_BAY_511, MASSDOT, NPS, ANTHROPIC, SOCRATA)
+
+__all__ = ["ALL_KEYS", "MASSDOT", "NPS", "SF_BAY_511", "SOCRATA", "ApiKey"]
