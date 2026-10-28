@@ -14,11 +14,14 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
+import respx
+from shapely.geometry import box
 
 from longrun.adapters.base import AdapterContext
 from longrun.adapters.keys import ApiKey
-from longrun.adapters.state511 import ibi_v2
+from longrun.adapters.state511 import caltrans_lcs, ibi_v2
 from longrun.adapters.state511.client import events_args
 from longrun.core.data.cache import SqliteCache, args_hash
 from longrun.core.models.context import Budget
@@ -182,3 +185,211 @@ def test_a_platform_is_a_tier_two_adapter_by_source_type() -> None:
 
     assert isinstance(PLATFORM, Adapter)
     assert PLATFORM.tier == 2 and PLATFORM.kind == "closures" and PLATFORM.scope == "feed"
+
+
+# --- Caltrans' Lane Closure System -------------------------------------------
+
+#: Downtown San Francisco, and downtown Los Angeles.
+SAN_FRANCISCO = box(-122.42, 37.77, -122.39, 37.80)
+LOS_ANGELES = box(-118.26, 34.04, -118.23, 34.06)
+
+
+def _lcs() -> dict[str, Any]:
+    return _by_ref(caltrans_lcs.parse_lcs(_shape("state511_caltrans_lcs.json"), source_url="x"))
+
+
+def test_every_closure_that_was_not_cancelled_becomes_a_tier_two_record() -> None:
+    by_ref = _lcs()
+    assert {ref.split("-")[0] for ref in by_ref} == {
+        "INV1",
+        "INV2",
+        "INV4",
+        "INV5",
+        "INV6",
+        "INV7",
+        "INV8",
+    }, "INV3 was cancelled (code1022) and is dropped"
+    assert all(f.tier == 2 and f.kind == "closures" for f in by_ref.values())
+    assert all(f.confidence == caltrans_lcs.CALTRANS_CONFIDENCE for f in by_ref.values())
+
+
+def test_a_closure_is_placed_by_its_ends_and_never_drawn() -> None:
+    """Two points: a chord, or a point where they coincide. Both below the hard-flag line
+    (ADR 0059) - a straight line between two ends of a coast road crosses the headland."""
+    by_ref = _lcs()
+    chord = by_ref["INV1-0001-2026-10-28-21:00:00"]
+    assert chord.geometry == {
+        "type": "LineString",
+        "coordinates": [[-122.41, 37.78], [-122.408, 37.784]],
+    }
+    ramp = by_ref["INV2-0001-2026-10-29-01:00:00"]
+    assert ramp.geometry == {"type": "Point", "coordinates": [-122.4, 37.77]}
+    assert caltrans_lcs.CALTRANS_CONFIDENCE < HARD_FLAG_CONFIDENCE
+
+
+def test_pacific_times_are_naive_utc_read_from_the_epoch() -> None:
+    """21:00 PDT on 28 October is 04:00 UTC on the 29th."""
+    chord = _lcs()["INV1-0001-2026-10-28-21:00:00"]
+    assert (chord.start, chord.end) == (datetime(2026, 10, 29, 4, 0), datetime(2026, 10, 29, 12, 0))
+
+
+def test_a_time_with_no_epoch_is_read_as_pacific_on_its_own_date() -> None:
+    """01:30 on 1 November 2026 happens twice; with no epoch to say which, the first (PDT).
+    The end, on the 2nd, is in PST - each time converted at its own date (ADR 0046)."""
+    record = _lcs()["INV8-0001-2026-11-01-01:30:00"]
+    assert record.start == datetime(2026, 11, 1, 8, 30)
+    assert record.end == datetime(2026, 11, 2, 17, 0)
+
+
+def test_a_closure_picked_up_early_ends_when_it_was_picked_up() -> None:
+    record = _lcs()["INV4-0001-2026-10-28-21:00:00"]
+    assert record.end == datetime(2026, 10, 29, 10, 0), "picked up at 03:00 PDT, not 05:00"
+
+
+def test_an_indefinite_closure_has_no_end_rather_than_the_year_2999() -> None:
+    record = _lcs()["INV5-0001-2026-10-20-09:00:00"]
+    assert record.end is None and record.start == datetime(2026, 10, 20, 16, 0)
+
+
+def test_closure_types_map_onto_what_the_scorer_reads() -> None:
+    by_ref = _lcs()
+    assert by_ref["INV1-0001-2026-10-28-21:00:00"].category == "some-lanes-closed"
+    assert by_ref["INV2-0001-2026-10-29-01:00:00"].category == "road-closure"
+    assert by_ref["INV7-0001-2026-11-02-09:00:00"].category == "one-way-traffic"
+
+
+def test_a_closed_sidewalk_is_a_closed_sidewalk_and_still_cannot_fail_a_route() -> None:
+    """The Lane Type Chart's "Sidewalk" is the footway itself. Reported as shut - and held
+    below the line all the same, because a chord cannot say it runs along the route."""
+    record = _lcs()["INV6-0001-2026-10-30-22:00:00"]
+    assert record.category == "sidewalk-closed" and blocks_pedestrians(record)
+    assert not is_hard(record, parallel=True, when=datetime(2026, 10, 31, 6, 0))
+
+
+def test_the_detail_says_where_and_what_in_the_publishers_words() -> None:
+    record = _lcs()["INV1-0001-2026-10-28-21:00:00"]
+    assert record.detail == (
+        "SR-000 North, Example Ave to Sample St - Pavement Repair; Lane closure; "
+        "lanes closed: 1 of 2; Conventional Hwy"
+    )
+
+
+@pytest.mark.parametrize("payload", [None, [], {"data": None}, {"data": ["nope", {}]}])
+def test_a_file_that_is_not_a_closure_list_parses_to_nothing(payload: Any) -> None:
+    assert caltrans_lcs.parse_lcs(payload) == []
+
+
+def test_only_the_districts_a_corridor_meets_are_read() -> None:
+    assert caltrans_lcs.districts_meeting(SAN_FRANCISCO.bounds) == [4]
+    assert caltrans_lcs.districts_meeting(LOS_ANGELES.bounds) == [7]
+    assert caltrans_lcs.districts_meeting((-80.0, 25.0, -79.9, 25.1)) == []
+
+
+def test_every_district_has_a_box_inside_california() -> None:
+    assert sorted(caltrans_lcs.DISTRICT_BOXES) == list(range(1, 13))
+    for west, south, east, north in caltrans_lcs.DISTRICT_BOXES.values():
+        assert -124.5 <= west < east <= -114.1 and 32.5 <= south < north <= 42.1
+
+
+def _recorded(cache: Any, district: int, payload: Any) -> None:
+    cache.put(
+        "adapter.state511.caltrans",
+        args_hash(caltrans_lcs.lcs_args("state511.caltrans", district, DAY)),
+        DAY.isoformat(),
+        payload,
+    )
+
+
+def test_caltrans_replays_the_district_a_corridor_meets() -> None:
+    with SqliteCache() as cache:
+        _recorded(cache, 4, _shape("state511_caltrans_lcs.json"))
+        ctx = _ctx(cache)
+        result = caltrans_lcs.CLOSURES.fetch(SAN_FRANCISCO, DAY, ctx)
+    assert result.answered and result.vintage == "caltrans-lcs"
+    assert len(result.features) == 7
+    assert result.source_url == caltrans_lcs.URL_TEMPLATE.format(n=4)
+    assert ctx.budget.api_calls_used == 0
+
+
+@respx.mock
+def test_a_district_that_is_down_is_a_reason_for_the_whole_corridor() -> None:
+    """A corridor across two districts missing one reads exactly like one with fewer
+    closures, so the answer is the reason, naming the district."""
+    corridor = box(-121.3, 37.0, -121.1, 37.2)  # Districts 4, 5 and 10 meet near here
+    assert caltrans_lcs.districts_meeting(corridor.bounds) == [4, 5, 10]
+    respx.get(caltrans_lcs.URL_TEMPLATE.format(n=5)).mock(return_value=httpx.Response(503))
+    with SqliteCache() as cache:
+        _recorded(cache, 4, _shape("state511_caltrans_lcs.json"))
+        result = caltrans_lcs.CLOSURES.fetch(corridor, DAY, _ctx(cache))
+    assert not result.answered
+    assert result.reason == (
+        "district 5: FeedRefused: HTTP 503 from cwwp2.dot.ca.gov/data/d5/lcs/lcsStatusD05.json"
+    )
+
+
+def test_no_corridor_is_no_district_to_read() -> None:
+    with SqliteCache() as cache:
+        result = caltrans_lcs.CLOSURES.fetch(None, DAY, _ctx(cache))
+    assert result.reason == caltrans_lcs.NO_DISTRICT_REASON
+
+
+def test_caltrans_answers_for_california_at_tier_two_with_no_key() -> None:
+    from longrun.adapters.base import Adapter, key_of, scope_of
+    from longrun.core.export.attribution import licence_for
+
+    adapter = caltrans_lcs.CLOSURES
+    assert isinstance(adapter, Adapter)
+    assert adapter.jurisdictions == ("tiger:state:06",) and adapter.tier == 2
+    assert key_of(adapter) is None
+    assert scope_of(adapter) == "polygon", "which files are read depends on the corridor"
+    assert licence_for(adapter.source) is not None
+
+
+def test_caltrans_is_discovered_and_the_bay_area_still_asks_its_own_feed() -> None:
+    """Separate claimants climb separate ladders (ADR 0047): 511 SF Bay claims the nine
+    counties and Caltrans the state, so a San Francisco route asks both. Measured on
+    2026-10-28 they are complements, not substitutes - see `state511/__init__.py`."""
+    from longrun.adapters.registry import discover
+    from longrun.adapters.wzdx import sfbay
+
+    found, failures = discover()
+    assert not failures
+    assert "state511.caltrans" in {a.name for a in found}
+    assert "tiger:state:06" not in sfbay.CLOSURES.jurisdictions
+
+
+# --- live --------------------------------------------------------------------
+
+
+def _paths(node: Any, prefix: str = "") -> set[str]:
+    """Every key path in a document, lists collapsed: `data[].lcs.closure.facility`."""
+    if isinstance(node, dict):
+        out = set()
+        for key, value in node.items():
+            out.add(f"{prefix}.{key}".lstrip("."))
+            out |= _paths(value, f"{prefix}.{key}".lstrip("."))
+        return out
+    if isinstance(node, list):
+        out = set()
+        for item in node:
+            out |= _paths(item, f"{prefix}[]")
+        return out
+    return set()
+
+
+@pytest.mark.network
+def test_a_live_caltrans_file_still_has_every_key_the_shape_fixture_does() -> None:
+    """ADR 0055's live half: the fixture was written from documentation, and this is what
+    notices the day the file and the documentation part ways. District 9, the smallest."""
+    from longrun.adapters.http import get_json
+
+    url = caltrans_lcs.URL_TEMPLATE.format(n=9)
+    with SqliteCache() as cache:
+        live = get_json(url, AdapterContext(cache=cache, budget=Budget()))
+    missing = _paths(_shape("state511_caltrans_lcs.json")) - _paths(live)
+    assert not missing, sorted(missing)
+    west, south, east, north = caltrans_lcs.DISTRICT_BOXES[9]
+    for record in caltrans_lcs.parse_lcs(live):
+        points = record.geometry["coordinates"]
+        lon, lat = points[0] if record.geometry["type"] == "LineString" else points
+        assert west <= lon <= east and south <= lat <= north, record.ref

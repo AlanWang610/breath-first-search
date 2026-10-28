@@ -1,0 +1,773 @@
+{
+ "_provenance": {
+  "family": "state511",
+  "written_from": "https://cwwp2.dot.ca.gov/documentation/lcs/lcs-json-layout-example.html",
+  "read_on": "2026-10-28",
+  "values": "invented",
+  "notes": "Layout from Caltrans' LCS JSON layout example and field description (https://cwwp2.dot.ca.gov/documentation/lcs/lcs-field-description.html): every value a string; dates yyyy-mm-dd and times hh:mm:ss in PST or PDT; epochs Unix seconds; an indefinite end is 2999-12-31 23:59:00, epoch 32503708740; code1097 started, code1098 ended, code1022 cancelled. Every value here is invented; none is Caltrans' data."
+ },
+ "payload": {
+  "data": [
+   {
+    "lcs": {
+     "index": "INV1-0001-2026-10-28-21:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.410000",
+       "beginLatitude": "37.780000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.408000",
+       "endLatitude": "37.784000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV1",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-10-28",
+       "closureStartTime": "21:00:00",
+       "closureStartEpoch": "1793246400",
+       "closureEndDate": "2026-10-29",
+       "closureEndTime": "05:00:00",
+       "closureEndEpoch": "1793275200",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "Lane",
+      "typeOfWork": "Pavement Repair",
+      "durationOfClosure": "Standard",
+      "estimatedDelay": "10",
+      "lanesClosed": "1",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "false",
+       "code1097Timestamp": {
+        "code1097Date": "",
+        "code1097Time": "",
+        "code1097Epoch": ""
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV2-0001-2026-10-29-01:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Off Ramp",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.400000",
+       "beginLatitude": "37.770000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "I-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Example Off Ramp",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.400000",
+       "endLatitude": "37.770000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "I-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV2",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-10-29",
+       "closureStartTime": "01:00:00",
+       "closureStartEpoch": "1793260800",
+       "closureEndDate": "2026-10-29",
+       "closureEndTime": "05:00:00",
+       "closureEndEpoch": "1793275200",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Off Ramp",
+      "typeOfClosure": "Full",
+      "typeOfWork": "Pavement Repair",
+      "durationOfClosure": "Standard",
+      "estimatedDelay": "10",
+      "lanesClosed": "All",
+      "totalExistingLanes": "1",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "false",
+       "code1097Timestamp": {
+        "code1097Date": "",
+        "code1097Time": "",
+        "code1097Epoch": ""
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV3-0001-2026-10-28-21:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.410000",
+       "beginLatitude": "37.780000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.408000",
+       "endLatitude": "37.784000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV3",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-10-28",
+       "closureStartTime": "21:00:00",
+       "closureStartEpoch": "1793246400",
+       "closureEndDate": "2026-10-29",
+       "closureEndTime": "05:00:00",
+       "closureEndEpoch": "1793275200",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "Lane",
+      "typeOfWork": "Pavement Repair",
+      "durationOfClosure": "Standard",
+      "estimatedDelay": "10",
+      "lanesClosed": "1",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "false",
+       "code1097Timestamp": {
+        "code1097Date": "",
+        "code1097Time": "",
+        "code1097Epoch": ""
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "true",
+       "code1022Timestamp": {
+        "code1022Date": "2026-10-27",
+        "code1022Time": "12:00:00",
+        "code1022Epoch": "1793127600"
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV4-0001-2026-10-28-21:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.410000",
+       "beginLatitude": "37.780000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.408000",
+       "endLatitude": "37.784000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV4",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-10-28",
+       "closureStartTime": "21:00:00",
+       "closureStartEpoch": "1793246400",
+       "closureEndDate": "2026-10-29",
+       "closureEndTime": "05:00:00",
+       "closureEndEpoch": "1793275200",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "Full",
+      "typeOfWork": "Pavement Repair",
+      "durationOfClosure": "Standard",
+      "estimatedDelay": "10",
+      "lanesClosed": "All",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "true",
+       "code1097Timestamp": {
+        "code1097Date": "2026-10-28",
+        "code1097Time": "21:00:00",
+        "code1097Epoch": "1793246400"
+       }
+      },
+      "code1098": {
+       "isCode1098": "true",
+       "code1098Timestamp": {
+        "code1098Date": "2026-10-29",
+        "code1098Time": "03:00:00",
+        "code1098Epoch": "1793268000"
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV5-0001-2026-10-20-09:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.420000",
+       "beginLatitude": "37.790000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.420000",
+       "endLatitude": "37.800000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV5",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-10-20",
+       "closureStartTime": "09:00:00",
+       "closureStartEpoch": "1792512000",
+       "closureEndDate": "2999-12-31",
+       "closureEndTime": "23:59:00",
+       "closureEndEpoch": "32503708740",
+       "isClosureEndIndefinite": "true"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "Lane",
+      "typeOfWork": "Retaining Wall",
+      "durationOfClosure": "Long Term",
+      "estimatedDelay": "10",
+      "lanesClosed": "1",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "true",
+       "code1097Timestamp": {
+        "code1097Date": "2026-10-20",
+        "code1097Time": "09:00:00",
+        "code1097Epoch": "1792512000"
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV6-0001-2026-10-30-22:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.410000",
+       "beginLatitude": "37.780000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.408000",
+       "endLatitude": "37.784000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV6",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-10-30",
+       "closureStartTime": "22:00:00",
+       "closureStartEpoch": "1793422800",
+       "closureEndDate": "2026-10-31",
+       "closureEndTime": "06:00:00",
+       "closureEndEpoch": "1793451600",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "Lane",
+      "typeOfWork": "Curb/Gutter/Sidewalk Work",
+      "durationOfClosure": "Standard",
+      "estimatedDelay": "10",
+      "lanesClosed": "Sidewalk",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "false",
+       "code1097Timestamp": {
+        "code1097Date": "",
+        "code1097Time": "",
+        "code1097Epoch": ""
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV7-0001-2026-11-02-09:00:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "East / West",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.430000",
+       "beginLatitude": "37.770000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.440000",
+       "endLatitude": "37.770000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV7",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-11-02",
+       "closureStartTime": "09:00:00",
+       "closureStartEpoch": "1793638800",
+       "closureEndDate": "2026-11-02",
+       "closureEndTime": "15:00:00",
+       "closureEndEpoch": "1793660400",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "One-Way Traffic",
+      "typeOfWork": "Pavement Repair",
+      "durationOfClosure": "Standard",
+      "estimatedDelay": "10",
+      "lanesClosed": "1",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "false",
+       "code1097Timestamp": {
+        "code1097Date": "",
+        "code1097Time": "",
+        "code1097Epoch": ""
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   },
+   {
+    "lcs": {
+     "index": "INV8-0001-2026-11-01-01:30:00",
+     "recordTimestamp": {
+      "recordDate": "2026-10-28",
+      "recordTime": "08:00:00",
+      "recordEpoch": "1793199600"
+     },
+     "location": {
+      "travelFlowDirection": "North",
+      "begin": {
+       "beginDistrict": "4",
+       "beginLocationName": "Example Ave",
+       "beginFreeFormDescription": "",
+       "beginNearbyPlace": "Invented City",
+       "beginLongitude": "-122.410000",
+       "beginLatitude": "37.780000",
+       "beginElevation": "10",
+       "beginDirection": "",
+       "beginCounty": "San Francisco",
+       "beginRoute": "SR-000",
+       "beginRouteSuffix": "",
+       "beginPostmilePrefix": "",
+       "beginPostmile": "1.000",
+       "beginAlignment": "",
+       "beginMilepost": "1.000"
+      },
+      "end": {
+       "endDistrict": "4",
+       "endLocationName": "Sample St",
+       "endFreeFormDescription": "",
+       "endNearbyPlace": "Invented City",
+       "endLongitude": "-122.408000",
+       "endLatitude": "37.784000",
+       "endElevation": "12",
+       "endDirection": "",
+       "endCounty": "San Francisco",
+       "endRoute": "SR-000",
+       "endRouteSuffix": "",
+       "endPostmilePrefix": "",
+       "endPostmile": "1.400",
+       "endAlignment": "",
+       "endMilepost": "1.400"
+      }
+     },
+     "closure": {
+      "closureID": "INV8",
+      "logNumber": "1",
+      "closureTimestamp": {
+       "closureRequestDate": "2026-10-01",
+       "closureRequestTime": "07:00:00",
+       "closureRequestEpoch": "1790863200",
+       "closureStartDate": "2026-11-01",
+       "closureStartTime": "01:30:00",
+       "closureStartEpoch": "",
+       "closureEndDate": "2026-11-02",
+       "closureEndTime": "09:00:00",
+       "closureEndEpoch": "",
+       "isClosureEndIndefinite": "false"
+      },
+      "facility": "Conventional Hwy",
+      "typeOfClosure": "Lane",
+      "typeOfWork": "Pavement Repair",
+      "durationOfClosure": "Long Term",
+      "estimatedDelay": "10",
+      "lanesClosed": "1",
+      "totalExistingLanes": "2",
+      "isCHINReportable": "false",
+      "code1097": {
+       "isCode1097": "false",
+       "code1097Timestamp": {
+        "code1097Date": "",
+        "code1097Time": "",
+        "code1097Epoch": ""
+       }
+      },
+      "code1098": {
+       "isCode1098": "false",
+       "code1098Timestamp": {
+        "code1098Date": "",
+        "code1098Time": "",
+        "code1098Epoch": ""
+       }
+      },
+      "code1022": {
+       "isCode1022": "false",
+       "code1022Timestamp": {
+        "code1022Date": "",
+        "code1022Time": "",
+        "code1022Epoch": ""
+       }
+      }
+     }
+    }
+   }
+  ]
+ }
+}
