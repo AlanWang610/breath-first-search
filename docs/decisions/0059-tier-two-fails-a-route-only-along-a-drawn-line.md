@@ -66,14 +66,46 @@ record per occurrence and never longer than a day (measured 2026-10-28).
   Caltrans District 4 records live in the next seven days, 124 have a 511 SF Bay work zone
   within 300 m and overlapping in time. Of 653 SF Bay records, 53 have a Caltrans one. They
   are complements, so no `complete` flag or facet was needed to have both asked.
-* **No `state511` payload may be committed.** None carries a grant. The family is
-  deliberately absent from `test_payload_licences.FAMILIES`, and its parsers are tested
-  against shape fixtures (ADR 0055). In a hermetic replay a tier-2 rung reads "not in the
-  cassette", which is what moved the two San Francisco lines of `synthetic-hazards`.
+* **No IBI platform's payload may be committed.** None carries a grant, and no `state511_`
+  family but Caltrans' is in `test_payload_licences.FAMILIES`, so their parser is tested
+  against a shape fixture (ADR 0055). Caltrans is the exception, below.
 * **A refused request never names its key.** `http.get_json` raises `FeedRefused(status,
   where)`, which names the host and path, in place of httpx's `HTTPStatusError`. The httpx
   message is the whole URL, so it carried 511 SF Bay's `api_key=` into coverage reasons. An
   IBI platform's refusal is said as "refused LONGRUN_..._API_KEY (HTTP 400)".
+
+## Caltrans' conditions of use are its grant (2026-10-29)
+
+**An exception to ADR 0038, and the user's call.** ADR 0038 commits a payload only on a
+grant shipped inside it. A Caltrans Lane Closure System file carries no licence field.
+What Caltrans publishes is its conditions of use, at https://dot.ca.gov/conditions-of-use,
+which every CWWP2 page links as its own. Read 2026-10-29, the page is dated July 19, 2021,
+and its "Ownership" section begins:
+
+> In general, information presented on this website, unless otherwise indicated, is
+> considered in the public domain. It may be distributed or copied as permitted by law.
+
+M20 first left this sentence unread as a grant, because it is a statement about a website
+and not about a payload. The user read it as a grant and decided so on 2026-10-29. This
+section records that decision and how far it reaches.
+
+* **One family, by name.** `test_payload_licences.FAMILIES` gains `state511_caltrans_`.
+  - Its check reads the terms page, not the payload. The sentence is quoted verbatim there
+    with its URL and read date.
+  - It admits only a Lane Closure System file, and only one that indicates nothing
+    otherwise: a file naming a licence, copyright, terms or rights of its own is refused,
+    because the grant defers to it.
+  - An IBI platform's payload is still refused under any `state511_` name.
+* **Re-read live.** A `network` test fails if the sentence is reworded or withdrawn. The
+  recordings are then a decision to revisit, not a fact to keep relying on.
+* **Recorded.** `tests/contract/cassettes/state511_caltrans_d4.json` holds 33 District 4
+  records, verbatim, chosen from the live file on 2026-10-29: two of each kind the parser
+  treats differently. District 4 is also recorded into the `synthetic-hazards` cassette,
+  so the route's San Francisco closures lines answer at tier 2 instead of "not in the
+  cassette".
+* **It does not reach further.** This is not a rule that a terms page may stand in for a
+  payload's grant. A second publisher whose payload is silent needs its own decision, by a
+  person, recorded the same way.
 
 ## What would make us revisit
 
@@ -85,3 +117,5 @@ record per occurrence and never longer than a day (measured 2026-10-28).
   mean 0.75 is too careful for the closures that are short and straight.
 * **A recurrence schedule in a parseable form.** Then rule 2 becomes a window per
   occurrence, the way Caltrans already publishes one.
+* **Caltrans rewording or withdrawing the "Ownership" sentence**, or a Caltrans payload that
+  names terms of its own. Either ends the exception.

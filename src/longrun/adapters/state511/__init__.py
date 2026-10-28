@@ -12,7 +12,8 @@ is held below `closures.HARD_FLAG_CONFIDENCE`.
 against the 29 states and DC that no keyless tier-1 or tier-2 source answered for.
 
 *Adopted.* **California**, through Caltrans' Lane Closure System (`caltrans_lcs.py`):
-keyless, one file per district, the state highway system statewide. The WZDx registry's
+keyless, one file per district, the state highway system statewide, and recordable under
+Caltrans' conditions of use (ADR 0059). The WZDx registry's
 only California row is MTC's regional feed (`wzdx.sfbay`), and the two are complements -
 measured, about one record in ten has a counterpart in the other.
 

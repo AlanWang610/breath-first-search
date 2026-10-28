@@ -1,16 +1,20 @@
 """Tier 2: the 511 platforms and state DOT feeds that are not WZDx (M20, ADR 0059).
 
-No 511 platform's payload can be committed - none carries a redistribution grant, and the
-`state511` family is deliberately absent from `test_payload_licences.FAMILIES` - so the
-parsers here are tested against shape fixtures written from each vendor's documentation
-(ADR 0055): `tests/contract/shapes/state511_*.json`.
+No IBI 511 platform's payload can be committed - none carries a redistribution grant, and
+no `state511_` family but Caltrans' is in `test_payload_licences.FAMILIES` - so those
+parsers are tested against shape fixtures written from each vendor's documentation (ADR
+0055): `tests/contract/shapes/state511_*.json`.
+
+Caltrans is tested against both: the shape fixture, and a recorded District 4 file
+(`cassettes/state511_caltrans_d4.json`), committed under Caltrans' conditions of use - the
+user's call, 2026-10-29 (ADR 0059).
 """
 
 from __future__ import annotations
 
 import copy
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -356,6 +360,77 @@ def test_caltrans_is_discovered_and_the_bay_area_still_asks_its_own_feed() -> No
     assert not failures
     assert "state511.caltrans" in {a.name for a in found}
     assert "tiger:state:06" not in sfbay.CLOSURES.jurisdictions
+
+
+# --- Caltrans, recorded ------------------------------------------------------
+
+CASSETTES = Path(__file__).parent / "cassettes"
+
+
+def _recorded_d4() -> Any:
+    return json.loads((CASSETTES / "state511_caltrans_d4.json").read_text(encoding="utf-8"))
+
+
+def test_a_recorded_district_file_parses_in_full_but_for_its_cancellations() -> None:
+    """33 records chosen from the live District 4 file on 2026-10-29, verbatim - two of each
+    kind the parser treats differently - of which two were cancelled."""
+    payload = _recorded_d4()
+    cancelled = [
+        r for r in payload["data"] if r["lcs"]["closure"]["code1022"]["isCode1022"] == "true"
+    ]
+    features = caltrans_lcs.parse_lcs(payload, source_url="x")
+    assert len(payload["data"]) == 33 and len(cancelled) == 2
+    assert len(features) == 31
+    assert {f.category for f in features} == {
+        "road-closure",
+        "some-lanes-closed",
+        "sidewalk-closed",
+        "one-way-traffic",
+        "alternating-lanes",
+        "moving",
+    }
+
+
+def test_every_recorded_closure_lies_in_district_four_and_reads_forwards() -> None:
+    west, south, east, north = caltrans_lcs.DISTRICT_BOXES[4]
+    for feature in caltrans_lcs.parse_lcs(_recorded_d4()):
+        points = feature.geometry["coordinates"]
+        for lon, lat in points if feature.geometry["type"] == "LineString" else [points]:
+            assert west <= lon <= east and south <= lat <= north, feature.ref
+        assert feature.start is not None and feature.start.tzinfo is None
+        assert feature.end is None or feature.end >= feature.start
+        assert feature.confidence == caltrans_lcs.CALTRANS_CONFIDENCE < HARD_FLAG_CONFIDENCE
+
+
+def test_recorded_epochs_and_pacific_wall_clocks_agree() -> None:
+    """Measured on all 25,107 times in the twelve files on 2026-10-28; held here for the
+    ones committed, which is what lets the parser read the epoch and trust it."""
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo(caltrans_lcs.ZONE)
+    for record in _recorded_d4()["data"]:
+        stamps = record["lcs"]["closure"]["closureTimestamp"]
+        for side in ("Start", "End"):
+            day = stamps[f"closure{side}Date"]
+            if day.startswith("2999"):
+                continue
+            local = datetime.fromisoformat(f"{day}T{stamps[f'closure{side}Time']}")
+            assert int(local.replace(tzinfo=zone).timestamp()) == int(
+                stamps[f"closure{side}Epoch"]
+            ), record["lcs"]["index"]
+
+
+def test_a_recorded_closure_picked_up_early_ends_when_it_was() -> None:
+    picked = [
+        r for r in _recorded_d4()["data"] if r["lcs"]["closure"]["code1098"]["isCode1098"] == "true"
+    ]
+    assert picked
+    by_ref = _by_ref(caltrans_lcs.parse_lcs({"data": picked}))
+    for record in picked:
+        ended = record["lcs"]["closure"]["code1098"]["code1098Timestamp"]["code1098Epoch"]
+        feature = by_ref[record["lcs"]["index"]]
+        assert feature.end is not None
+        assert feature.end <= datetime.fromtimestamp(int(ended), UTC).replace(tzinfo=None)
 
 
 # --- the survey, as data -----------------------------------------------------

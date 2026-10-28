@@ -1,6 +1,8 @@
 # 0038 — A feed declares its own licence, or its payload is not committed
 
-Status: **accepted**, M14, 2026-09-23.
+Status: **accepted**, M14, 2026-09-23. One exception, by name: Caltrans' Lane Closure
+System is committed under Caltrans' conditions of use - the user's call, 2026-10-29
+(ADR 0059).
 
 ## Context
 

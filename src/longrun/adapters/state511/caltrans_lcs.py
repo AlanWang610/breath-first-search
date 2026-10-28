@@ -31,11 +31,14 @@ a chord, or a point when they coincide. Confidence 0.75, under
 crosses the headland, not Highway 1, and ADR 0013's "does it run along the route?" cannot
 be asked of it (ADR 0059: tier 2 fails a route only along a drawn line).
 
-**No cassette.** The payload carries no licence. Caltrans' conditions of use say "in
-general, information presented on this website, unless otherwise indicated, is considered
-in the public domain", which is a statement about a website rather than a grant in the
-payload - and ADR 0038 accepts only the second. So the parser is tested against a shape
-fixture written from the field description (ADR 0055).
+**Recorded under Caltrans' conditions of use - the one exception to ADR 0038.** The payload
+carries no licence. Caltrans' conditions of use, which every CWWP2 page links as its own,
+say "In general, information presented on this website, unless otherwise indicated, is
+considered in the public domain. It may be distributed or copied as permitted by law." ADR
+0038 accepts only a grant inside the payload, and reading that sentence as one was the
+user's call, made 2026-10-29 (ADR 0059). So a District 4 file is committed under its own
+family in `test_payload_licences.py` and recorded into `synthetic-hazards`; the parser is
+also tested against a shape fixture written from the field description (ADR 0055).
 """
 
 from __future__ import annotations
