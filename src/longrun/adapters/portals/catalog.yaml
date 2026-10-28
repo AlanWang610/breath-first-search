@@ -140,6 +140,38 @@ adopted:
       Street Closures, 104 rows: block parties, play streets, farmers markets and temporary
       activations. Public domain, so a payload is committed as a contract cassette.
 
+  # SFMTA's temporary street closures (M21.6): special events, special traffic permits and
+  # the rest, with WZDx's own vehicle-impact words. Kept to permitted closures that close
+  # something; "Roadway Shared Spaces" are standing parklets in the parking lane, not
+  # closures anybody runs into. Dedicated to the public domain (PDDL).
+  - name: portal.socrata.sf-temporary-street-closures
+    jurisdiction: tiger:place:0667000
+    kind: closures
+    platform: socrata
+    domain: data.sf.gov
+    dataset: 8x25-yybr
+    source: portal_sf
+    zone: America/Los_Angeles
+    geometry: {kind: field, field: shape}
+    category:
+      kind: map
+      field: veh_imp
+      values: {all-lanes-closed: road-closure, some-lanes-closed: some-lanes-closed}
+    start: {kind: field, field: start_dt, format: local}
+    end: {kind: field, field: end_dt, format: local}
+    detail: {kind: template, template: "{type} ({case_name}): {loc_desc}"}
+    ref: {kind: field, field: case_num}
+    label: {kind: field, field: street}
+    where: "status = 'Permitted' AND veh_imp <> 'all-lanes-open' AND type <> 'Roadway Shared Spaces'"
+    licence: {id: PDDL, read_on: 2026-10-28, from: "https://data.sf.gov/api/views/8x25-yybr.json"}
+    survey: {read_on: 2026-10-28, rows: 3992, updated: 2026-10-27, max_staleness_days: 14}
+    note: >-
+      3,992 rows. From 2026-10-27 on: 2,777 permitted shared spaces (filtered out), 593
+      permitted special events closing every lane, 272 special traffic permits closing
+      some. Its start_utc/end_utc are local time shifted by a fixed eight hours, an hour
+      wrong all summer, so the local start_dt/end_dt are read instead. The portal moved
+      from data.sfgov.org to data.sf.gov.
+
   # --- ArcGIS (M21.5) -------------------------------------------------------
 
   # Phoenix Street Transportation's planned restrictions along streets, the layer behind

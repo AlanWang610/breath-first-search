@@ -214,6 +214,11 @@ LICENCES: dict[str, SourceLicence] = {
         licence="Public domain (declared by the dataset)",
         attribution="Street closures: Seattle Department of Transportation",
     ),
+    "portal_sf": SourceLicence(
+        source="portal_sf",
+        licence="ODC Public Domain Dedication and License (declared by the dataset)",
+        attribution="Temporary street closures: SFMTA, via DataSF",
+    ),
     # The ArcGIS publishers. A layer declares no licence id; where the city's catalog says
     # something, it is quoted, and otherwise the row says what the layer said - nothing.
     "portal_phoenix": SourceLicence(

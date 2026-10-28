@@ -119,7 +119,7 @@ def fetch_portal(
     """One dataset's answer for one corridor and day, cached, mapped and never raised out of."""
     from longrun.adapters.base import AdapterResult, describe
     from longrun.adapters.portals.catalog import to_features
-    from longrun.core.data.cache import fetch
+    from longrun.core.data.cache import CacheMiss, fetch
 
     client = platform(entry.platform)
     week = week_of(day)
@@ -132,8 +132,12 @@ def fetch_portal(
             client.metadata(entry, ctx),
         )
     except Exception as exc:  # noqa: BLE001 - a portal that is down is a reason
+        # A cassette that lacks the metadata lacks the rows too, and says so in the same
+        # words as every other miss, so the two read as the one fact they are.
+        missed = isinstance(exc, CacheMiss)
         return AdapterResult(
-            reason=f"its metadata could not be read: {describe(exc)}", source_url=entry.page
+            reason=describe(exc) if missed else f"its metadata could not be read: {describe(exc)}",
+            source_url=entry.page,
         )
     updated = _date(meta.get("updated") if isinstance(meta, dict) else None)
     stale = stale_reason(entry, updated, day)

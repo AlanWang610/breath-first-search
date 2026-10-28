@@ -1,0 +1,160 @@
+{
+ "rows": [
+  {
+   "case_name": "Mission Community Market 2026",
+   "case_num": "1414320",
+   "cnn": "2742000",
+   "created_date": "2026-10-27T00:02:58.000",
+   "data_as_of": "2026-10-27T00:02:58.000",
+   "data_loaded_at": "2026-10-27T13:07:49.993",
+   "direction": "undefined",
+   "end_date": "2026-10-29T00:00:00.000",
+   "end_dt": "2026-10-29T20:00:00.000",
+   "end_time": "20:00:00",
+   "end_utc": "2026-10-30T03:00:00.000",
+   "from_st": "21ST ST",
+   "last_edited_date": "2026-10-27T00:02:58.000",
+   "loc_desc": "BARTLETT ST between 22ND ST and 21ST ST",
+   "objectid": "27882067",
+   "shape": {
+    "coordinates": [
+     [
+      -122.419857943,
+      37.75536573
+     ],
+     [
+      -122.420011098,
+      37.756968602
+     ]
+    ],
+    "type": "LineString"
+   },
+   "start_date": "2026-10-29T00:00:00.000",
+   "start_dt": "2026-10-29T12:00:00.000",
+   "start_time": "12:00:00",
+   "start_utc": "2026-10-29T19:00:00.000",
+   "status": "Permitted",
+   "street": "BARTLETT ST",
+   "to_st": "22ND ST",
+   "type": "Special Event",
+   "veh_imp": "all-lanes-closed"
+  },
+  {
+   "case_name": "Sparks Client Event",
+   "case_num": "1599180",
+   "cnn": "253000",
+   "created_date": "2026-10-27T00:02:58.000",
+   "data_as_of": "2026-10-27T00:02:58.000",
+   "data_loaded_at": "2026-10-27T13:07:49.993",
+   "direction": "undefined",
+   "end_date": "2026-10-27T00:00:00.000",
+   "end_dt": "2026-10-27T21:00:00.000",
+   "end_time": "21:00:00",
+   "end_utc": "2026-10-28T04:00:00.000",
+   "from_st": "MINNA ST",
+   "last_edited_date": "2026-10-27T00:02:58.000",
+   "loc_desc": "04TH ST between MINNA ST and HOWARD ST",
+   "objectid": "27900470",
+   "shape": {
+    "coordinates": [
+     [
+      -122.403711753,
+      37.784044438
+     ],
+     [
+      -122.402708154,
+      37.783259236
+     ]
+    ],
+    "type": "LineString"
+   },
+   "start_date": "2026-10-27T00:00:00.000",
+   "start_dt": "2026-10-27T06:00:00.000",
+   "start_time": "06:00:00",
+   "start_utc": "2026-10-27T13:00:00.000",
+   "status": "Permitted",
+   "street": "4TH ST",
+   "to_st": "HOWARD ST",
+   "type": "Special Event",
+   "veh_imp": "some-lanes-closed"
+  },
+  {
+   "case_name": "Sparks Client Event",
+   "case_num": "1599180",
+   "cnn": "253000",
+   "created_date": "2026-10-27T00:02:58.000",
+   "data_as_of": "2026-10-27T00:02:58.000",
+   "data_loaded_at": "2026-10-27T13:07:49.993",
+   "direction": "undefined",
+   "end_date": "2026-10-28T00:00:00.000",
+   "end_dt": "2026-10-28T21:00:00.000",
+   "end_time": "21:00:00",
+   "end_utc": "2026-10-29T04:00:00.000",
+   "from_st": "MINNA ST",
+   "last_edited_date": "2026-10-27T00:02:58.000",
+   "loc_desc": "04TH ST between MINNA ST and HOWARD ST",
+   "objectid": "27900471",
+   "shape": {
+    "coordinates": [
+     [
+      -122.403711753,
+      37.784044438
+     ],
+     [
+      -122.402708154,
+      37.783259236
+     ]
+    ],
+    "type": "LineString"
+   },
+   "start_date": "2026-10-28T00:00:00.000",
+   "start_dt": "2026-10-28T06:00:00.000",
+   "start_time": "06:00:00",
+   "start_utc": "2026-10-28T13:00:00.000",
+   "status": "Permitted",
+   "street": "4TH ST",
+   "to_st": "HOWARD ST",
+   "type": "Special Event",
+   "veh_imp": "some-lanes-closed"
+  },
+  {
+   "case_name": "Fog City - North Beach",
+   "case_num": "1618262",
+   "cnn": "6404000",
+   "created_date": "2026-10-27T00:02:58.000",
+   "data_as_of": "2026-10-27T00:02:58.000",
+   "data_loaded_at": "2026-10-27T13:07:49.993",
+   "direction": "undefined",
+   "end_date": "2026-10-27T00:00:00.000",
+   "end_dt": "2026-10-27T12:00:00.000",
+   "end_time": "12:00:00",
+   "end_utc": "2026-10-27T19:00:00.000",
+   "from_st": "GREEN ST",
+   "last_edited_date": "2026-10-27T00:02:58.000",
+   "loc_desc": "GRANT AVE between GREEN ST and UNION ST",
+   "objectid": "27901631",
+   "shape": {
+    "coordinates": [
+     [
+      -122.407395243,
+      37.799703676
+     ],
+     [
+      -122.407584444,
+      37.800638021
+     ]
+    ],
+    "type": "LineString"
+   },
+   "start_date": "2026-10-27T00:00:00.000",
+   "start_dt": "2026-10-27T07:00:00.000",
+   "start_time": "07:00:00",
+   "start_utc": "2026-10-27T14:00:00.000",
+   "status": "Permitted",
+   "street": "GRANT AVE",
+   "to_st": "UNION ST",
+   "type": "Special Event",
+   "veh_imp": "all-lanes-closed"
+  }
+ ]
+}
