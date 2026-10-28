@@ -146,3 +146,24 @@ the Embarcadero, inside the city, so its closures line climbs to SFMTA's Tempora
 Closures at tier 3. The dataset is public domain and could be recorded, and it is not: real
 closures on a hand-written route would add flags nobody wrote, and every number in this
 fixture is known by construction. The line says `not in the cassette`, which is true.
+
+**Caltrans' District 4 is recorded, and its flags are real ones nobody wrote (M20).** The
+opposite call to the portal's, made by the user on 2026-10-29. Caltrans claims the state,
+so both San Francisco closures lines climb to its Lane Closure System at tier 2. Its file
+is committed under Caltrans' conditions of use (ADR 0059). `cache.sqlite` holds District 4
+exactly as `caltrans_lcs` fetched it on 2026-10-29: 1,369 records, 2.8 MB of the cassette.
+It is filed under the pinned date, because a cache key is the plan's day. So:
+
+- Both lines answer, `checked: true` at tier 2, and check 6 moves from `skipped` to
+  `passed`. Every jurisdiction answered and no closure is hard.
+- **Ten soft `closure_nearby` flags**, nine on `s00008` and one on `s00010`. Every one is
+  an I-80 lane closure on the Bay Bridge, placed as a chord from its San Francisco end to
+  Yerba Buena Island. The route's latitude, 37.7955, crosses those chords at 1.67-2.23
+  km.
+  - The chords cross the route rather than running along it, and a chord is held below
+    the hard-flag line anyway, so none can be hard.
+  - Their windows are 28-31 October 2026, weeks after the pinned 12 September. They flag
+    because `closure_nearby` reports any closure within 60 m whatever its window, and
+    only the hard gate reads the clock.
+
+Re-recording moves these flags. A file read on another day has other closures in it.

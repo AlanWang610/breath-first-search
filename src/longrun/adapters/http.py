@@ -42,6 +42,21 @@ class FeedTooLarge(RuntimeError):
     """A feed larger than its ceiling, refused rather than truncated."""
 
 
+class FeedRefused(RuntimeError):
+    """A feed that answered with an error status (M20).
+
+    Raised in place of httpx's `HTTPStatusError`, whose message is the whole request URL -
+    query string included - and so carried `api_key=...` into every coverage reason a keyed
+    feed's refusal produced, and from there onto the plan sheet. This one names the host and
+    path and nothing a caller put in `params`.
+    """
+
+    def __init__(self, status: int, where: str) -> None:
+        super().__init__(f"HTTP {status} from {where}")
+        self.status = status
+        self.where = where
+
+
 def get_json(
     url: str,
     ctx: AdapterContext,
@@ -51,8 +66,8 @@ def get_json(
     timeout_s: float = HTTP_TIMEOUT_S,
     max_bytes: int = MAX_FEED_BYTES,
 ) -> Any:
-    """GET a JSON document, streamed. Raises `FeedTooLarge`, `BudgetExceeded` (the plan's
-    deadline) or httpx's own errors; never returns a partial document.
+    """GET a JSON document, streamed. Raises `FeedTooLarge`, `FeedRefused`, `BudgetExceeded`
+    (the plan's deadline) or httpx's transport errors; never returns a partial document.
 
     Spends nothing - the caller's producer spends the API call, as it always has, so a
     cassette replay costs nothing.
@@ -62,7 +77,10 @@ def get_json(
     with httpx.stream(
         "GET", url, params=params, headers=headers, timeout=timeout_s, follow_redirects=True
     ) as response:
-        response.raise_for_status()
+        if response.is_error:
+            raise FeedRefused(
+                response.status_code, f"{response.request.url.host}{response.request.url.path}"
+            )
         declared = response.headers.get("content-length", "")
         if declared.isdigit() and int(declared) > max_bytes:
             raise FeedTooLarge(f"the feed declares {int(declared):,} bytes, over {max_bytes:,}")
@@ -75,4 +93,11 @@ def get_json(
     return json.loads(bytes(body))
 
 
-__all__ = ["CHUNK_BYTES", "HTTP_TIMEOUT_S", "MAX_FEED_BYTES", "FeedTooLarge", "get_json"]
+__all__ = [
+    "CHUNK_BYTES",
+    "HTTP_TIMEOUT_S",
+    "MAX_FEED_BYTES",
+    "FeedRefused",
+    "FeedTooLarge",
+    "get_json",
+]

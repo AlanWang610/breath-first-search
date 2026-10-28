@@ -186,6 +186,14 @@ LICENCES: dict[str, SourceLicence] = {
         licence="per state DOT terms of use",
         attribution="State 511 traveler information",
     ),
+    # M20. The payload carries no licence; Caltrans' conditions of use call the site's
+    # information public domain "in general ... unless otherwise indicated". Read as a
+    # grant - the user's call, 2026-10-29, the one exception to ADR 0038 (ADR 0059).
+    "state511_caltrans": SourceLicence(
+        source="state511_caltrans",
+        licence="public domain, per the Caltrans conditions of use",
+        attribution="Lane closures: California Department of Transportation (Caltrans) LCS",
+    ),
     "portal": SourceLicence(
         source="portal",
         licence="per publishing jurisdiction",
