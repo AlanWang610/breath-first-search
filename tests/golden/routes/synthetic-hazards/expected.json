@@ -231,22 +231,22 @@
       "vintage": null
     },
     {
-      "checked": false,
+      "checked": true,
       "jurisdiction": "San Francisco County (tiger:county:06075)",
       "kind": "closures",
-      "reason": "tier 1 wzdx.sfbay: LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token). Then tier 2 state511.caltrans: district 4: not in the cassette. Then tier 4 extraction: tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
+      "reason": "tier 1 wzdx.sfbay: LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token)",
       "source": "closures",
-      "tier": null,
-      "vintage": null
+      "tier": 2,
+      "vintage": "caltrans-lcs"
     },
     {
-      "checked": false,
+      "checked": true,
       "jurisdiction": "San Francisco (tiger:place:0667000)",
       "kind": "closures",
-      "reason": "tier 1 wzdx.sfbay: LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token). Then tier 2 state511.caltrans: district 4: not in the cassette. Then tier 3 portal.socrata.sf-temporary-street-closures: not in the cassette. Then tier 4 extraction: tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
+      "reason": "tier 1 wzdx.sfbay: LONGRUN_511SF_API_KEY is not set; 511 SF Bay needs a free key (https://511.org/open-data/token). Then tier 3 portal.socrata.sf-temporary-street-closures: not in the cassette",
       "source": "closures",
-      "tier": null,
-      "vintage": null
+      "tier": 2,
+      "vintage": "caltrans-lcs"
     },
     {
       "checked": true,
@@ -402,7 +402,7 @@
     "status": "complete",
     "trade_offs": []
   },
-  "measurements_sha256": "a147d2c5175b7cde2235b603678af6828317e16dc60f8000d9ff4d69f5f0fa41",
+  "measurements_sha256": "53e4121a1220da2cebab1e003d330b0dfcc442fb24213c7b2792000f3f4e92da",
   "pacing": {
     "duration_s": 1544.9,
     "finish": "2026-09-12T07:25:44"
@@ -543,6 +543,86 @@
       "segment_id": "s00014",
       "severity": 0.4,
       "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00008",
+      "severity": 0.375,
+      "tier": "comfort"
+    },
+    {
+      "kind": "soft",
+      "reason_code": "closure_nearby",
+      "scorer": "closures",
+      "segment_id": "s00010",
+      "severity": 0.375,
+      "tier": "comfort"
     }
   ],
   "route": {
@@ -615,18 +695,54 @@
     "closures": {
       "flags": {
         "hard": 0,
-        "soft": 0
+        "soft": 10
       },
       "mean_confidence": 1.0,
       "measured_segments": 20,
       "summary": {
-        "closures": 0,
-        "jurisdictions_answered": 0,
+        "closures": 10,
+        "jurisdictions_answered": 2,
         "jurisdictions_crossed": 2,
-        "jurisdictions_unanswered": 2
+        "jurisdictions_unanswered": 0
       },
       "waypoints": {},
-      "worst": []
+      "worst": [
+        {
+          "kind": "soft",
+          "reason_code": "closure_nearby",
+          "segment_id": "s00008",
+          "severity": 0.375,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "closure_nearby",
+          "segment_id": "s00008",
+          "severity": 0.375,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "closure_nearby",
+          "segment_id": "s00008",
+          "severity": 0.375,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "closure_nearby",
+          "segment_id": "s00008",
+          "severity": 0.375,
+          "tier": "comfort"
+        },
+        {
+          "kind": "soft",
+          "reason_code": "closure_nearby",
+          "segment_id": "s00008",
+          "severity": 0.375,
+          "tier": "comfort"
+        }
+      ]
     },
     "crew_points": {
       "flags": {
@@ -1075,7 +1191,7 @@
       "name": "no_active_closures",
       "number": 6,
       "offenders": 0,
-      "status": "skipped"
+      "status": "passed"
     },
     {
       "name": "distance_in_tolerance",
