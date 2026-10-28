@@ -20,10 +20,10 @@ from typing import Any
 import pytest
 
 from longrun.adapters.base import AdapterContext
-from longrun.adapters.keys import IDOT, MASSDOT, ORDOT
-from longrun.adapters.wzdx import ildot, massdot, ordot
+from longrun.adapters.keys import IDOT, MASSDOT, NPS, ORDOT
+from longrun.adapters.wzdx import ildot, massdot, nps, ordot
 from longrun.adapters.wzdx.client import wzdx_args
-from longrun.adapters.wzdx.feed import feed_publisher, feed_version
+from longrun.adapters.wzdx.feed import feed_publisher, feed_version, parse_wzdx
 from longrun.core.data.cache import SqliteCache, args_hash, peek
 from longrun.core.models.context import Budget
 
@@ -55,7 +55,30 @@ KEYED_CC0 = [
         ildot.CLOSURES,
         IDOT,
     ),
+    ("nps", "wzdx_nps.json", "wzdx-4.1", "National Park Service", nps.CLOSURES, NPS),
 ]
+
+
+def test_a_park_road_closure_can_fail_a_route() -> None:
+    """The point of the NPS feed: a park road shut outright, inside its window, at tier 1 and
+    full confidence, is what ADR 0013's hard flag exists for. Gate 2 (along the route) and
+    the arrival time are the route's to decide; every gate a record decides alone, passes."""
+    from longrun.core.scorers.closures import (
+        HARD_FLAG_CONFIDENCE,
+        MIN_HARD_FLAG_TIER,
+        blocks_pedestrians,
+        is_standing_condition,
+    )
+
+    eligible = [
+        f
+        for f in parse_wzdx(_payload("wzdx_nps.json"))
+        if blocks_pedestrians(f)
+        and not is_standing_condition(f)
+        and f.tier <= MIN_HARD_FLAG_TIER
+        and f.confidence >= HARD_FLAG_CONFIDENCE
+    ]
+    assert eligible, "the NPS cassette carries no record that could fail a route"
 
 
 def _payload(name: str) -> dict[str, Any]:

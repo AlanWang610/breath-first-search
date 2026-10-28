@@ -149,13 +149,6 @@ AWAITING_KEY: tuple[AwaitingKey, ...] = (
         why="HTTP 403 without a key",
     ),
     AwaitingKey(
-        registry_id="nps",
-        jurisdiction="padus:NPS",
-        url="https://developer.nps.gov/api/v1/roadevents",
-        register_at="https://www.nps.gov/subjects/developer/get-started.htm",
-        why="HTTP 403 without a key; park roads, so it claims the agency rather than a state",
-    ),
-    AwaitingKey(
         registry_id="odot",
         jurisdiction="tiger:state:40",
         url="https://oktraffic.org/api/Geojsons/workzones",

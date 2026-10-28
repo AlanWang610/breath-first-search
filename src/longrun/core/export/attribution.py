@@ -200,6 +200,13 @@ LICENCES: dict[str, SourceLicence] = {
         licence="CC0 1.0",
         attribution="Work zone data: Illinois Department of Transportation and Illinois Tollway",
     ),
+    # Its own row, ahead of the `nps` one by prefix: the alerts API is US public domain by
+    # statute, and this feed declares CC0 in its envelope, which is what ADR 0038 reads.
+    "wzdx_nps": SourceLicence(
+        source="wzdx_nps",
+        licence="CC0 1.0",
+        attribution="Road events: National Park Service",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",
