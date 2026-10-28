@@ -215,7 +215,7 @@ def _stub(
     body += [
         f"  licence: {{id: {'null' if licence is None else licence}, read_on: {today}, "
         f"from: {licence_from}}}",
-        f"  survey: {{on: {today}, rows: {rows or 0}, updated: {updated or '<date>'}, "
+        f"  survey: {{read_on: {today}, rows: {rows or 0}, updated: {updated or '<date>'}, "
         "max_staleness_days: 14}",
     ]
     return [f"    {line}" for line in body]

@@ -40,7 +40,7 @@ def _entry(**overrides: Any) -> CatalogEntry:
         "end": {"kind": "field", "field": "end_date", "format": "date"},
         "licence": {"id": None, "read_on": "2026-10-28", "from": "https://data.example.gov/x"},
         "survey": {
-            "on": "2026-10-28",
+            "read_on": "2026-10-28",
             "rows": 1,
             "updated": "2026-10-27",
             "max_staleness_days": 14,

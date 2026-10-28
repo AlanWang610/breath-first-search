@@ -39,7 +39,7 @@ def _row(**overrides: Any) -> dict[str, Any]:
         "ref": {"kind": "field", "field": "permit"},
         "licence": {"id": None, "read_on": "2026-10-28", "from": "https://data.example.gov/x"},
         "survey": {
-            "on": "2026-10-28",
+            "read_on": "2026-10-28",
             "rows": 10,
             "updated": "2026-10-27",
             "max_staleness_days": 14,
@@ -143,7 +143,7 @@ def test_a_refusal_states_a_closed_reason_and_what_was_checked(tmp_path: Path) -
         "kind": "speed_survey",
         "reason": "points_only",
         "checked": ["data.cityofnewyork.us: 'speed'"],
-        "on": "2026-10-28",
+        "read_on": "2026-10-28",
         "note": "counts at stations",
     }
     vague = {**good, "reason": "didn't get to it"}
@@ -158,6 +158,26 @@ def test_a_refusal_states_a_closed_reason_and_what_was_checked(tmp_path: Path) -
 def test_the_packaged_catalog_reads_whole() -> None:
     catalog = read(CATALOG)
     assert catalog.failures == [], [f"{f.name}: {f.reason}" for f in catalog.failures]
+
+
+def test_every_adopted_publisher_is_named_on_a_sheet() -> None:
+    """The generic `portal` row would answer for every `portal_*` source by prefix, and print
+    "Local open-data portal" for a closure the City of Chicago published. Each publisher
+    gets its own row, so the sheet names who to check a closure with."""
+    from longrun.core.export.attribution import licence_for
+
+    for entry in read(CATALOG).adopted:
+        found = licence_for(entry.source)
+        assert found is not None and found.source == entry.source, entry.name
+
+
+def test_the_catalog_is_registered_and_discovered() -> None:
+    from longrun.adapters.registry import discover
+
+    adapters, failures = discover()
+    names = {a.name for a in adapters}
+    assert not [f for f in failures if f.name.startswith(("portal-catalog", "catalog["))]
+    assert {e.name for e in read(CATALOG).adopted} <= names
 
 
 # --- records into features --------------------------------------------------

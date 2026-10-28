@@ -191,6 +191,29 @@ LICENCES: dict[str, SourceLicence] = {
         licence="per publishing jurisdiction",
         attribution="Local open-data portal",
     ),
+    # M21's catalog publishers, one row each. The licence is what the dataset's own metadata
+    # declared when it was adopted (`catalog.yaml` records the id verbatim); "terms of use"
+    # rows are a permission to read, which is why none of those has a committed payload.
+    "portal_nyc": SourceLicence(
+        source="portal_nyc",
+        licence="NYC Open Data terms of use; no licence declared by the dataset",
+        attribution="Street closures: NYC Department of Transportation, via NYC Open Data",
+    ),
+    "portal_chicago": SourceLicence(
+        source="portal_chicago",
+        licence="City of Chicago data portal terms of use",
+        attribution="Permits: Chicago Department of Transportation, via the City of Chicago",
+    ),
+    "portal_dallas": SourceLicence(
+        source="portal_dallas",
+        licence="Dallas OpenData terms of use; no licence declared by the dataset",
+        attribution="Right-of-way permits: City of Dallas, via Dallas OpenData",
+    ),
+    "portal_seattle": SourceLicence(
+        source="portal_seattle",
+        licence="Public domain (declared by the dataset)",
+        attribution="Street closures: Seattle Department of Transportation",
+    ),
     "nps": SourceLicence(
         source="nps",
         licence="US public domain",

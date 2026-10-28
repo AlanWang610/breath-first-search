@@ -11,6 +11,133 @@
 #
 # `longrun survey-portal` prints a stub for an adopted row; it never writes this file.
 
-adopted: []
+adopted:
+  # --- Socrata (M21.4) ------------------------------------------------------
+
+  # NYC DOT's own closures: every block a permitted construction activity closes, with the
+  # dates it holds. Lines, so a closure along the route can be told from one across it.
+  - name: portal.socrata.nyc-street-closures-block
+    jurisdiction: tiger:place:3651000
+    kind: closures
+    platform: socrata
+    domain: data.cityofnewyork.us
+    dataset: i6b5-j7bu
+    source: portal_nyc
+    zone: America/New_York
+    geometry: {kind: field, field: the_geom}
+    category: {kind: const, value: road-closure}
+    start: {kind: field, field: work_start_date, format: date}
+    end: {kind: field, field: work_end_date, format: date}
+    detail: {kind: template, template: "{purpose}: {onstreetname} from {fromstreetname} to {tostreetname}"}
+    ref: {kind: field, field: uniqueid}
+    label: {kind: field, field: onstreetname}
+    licence: {id: null, read_on: 2026-10-28, from: "https://data.cityofnewyork.us/api/views/i6b5-j7bu.json"}
+    survey: {read_on: 2026-10-28, rows: 4466, updated: 2026-10-26, max_staleness_days: 14}
+    note: >-
+      Street Closures due to Construction Activities by Block. 4,466 rows, every one with
+      a window; the dataset declares no licence, so no payload is committed.
+
+  # The same closures where they fall on an intersection rather than a block: points. A
+  # facet of its own, because it describes different ground from the block table and both
+  # are asked: on one facet they would be two complete answers racing for one ladder.
+  - name: portal.socrata.nyc-street-closures-intersection
+    jurisdiction: tiger:place:3651000
+    kind: closures
+    facet: closures.intersections
+    platform: socrata
+    domain: data.cityofnewyork.us
+    dataset: 478a-yykk
+    source: portal_nyc
+    zone: America/New_York
+    geometry: {kind: field, field: the_geom}
+    category: {kind: const, value: road-closure}
+    start: {kind: field, field: work_start_date, format: date}
+    end: {kind: field, field: work_end_date, format: date}
+    detail: {kind: template, template: "{purpose}: {onstreetname} at {fromstreetname}"}
+    ref: {kind: field, field: uniqueid}
+    licence: {id: null, read_on: 2026-10-28, from: "https://data.cityofnewyork.us/api/views/478a-yykk.json"}
+    survey: {read_on: 2026-10-28, rows: 1721, updated: 2026-10-26, max_staleness_days: 14}
+
+  # CDOT's permits, kept to the ones that close something and are being worked: the table
+  # holds 2.3 million permits back to 2016, most of them driveways and curb-lane bagging.
+  - name: portal.socrata.chicago-cdot-permit-closures
+    jurisdiction: tiger:place:1714000
+    kind: closures
+    platform: socrata
+    domain: data.cityofchicago.org
+    dataset: pubx-yq2d
+    source: portal_chicago
+    zone: America/Chicago
+    geometry: {kind: point, lat: latitude, lon: longitude}
+    category:
+      kind: map
+      field: streetclosure
+      values:
+        Full: road-closure
+        Sidewalk: sidewalk-closed
+        Partial: some-lanes-closed
+        Intermitte: intermittent-closure
+    start: {kind: field, field: applicationstartdate, format: local}
+    end: {kind: field, field: applicationenddate, format: local}
+    detail:
+      kind: template
+      template: "{worktypedescription} at {streetnumberfrom} {direction} {streetname} {suffix}: {streetclosure} closure"
+    ref: {kind: field, field: applicationnumber}
+    label: {kind: field, field: streetname}
+    where: "streetclosure in ('Full','Partial','Sidewalk','Intermitte') AND applicationstatus = 'Open' AND currentmilestone in ('Inspection','Permit Active')"
+    licence: {id: SEE_TERMS_OF_USE, read_on: 2026-10-28, from: "https://data.cityofchicago.org/api/views/pubx-yq2d.json"}
+    survey: {read_on: 2026-10-28, rows: 2173, updated: 2026-10-26, max_staleness_days: 14}
+    note: >-
+      Transportation Department Permits. 2,173 open permits in inspection or active close
+      something on or after 2026-10-27: the street (Full), part of it, or the sidewalk.
+      Points at the permit's address. "See Terms of Use" is a permission to read, so no
+      payload is committed.
+
+  # Right-of-way permits drawn as the lines they occupy. Utility work mostly; the permit
+  # says what is being done and where, not which lanes close, so it is a soft note.
+  - name: portal.socrata.dallas-row-permits
+    jurisdiction: tiger:place:4819000
+    kind: closures
+    platform: socrata
+    domain: www.dallasopendata.com
+    dataset: xd3q-ipis
+    source: portal_dallas
+    zone: America/Chicago
+    geometry: {kind: field, field: the_geom}
+    category: {kind: const, value: right-of-way-work}
+    start: {kind: field, field: rowrequestedstartdate, format: date}
+    end: {kind: field, field: rowestimatedcompletiondate, format: date}
+    detail: {kind: template, template: "{rowimprovementrepair} ({rowreasonforjob}): {workdescription}"}
+    ref: {kind: field, field: externalfilenum}
+    where: "statusdescription = 'Issued'"
+    licence: {id: null, read_on: 2026-10-28, from: "https://www.dallasopendata.com/api/views/xd3q-ipis.json"}
+    survey: {read_on: 2026-10-28, rows: 2406, updated: 2026-10-20, max_staleness_days: 14}
+    note: >-
+      ROW Permits - Lines. 2,406 issued permits run to 2026-10-27 or later. The city's
+      "ROW Restrictions" (8hyu-vkvq) looked like closures and is holiday moratoria around
+      shopping malls, so it was not adopted.
+
+  # Seattle's street closures are events: block parties, play streets, farmers markets.
+  # Closed to cars and open to people, so they are a note and never a barrier.
+  - name: portal.socrata.seattle-street-closures
+    jurisdiction: tiger:place:5363000
+    kind: closures
+    platform: socrata
+    domain: data.seattle.gov
+    dataset: ium9-iqtc
+    source: portal_seattle
+    zone: America/Los_Angeles
+    geometry: {kind: field, field: line_string}
+    category: {kind: const, value: street-event}
+    start: {kind: field, field: start_date, format: date}
+    end: {kind: field, field: end_date, format: date}
+    detail: {kind: template, template: "{permit_type}: {project_name}"}
+    ref: {kind: field, field: permit_number}
+    label: {kind: field, field: street_on}
+    licence: {id: PUBLIC_DOMAIN, read_on: 2026-10-28, from: "https://data.seattle.gov/api/views/ium9-iqtc.json"}
+    survey: {read_on: 2026-10-28, rows: 104, updated: 2026-10-27, max_staleness_days: 14}
+    note: >-
+      Street Closures, 104 rows: block parties, play streets, farmers markets and temporary
+      activations. Public domain, so a payload is committed as a contract cassette.
 
 refused: []

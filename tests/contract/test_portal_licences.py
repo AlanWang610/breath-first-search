@@ -67,6 +67,22 @@ def test_every_committed_portal_payload_is_an_adopted_dataset() -> None:
         assert path.stem in adopted, f"{path.name} names no adopted catalog row"
 
 
+def test_every_committed_portal_payload_maps_through_its_row() -> None:
+    """The point of committing one: the parser meets the publisher's real rows in CI. A row
+    that stopped mapping - a renamed column - fails here rather than as a quiet reason."""
+    from longrun.adapters.portals.catalog import to_features
+    from longrun.adapters.portals.client import platform
+
+    by_stem = {e.name.replace(".", "_").replace("-", "_"): e for e in read(CATALOG).adopted}
+    payloads = [p for p in CASSETTES.glob("portal_*.json") if not p.name.endswith(".meta.json")]
+    for path in payloads:
+        entry = by_stem[path.stem]
+        rows = platform(entry.platform).rows(json.loads(path.read_text(encoding="utf-8")))
+        mapped = to_features(entry, rows)
+        assert rows and mapped.dropped == 0, (path.name, mapped.first_problem)
+        assert all(f.tier == 3 and f.jurisdiction == entry.jurisdiction for f in mapped.features)
+
+
 def test_an_adopted_rows_recorded_licence_is_what_its_metadata_said() -> None:
     """The row's `licence.id` is the id the metadata declared when it was read, so a
     committed `.meta.json` and the row cannot disagree."""

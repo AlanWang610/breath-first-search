@@ -78,6 +78,8 @@ RefusalReason = Literal[
     "not_a_survey",
     # Published on a platform this package does not read (CKAN, a bespoke API).
     "platform_unbuilt",
+    # Published behind a login or a token: a dataset nobody can ask without an account.
+    "not_public",
     # A better tier already answers for this place from the same publisher.
     "covered",
 ]
@@ -213,7 +215,8 @@ class Survey(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    on: date
+    #: When the survey was made. Not `on`: YAML 1.1 reads a bare `on` as `true`.
+    read_on: date
     rows: int = Field(ge=0)
     updated: date
     #: How old the dataset may be before an answer from it is refused. A closure source
@@ -338,7 +341,7 @@ class Refusal(BaseModel):
     #: What was searched or read: queries, dataset ids, URLs. At least one, because a
     #: refusal nobody can retrace is indistinguishable from not having looked.
     checked: list[str] = Field(min_length=1)
-    on: date
+    read_on: date
     note: str
 
     @model_validator(mode="after")
