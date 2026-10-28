@@ -40,19 +40,45 @@ def _wzdx_envelope_is_cc0(payload: Any) -> str | None:
     return None
 
 
-#: Cassette file prefix -> the check its payload must pass. A prefix not listed here cannot
-#: be committed at all - which is the point.
-FAMILIES: dict[str, Callable[[Any], str | None]] = {
-    "wzdx_": _wzdx_envelope_is_cc0,
+def _wzdx_family(path: Path) -> str | None:
+    return _wzdx_envelope_is_cc0(json.loads(path.read_text(encoding="utf-8")))
+
+
+#: Where a portal payload's grant lives: not in the payload - a Socrata row has no envelope -
+#: but in the dataset's own metadata, committed verbatim beside it (ADR 0061).
+META_SUFFIX = ".meta.json"
+
+
+def _portal_family(path: Path) -> str | None:
+    """A portal payload is committed beside the metadata that granted it, and the grant is a
+    public-domain dedication (`catalog.COMMITTABLE_LICENCES`)."""
+    from longrun.adapters.portals.catalog import committable
+
+    meta = path.with_name(path.stem + META_SUFFIX)
+    if not meta.exists():
+        return f"has no verbatim {meta.name} beside it"
+    return committable(json.loads(meta.read_text(encoding="utf-8")))
+
+
+#: Cassette file prefix -> the check its file must pass. A prefix not listed here cannot be
+#: committed at all - which is the point.
+FAMILIES: dict[str, Callable[[Path], str | None]] = {
+    "wzdx_": _wzdx_family,
+    "portal_": _portal_family,
 }
 
 
-def _family(name: str) -> Callable[[Any], str | None] | None:
+def _family(name: str) -> Callable[[Path], str | None] | None:
     return next((check for prefix, check in FAMILIES.items() if name.startswith(prefix)), None)
 
 
-#: Every payload in the directory; a dotfile (`.gitkeep`) is the directory's, not a payload.
-PAYLOADS = sorted(p for p in CASSETTES.iterdir() if not p.name.startswith("."))
+#: Every payload in the directory; a dotfile (`.gitkeep`) is the directory's, not a payload,
+#: and a `.meta.json` is the metadata that grants one, checked with it.
+PAYLOADS = sorted(
+    p
+    for p in CASSETTES.iterdir()
+    if not p.name.startswith(".") and not p.name.endswith(META_SUFFIX)
+)
 
 
 @pytest.mark.parametrize("path", PAYLOADS, ids=lambda p: p.name if isinstance(p, Path) else str(p))
@@ -64,14 +90,25 @@ def test_every_committed_payload_carries_its_familys_grant(path: Path) -> None:
         f"{path.name} belongs to no family in FAMILIES; a payload with no declared grant "
         f"is a shape fixture (tests/contract/shapes/), not a cassette"
     )
-    reason = check(json.loads(path.read_text(encoding="utf-8")))
+    reason = check(path)
     assert reason is None, f"{path.name} {reason} and must not be committed"
 
 
+def test_every_metadata_file_grants_a_payload_beside_it() -> None:
+    """A `.meta.json` with no payload is metadata nobody reads - most likely a payload that
+    was renamed and left its grant behind."""
+    for meta in CASSETTES.glob(f"*{META_SUFFIX}"):
+        payload = meta.with_name(meta.name.removesuffix(META_SUFFIX) + ".json")
+        assert payload.exists(), f"{meta.name} grants nothing: no {payload.name}"
+
+
 def test_an_unknown_family_is_refused_rather_than_waved_through() -> None:
+    """M21 added the portal family. Its grant is read from the dataset's metadata, so the
+    prefix alone admits nothing (`test_portal_licences.py`)."""
     assert _family("state511_ga.json") is None
-    assert _family("portal_socrata_kcmo.json") is None
-    assert _family("wzdx_modot.json") is _wzdx_envelope_is_cc0
+    assert _family("arcgis_kcmo.json") is None
+    assert _family("portal_socrata_kcmo.json") is _portal_family
+    assert _family("wzdx_modot.json") is _wzdx_family
 
 
 @pytest.mark.parametrize(

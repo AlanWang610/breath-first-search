@@ -84,6 +84,32 @@ RefusalReason = Literal[
 
 Platform = Literal["socrata", "arcgis"]
 
+#: The licence ids under which a portal's payload may be committed as a cassette (ADR 0061,
+#: extending ADR 0038), exactly as Socrata publishes them in a view's `licenseId`. Each is a
+#: dedication to the public domain - CC0, the Open Data Commons PDDL, or a plain statement of
+#: public domain - and nothing else is: an attribution licence is a permission with an
+#: obligation a committed fixture would carry forever, and "See Terms of Use" is a
+#: permission to read. CKAN's `cc-zero`, `odc-pddl` and `other-pd` are the same grants and
+#: would join this set with a CKAN client; ArcGIS publishes no licence id at all, only HTML.
+COMMITTABLE_LICENCES = frozenset({"CC0_10", "PDDL", "PUBLIC_DOMAIN"})
+
+
+def committable(metadata: Any) -> str | None:
+    """Why a portal payload may not be committed beside this verbatim metadata, or `None`
+    if it may. `metadata` is the dataset's own metadata document, as fetched."""
+    if not isinstance(metadata, dict):
+        return "has no metadata to read a licence from"
+    if "licenseId" not in metadata:
+        return "declares no licence id (an ArcGIS licence is free HTML, never an id)"
+    licence = metadata.get("licenseId")
+    if licence not in COMMITTABLE_LICENCES:
+        return (
+            f"declares {licence!r}, not one of the public-domain dedications ADR 0061 "
+            f"accepts ({', '.join(sorted(COMMITTABLE_LICENCES))})"
+        )
+    return None
+
+
 #: Timestamp formats a `field` mapping may declare for `start`, `end` and `observed_on`.
 #: `date`: a calendar date, the whole local day; an instant with an offset is first moved to
 #: the feed's zone. `local`: a wall-clock time with no offset, in the feed's zone. `utc`: an
@@ -589,6 +615,7 @@ ADAPTERS = load()
 __all__ = [
     "ADAPTERS",
     "CATALOG",
+    "COMMITTABLE_LICENCES",
     "DEFAULT_CONFIDENCE",
     "Catalog",
     "CatalogAdapter",
@@ -598,6 +625,7 @@ __all__ = [
     "Refusal",
     "RefusalReason",
     "Survey",
+    "committable",
     "load",
     "read",
     "to_features",
