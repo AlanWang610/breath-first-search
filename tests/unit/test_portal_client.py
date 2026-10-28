@@ -332,3 +332,24 @@ def test_arcgis_rows_carry_their_geometry_beside_their_attributes() -> None:
     ]
     assert arcgis.updated({"editingInfo": {"dataLastEditDate": 1793000000000}}) == "2026-10-26"
     assert arcgis.updated({}) is None
+
+
+@respx.mock
+def test_a_map_service_without_edit_dates_is_dated_by_its_newest_record() -> None:
+    """Phoenix's map service publishes no `editingInfo`. The row names a column whose
+    newest value stands in, so the layer can still be told from one nobody maintains."""
+    respx.get(LAYER).mock(return_value=httpx.Response(200, json={"name": "Restrictions"}))
+
+    def query(request: httpx.Request) -> httpx.Response:
+        if "outStatistics" in request.url.params:
+            newest = {"features": [{"attributes": {"newest": "2026-10-27"}}]}
+            return httpx.Response(200, json=newest)
+        return httpx.Response(200, json={"features": []})
+
+    respx.get(f"{LAYER}/query").mock(side_effect=query)
+    with SqliteCache() as cache:
+        dated = fetch_portal(_arcgis(freshness_field="StartDate"), CORRIDOR, DAY, _ctx(cache))
+    with SqliteCache() as cache:
+        undated = fetch_portal(_arcgis(), CORRIDOR, DAY, _ctx(cache))
+    assert dated.answered and dated.vintage == "arcgis-2026-10-27"
+    assert "does not say when it was last updated" in (undated.reason or "")

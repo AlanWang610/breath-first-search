@@ -214,6 +214,38 @@ LICENCES: dict[str, SourceLicence] = {
         licence="Public domain (declared by the dataset)",
         attribution="Street closures: Seattle Department of Transportation",
     ),
+    # The ArcGIS publishers. A layer declares no licence id; where the city's catalog says
+    # something, it is quoted, and otherwise the row says what the layer said - nothing.
+    "portal_phoenix": SourceLicence(
+        source="portal_phoenix",
+        licence="CC-BY (the city's open-data catalog); the layer declares none",
+        attribution="Traffic restrictions: City of Phoenix Street Transportation Department",
+    ),
+    "portal_nashville": SourceLicence(
+        source="portal_nashville",
+        licence="no licence declared by the layer; Metro Nashville terms of use",
+        attribution="Road closures: Metropolitan Government of Nashville and Davidson County",
+    ),
+    "portal_raleigh": SourceLicence(
+        source="portal_raleigh",
+        licence="no licence declared by the layer; City of Raleigh terms of use",
+        attribution="Road closures: City of Raleigh",
+    ),
+    "portal_virginia_beach": SourceLicence(
+        source="portal_virginia_beach",
+        licence="no licence declared by the layer; City of Virginia Beach terms of use",
+        attribution="Road closures: City of Virginia Beach",
+    ),
+    "portal_atlanta": SourceLicence(
+        source="portal_atlanta",
+        licence="no licence declared by the layer; City of Atlanta terms of use",
+        attribution="Road closures: City of Atlanta Department of Public Works",
+    ),
+    "portal_louisville": SourceLicence(
+        source="portal_louisville",
+        licence="no licence declared by the layer; Louisville Metro terms of use",
+        attribution="Right-of-way permits: Louisville Metro Public Works",
+    ),
     "nps": SourceLicence(
         source="nps",
         licence="US public domain",

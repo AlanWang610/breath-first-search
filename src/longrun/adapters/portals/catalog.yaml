@@ -140,4 +140,152 @@ adopted:
       Street Closures, 104 rows: block parties, play streets, farmers markets and temporary
       activations. Public domain, so a payload is committed as a contract cassette.
 
+  # --- ArcGIS (M21.5) -------------------------------------------------------
+
+  # Phoenix Street Transportation's planned restrictions along streets, the layer behind
+  # the city's CKAN "Traffic Restrictions Streets" (cc-by there; an ArcGIS layer declares
+  # nothing). A map service with no editingInfo, so its newest start date dates it. Its
+  # dates are text, so the window is applied after mapping, not in the query.
+  - name: portal.arcgis.phoenix-traffic-restrictions
+    jurisdiction: tiger:place:0455000
+    kind: closures
+    platform: arcgis
+    domain: maps.phoenix.gov
+    dataset: /pub/rest/services/Public/TrafficRestrictions/MapServer/1
+    source: portal_phoenix
+    zone: America/Phoenix
+    geometry: {kind: field, field: geometry}
+    category:
+      kind: map
+      field: ClosureType
+      values: {Full: road-closure, Partial: some-lanes-closed}
+      default: restriction
+    start: {kind: field, field: StartDate, format: date}
+    end: {kind: field, field: EndDate, format: date}
+    detail:
+      kind: template
+      template: "{RestrictionType} restriction on {OnStreet} from {FromStreet} to {ToStreet}: {LanesMaintained} {PedestrianAccess}"
+    ref: {kind: field, field: TRACSPermit}
+    label: {kind: field, field: OnStreet}
+    where: "RestrictionType <> 'Meter'"
+    window_filter: false
+    freshness_field: StartDate
+    licence: {id: null, read_on: 2026-10-28, from: "https://maps.phoenix.gov/pub/rest/services/Public/TrafficRestrictions/MapServer/1?f=json"}
+    survey: {read_on: 2026-10-28, rows: 1529, updated: 2026-10-27, max_staleness_days: 14}
+    note: >-
+      1,529 restrictions: 981 street, 349 sidewalk, 199 parking meter (filtered out). Full
+      closures are road-closure and partial ones some-lanes-closed.
+
+  # Nashville's Road Closures solution layer: 4,043 lines with a lane impact and a window.
+  - name: portal.arcgis.nashville-road-closures
+    jurisdiction: tiger:place:4752006
+    kind: closures
+    platform: arcgis
+    domain: services2.arcgis.com
+    dataset: /HdTo6HJqh92wn4D8/arcgis/rest/services/RoadClosures_public_b6790041823f4ecf96e7a54e50276f00/FeatureServer/1
+    source: portal_nashville
+    zone: America/Chicago
+    geometry: {kind: field, field: geometry}
+    category: &laneimpact
+      kind: map
+      field: laneimpact
+      values: {All Lanes: road-closure, Some Lanes: some-lanes-closed, Alternating One Way: some-lanes-closed}
+      default: road-closure
+    start: {kind: field, field: starttime, format: epoch_ms}
+    end: {kind: field, field: endtime, format: epoch_ms}
+    detail: {kind: template, template: "{reason}: {street} ({direction}) {description}"}
+    ref: {kind: field, field: closureid}
+    label: {kind: field, field: street}
+    licence: {id: null, read_on: 2026-10-28, from: "https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/services/RoadClosures_public_b6790041823f4ecf96e7a54e50276f00/FeatureServer/1?f=json"}
+    survey: {read_on: 2026-10-28, rows: 4043, updated: 2026-10-28, max_staleness_days: 14}
+
+  # Raleigh's active closures, the same Road Closures solution schema.
+  - name: portal.arcgis.raleigh-road-closures
+    jurisdiction: tiger:place:3755000
+    kind: closures
+    platform: arcgis
+    domain: services.arcgis.com
+    dataset: /v400IkDOw1ad7Yad/arcgis/rest/services/RoadClosures_Active/FeatureServer/1
+    source: portal_raleigh
+    zone: America/New_York
+    geometry: {kind: field, field: geometry}
+    category: *laneimpact
+    start: {kind: field, field: starttime, format: epoch_ms}
+    end: {kind: field, field: endtime, format: epoch_ms}
+    detail: {kind: template, template: "{reason}: {street} ({direction}) {description}"}
+    ref: {kind: field, field: closureid}
+    label: {kind: field, field: street}
+    licence: {id: null, read_on: 2026-10-28, from: "https://services.arcgis.com/v400IkDOw1ad7Yad/arcgis/rest/services/RoadClosures_Active/FeatureServer/1?f=json"}
+    survey: {read_on: 2026-10-28, rows: 12, updated: 2026-10-27, max_staleness_days: 14}
+
+  # Virginia Beach's road closures: every row a full closure.
+  - name: portal.arcgis.virginia-beach-road-closures
+    jurisdiction: tiger:place:5182000
+    kind: closures
+    platform: arcgis
+    domain: services1.arcgis.com
+    dataset: /iM09lHgNpufqQHem/arcgis/rest/services/RoadClosures_public_5f93f2a6d9584e55b5d9bbbc303e968b/FeatureServer/1
+    source: portal_virginia_beach
+    zone: America/New_York
+    geometry: {kind: field, field: geometry}
+    category: {kind: map, field: type, values: {ROAD_CLOSED: road-closure}, default: road-closure}
+    start: {kind: field, field: starttime, format: epoch_ms}
+    end: {kind: field, field: endtime, format: epoch_ms}
+    detail: {kind: template, template: "{street} from {from_street} to {to_street}: {description}"}
+    label: {kind: field, field: street}
+    licence: {id: null, read_on: 2026-10-28, from: "https://services1.arcgis.com/iM09lHgNpufqQHem/arcgis/rest/services/RoadClosures_public_5f93f2a6d9584e55b5d9bbbc303e968b/FeatureServer/1?f=json"}
+    survey: {read_on: 2026-10-28, rows: 444, updated: 2026-10-16, max_staleness_days: 14}
+
+  # Atlanta DPW's road closures, kept to the active ones.
+  - name: portal.arcgis.atlanta-road-closures
+    jurisdiction: tiger:place:1304000
+    kind: closures
+    platform: arcgis
+    domain: services2.arcgis.com
+    dataset: /zLeajbicrDRLQcny/arcgis/rest/services/Road_Detours_and_Closures/FeatureServer/2
+    source: portal_atlanta
+    zone: America/New_York
+    geometry: {kind: field, field: geometry}
+    category: {kind: map, field: FULLCLOSE, values: {"Yes": road-closure, "No": some-lanes-closed}, default: some-lanes-closed}
+    start: {kind: field, field: STARTDATE, format: epoch_ms}
+    end: {kind: field, field: ENDDATE, format: epoch_ms}
+    detail: {kind: template, template: "{BLOCKNM} {LOCDESC} ({BLOCKTYPE}) {COMMENT}"}
+    ref: {kind: field, field: PERMITID}
+    where: "ACTIVE = 'Yes'"
+    licence: {id: null, read_on: 2026-10-28, from: "https://services2.arcgis.com/zLeajbicrDRLQcny/arcgis/rest/services/Road_Detours_and_Closures/FeatureServer/2?f=json"}
+    survey: {read_on: 2026-10-28, rows: 537, updated: 2026-10-15, max_staleness_days: 30}
+    note: >-
+      537 closures, 93 marked active. Edited every few weeks rather than daily, so 30 days
+      of staleness before it is refused.
+
+  # Louisville Metro Public Works' right-of-way construction permits: points, with the
+  # closure each permits named in WORK_TYPE.
+  - name: portal.arcgis.louisville-row-permits
+    jurisdiction: tiger:place:2148006
+    kind: closures
+    platform: arcgis
+    domain: services1.arcgis.com
+    dataset: /79kfd2K6fskCAkyg/arcgis/rest/services/Louisville_KY_ROW_Construction_Permits_new/FeatureServer/0
+    source: portal_louisville
+    zone: America/Kentucky/Louisville
+    geometry: {kind: field, field: geometry}
+    category:
+      kind: map
+      field: WORK_TYPE
+      values:
+        Road Closure: road-closure
+        Excavation ,Road Closure: road-closure
+        Lane Closure ,Road Closure: road-closure
+        Lane Closure: some-lanes-closed
+        Excavation ,Lane Closure: some-lanes-closed
+        Excavation ,Lane Closure ,Utility Cut: some-lanes-closed
+        Lane Closure ,Utility Cut: some-lanes-closed
+      default: right-of-way-work
+    start: {kind: field, field: FROM_DATE, format: epoch_ms_date}
+    end: {kind: field, field: TO_DATE, format: epoch_ms_date}
+    detail: {kind: template, template: "{WORK_TYPE} at {STREET_ADDRESS} ({APPLICANT_NAME})"}
+    ref: {kind: field, field: PERMIT_NO}
+    licence: {id: null, read_on: 2026-10-28, from: "https://services1.arcgis.com/79kfd2K6fskCAkyg/arcgis/rest/services/Louisville_KY_ROW_Construction_Permits_new/FeatureServer/0?f=json"}
+    survey: {read_on: 2026-10-28, rows: 286, updated: 2026-10-25, max_staleness_days: 14}
+
 refused: []

@@ -261,6 +261,10 @@ class CatalogEntry(BaseModel):
     window_filter: bool = True
     #: Socrata only: a legacy `location` column takes `within_box`, not `intersects`.
     spatial: Literal["intersects", "within_box"] = "intersects"
+    #: ArcGIS only: a column whose newest value says when the table last changed, for a
+    #: map service that publishes no `editingInfo`. Without one such a layer cannot say
+    #: whether anybody still maintains it, and is refused like any dataset that cannot.
+    freshness_field: str | None = None
     #: `feed` reads the whole dataset once a day (a survey); `polygon` asks per corridor.
     scope: Literal["feed", "polygon"] = "polygon"
     complete: bool = True

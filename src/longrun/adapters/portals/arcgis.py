@@ -18,6 +18,7 @@ layer was last edited.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from datetime import date as date_type
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -142,9 +143,47 @@ def metadata(entry: CatalogEntry, ctx: AdapterContext) -> Callable[[], Any]:
         _raise_for_error(layer)
         if not isinstance(layer, dict):
             raise RuntimeError("the layer's metadata is not an object")
-        return {"updated": updated(layer), "licence": None}
+        stamp = updated(layer)
+        if stamp is None and entry.freshness_field:
+            ctx.budget.spend_api_call()
+            stamp = newest(entry, ctx)
+        return {"updated": stamp, "licence": None}
 
     return run
+
+
+def newest(entry: CatalogEntry, ctx: AdapterContext) -> str | None:
+    """The newest value of a row's `freshness_field`, as an ISO date: when a map service
+    with no `editingInfo` last gained a record. A date field arrives as epoch milliseconds,
+    a text one as whatever the publisher wrote, read only if it starts with an ISO date."""
+    import json
+
+    from longrun.adapters.http import get_json
+
+    statistic = [
+        {
+            "statisticType": "max",
+            "onStatisticField": entry.freshness_field,
+            "outStatisticFieldName": "newest",
+        }
+    ]
+    page = get_json(
+        f"https://{entry.domain}{entry.dataset}/query",
+        ctx,
+        params={"where": "1=1", "outStatistics": json.dumps(statistic), "f": "json"},
+    )
+    _raise_for_error(page)
+    features = page.get("features") if isinstance(page, dict) else None
+    if not features:
+        return None
+    value = (features[0].get("attributes") or {}).get("newest")
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value) / 1000.0, UTC).date().isoformat()
+    text = str(value or "")[:10]
+    try:
+        return date_type.fromisoformat(text).isoformat()
+    except ValueError:
+        return None
 
 
 def updated(layer: dict[str, Any]) -> str | None:
@@ -159,4 +198,4 @@ def updated(layer: dict[str, Any]) -> str | None:
     return datetime.fromtimestamp(float(stamp) / 1000.0, UTC).date().isoformat()
 
 
-__all__ = ["exceeded", "metadata", "produce", "rows", "updated", "where"]
+__all__ = ["exceeded", "metadata", "newest", "produce", "rows", "updated", "where"]
