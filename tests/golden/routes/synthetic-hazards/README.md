@@ -140,3 +140,9 @@ test — not an omission from this fixture.
 
 Way matching is geometric (repair mode has no router), so verification check 2
 (`on_network`) reports `skipped`. It is not a pass.
+
+**San Francisco's portal is asked and deliberately not recorded (M21).** The route runs along
+the Embarcadero, inside the city, so its closures line climbs to SFMTA's Temporary Street
+Closures at tier 3. The dataset is public domain and could be recorded, and it is not: real
+closures on a hand-written route would add flags nobody wrote, and every number in this
+fixture is known by construction. The line says `not in the cassette`, which is true.

@@ -1,0 +1,120 @@
+{
+ "rows": [
+  {
+   "end_date": "2026-11-27T00:00:00.000",
+   "line_string": {
+    "coordinates": [
+     [
+      -122.354128469841,
+      47.7068951374398
+     ],
+     [
+      -122.352910573435,
+      47.7068909702483
+     ],
+     [
+      -122.352788930822,
+      47.7068905622959
+     ]
+    ],
+    "type": "LineString"
+   },
+   "permit_number": "SUFUN0006308",
+   "permit_type": "Play Street",
+   "project_description": "Play Street on N 107th St between Phinney Ave N (non-arterial) and Dayton Ave N (arterial).  Wednesdays 5pm-10pm, June 1-Nov 27.",
+   "project_name": "Play Street | Wed | N 107th St b/t Phinney & Dayton",
+   "segkey": "15027",
+   "start_date": "2026-06-01T00:00:00.000",
+   "street_from": "PHINNEY AVE N",
+   "street_on": "N 107TH ST",
+   "street_to": "DAYTON AVE N",
+   "wednesday": "5PM-10PM"
+  },
+  {
+   "end_date": "2026-10-28T00:00:00.000",
+   "line_string": {
+    "coordinates": [
+     [
+      -122.290676618481,
+      47.6916499125411
+     ],
+     [
+      -122.290668462744,
+      47.6916498862702
+     ],
+     [
+      -122.287996682288,
+      47.6916412821379
+     ]
+    ],
+    "type": "LineString"
+   },
+   "permit_number": "SUFUN0006603",
+   "permit_type": "Play Street",
+   "project_description": "play street on NE 87th for September and October 2026",
+   "project_name": "Play Street | 9/2 | on NE 87th St btwn 35th & 38th",
+   "segkey": "17757",
+   "start_date": "2026-09-02T00:00:00.000",
+   "street_from": "35TH AVE NE",
+   "street_on": "NE 87TH ST",
+   "street_to": "38TH AVE NE",
+   "wednesday": "4PM-7:30PM"
+  },
+  {
+   "end_date": "2026-11-29T00:00:00.000",
+   "line_string": {
+    "coordinates": [
+     [
+      -122.284843407151,
+      47.6703182338992
+     ],
+     [
+      -122.284721729382,
+      47.670328368979
+     ],
+     [
+      -122.28215887793,
+      47.6703275878599
+     ]
+    ],
+    "type": "LineString"
+   },
+   "permit_number": "SUFUN0006490",
+   "permit_type": "Play Street",
+   "project_description": "Play Street on NE 57th St between 40th Ave NE (arterial) and 43rd Ave NE (non-arterial), Saturdays 2-8pm, Aug 29-Nov 29.",
+   "project_name": "Play Street | Sat | NE 57th St b/t 40th & 43rd",
+   "saturday": "2PM-8PM",
+   "segkey": "17095",
+   "start_date": "2026-08-29T00:00:00.000",
+   "street_from": "40TH AVE NE",
+   "street_on": "NE 57TH ST",
+   "street_to": "43RD AVE NE"
+  },
+  {
+   "end_date": "2026-10-30T00:00:00.000",
+   "line_string": {
+    "coordinates": [
+     [
+      -122.337151497242,
+      47.6220364607981
+     ],
+     [
+      -122.33714239413,
+      47.6232045165442
+     ]
+    ],
+    "type": "LineString"
+   },
+   "permit_number": "SUFUN0006171",
+   "permit_type": "Farmers Market",
+   "project_description": "Pike Place Market Express Farmers Market at South Lake Union; Closing Terry Ave N between Harrison St and Republican St. Includes closing both the East and West parking lanes, hiring two off-duty police officers to allow the Street Car to continue working, but otherwise closing street access to all other vehicles.",
+   "project_name": "Farmers Market | Pike Place Market Express SLU | Terry Ave N",
+   "segkey": "13121",
+   "start_date": "2026-06-04T00:00:00.000",
+   "street_from": "HARRISON ST",
+   "street_on": "TERRY AVE N",
+   "street_to": "REPUBLICAN ST",
+   "thursday": "8AM-4PM"
+  }
+ ]
+}

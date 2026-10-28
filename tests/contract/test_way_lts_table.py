@@ -210,14 +210,22 @@ def test_a_surveyed_way_reads_the_same_level_through_the_plan_time_store(
             f"SELECT l.way_id, l.lts FROM {SCHEMA}.{TABLE} l JOIN {SURVEY_TABLE} s USING (way_id)"
         )
         stored = dict(cur.fetchall())
-    if not stored:
-        pytest.skip("the survey table is empty")
+        if not stored:
+            pytest.skip("the survey table is empty")
+        # Wherever the survey was merged - the first was Oakland's (M21), not the Ozarks
+        # this module's fixture polygon covers - so the box is drawn round surveyed ways.
+        cur.execute(
+            "SELECT ST_AsText(ST_Envelope(ST_Collect(geom))) FROM osm.ways "
+            "WHERE way_id IN (SELECT way_id FROM " + SURVEY_TABLE + " ORDER BY way_id LIMIT 25)"
+        )
+        found = cur.fetchone()
+    surveyed = found[0] if found and found[0] else polygon
 
-    frame = PostGISLayerStore(conn)._intersecting("ways", polygon)
+    frame = PostGISLayerStore(conn)._intersecting("ways", surveyed)
     assert SURVEY_SPEED_COLUMN in frame.columns
     checked = 0
     for _, way in frame.iterrows():
         if int(way["way_id"]) in stored:
             assert lts_for_way(row_tags(way)).level == stored[int(way["way_id"])]
             checked += 1
-    assert checked, "no surveyed way inside the Ozarks polygon"
+    assert checked, "no surveyed way inside a box drawn round surveyed ways"

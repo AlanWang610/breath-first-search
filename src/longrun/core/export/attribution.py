@@ -191,6 +191,71 @@ LICENCES: dict[str, SourceLicence] = {
         licence="per publishing jurisdiction",
         attribution="Local open-data portal",
     ),
+    # M21's catalog publishers, one row each. The licence is what the dataset's own metadata
+    # declared when it was adopted (`catalog.yaml` records the id verbatim); "terms of use"
+    # rows are a permission to read, which is why none of those has a committed payload.
+    "portal_nyc": SourceLicence(
+        source="portal_nyc",
+        licence="NYC Open Data terms of use; no licence declared by the dataset",
+        attribution="Street closures: NYC Department of Transportation, via NYC Open Data",
+    ),
+    "portal_chicago": SourceLicence(
+        source="portal_chicago",
+        licence="City of Chicago data portal terms of use",
+        attribution="Permits: Chicago Department of Transportation, via the City of Chicago",
+    ),
+    "portal_dallas": SourceLicence(
+        source="portal_dallas",
+        licence="Dallas OpenData terms of use; no licence declared by the dataset",
+        attribution="Right-of-way permits: City of Dallas, via Dallas OpenData",
+    ),
+    "portal_seattle": SourceLicence(
+        source="portal_seattle",
+        licence="Public domain (declared by the dataset)",
+        attribution="Street closures: Seattle Department of Transportation",
+    ),
+    "portal_sf": SourceLicence(
+        source="portal_sf",
+        licence="ODC Public Domain Dedication and License (declared by the dataset)",
+        attribution="Temporary street closures: SFMTA, via DataSF",
+    ),
+    # The ArcGIS publishers. A layer declares no licence id; where the city's catalog says
+    # something, it is quoted, and otherwise the row says what the layer said - nothing.
+    "portal_phoenix": SourceLicence(
+        source="portal_phoenix",
+        licence="CC-BY (the city's open-data catalog); the layer declares none",
+        attribution="Traffic restrictions: City of Phoenix Street Transportation Department",
+    ),
+    "portal_nashville": SourceLicence(
+        source="portal_nashville",
+        licence="no licence declared by the layer; Metro Nashville terms of use",
+        attribution="Road closures: Metropolitan Government of Nashville and Davidson County",
+    ),
+    "portal_raleigh": SourceLicence(
+        source="portal_raleigh",
+        licence="no licence declared by the layer; City of Raleigh terms of use",
+        attribution="Road closures: City of Raleigh",
+    ),
+    "portal_virginia_beach": SourceLicence(
+        source="portal_virginia_beach",
+        licence="no licence declared by the layer; City of Virginia Beach terms of use",
+        attribution="Road closures: City of Virginia Beach",
+    ),
+    "portal_atlanta": SourceLicence(
+        source="portal_atlanta",
+        licence="no licence declared by the layer; City of Atlanta terms of use",
+        attribution="Road closures: City of Atlanta Department of Public Works",
+    ),
+    "portal_oakland": SourceLicence(
+        source="portal_oakland",
+        licence="no licence declared by the layer; City of Oakland terms of use",
+        attribution="Speed counts: City of Oakland Department of Transportation",
+    ),
+    "portal_louisville": SourceLicence(
+        source="portal_louisville",
+        licence="no licence declared by the layer; Louisville Metro terms of use",
+        attribution="Right-of-way permits: Louisville Metro Public Works",
+    ),
     "nps": SourceLicence(
         source="nps",
         licence="US public domain",
