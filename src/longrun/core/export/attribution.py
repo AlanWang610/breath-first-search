@@ -183,6 +183,13 @@ LICENCES: dict[str, SourceLicence] = {
     ),
     # M19's keyed feeds. A key decides who can fetch a feed and the envelope decides who may
     # republish it: these need a key and declare CC0 1.0, read on 2026-10-28.
+    # MassDOT predates M19 and answered through the generic `wzdx` row by prefix. Its own row
+    # now that a payload has been read: CWZ 1.0, CC0 in the envelope.
+    "wzdx_massdot": SourceLicence(
+        source="wzdx_massdot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Massachusetts Department of Transportation",
+    ),
     "wzdx_ordot": SourceLicence(
         source="wzdx_ordot",
         licence="CC0 1.0",

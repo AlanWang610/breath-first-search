@@ -20,8 +20,8 @@ from typing import Any
 import pytest
 
 from longrun.adapters.base import AdapterContext
-from longrun.adapters.keys import ORDOT
-from longrun.adapters.wzdx import ordot
+from longrun.adapters.keys import MASSDOT, ORDOT
+from longrun.adapters.wzdx import massdot, ordot
 from longrun.adapters.wzdx.client import wzdx_args
 from longrun.adapters.wzdx.feed import feed_publisher, feed_version
 from longrun.core.data.cache import SqliteCache, args_hash, peek
@@ -35,9 +35,18 @@ DAY = date(2026, 10, 28)
 #: The CC0 URL, in both the forms publishers write it.
 CC0 = "https://creativecommons.org/publicdomain/zero/1.0"
 
-#: (short, cassette, spec version, publisher, adapter, key).
+#: (short, cassette, vintage, publisher, adapter, key). The vintage names the specification
+#: as well as its version: MassDOT publishes CWZ 1.0, not the WZDx 1.0 of 2019 (ADR 0058).
 KEYED_CC0 = [
-    ("ordot", "wzdx_ordot.json", "4.0", "Oregon-DOT", ordot.CLOSURES, ORDOT),
+    ("ordot", "wzdx_ordot.json", "wzdx-4.0", "Oregon-DOT", ordot.CLOSURES, ORDOT),
+    (
+        "massdot",
+        "cwz_massdot.json",
+        "cwz-1.0",
+        "MassDOT Work Zone Manager",
+        massdot.CLOSURES,
+        MASSDOT,
+    ),
 ]
 
 
@@ -46,15 +55,15 @@ def _payload(name: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    ("short", "cassette", "version", "publisher", "adapter", "key"),
+    ("short", "cassette", "vintage", "publisher", "adapter", "key"),
     KEYED_CC0,
     ids=[k[0] for k in KEYED_CC0],
 )
 def test_a_keyed_cc0_feed_replays_through_its_adapter_with_no_key(
-    short: str, cassette: str, version: str, publisher: str, adapter: Any, key: Any
+    short: str, cassette: str, vintage: str, publisher: str, adapter: Any, key: Any
 ) -> None:
     payload = _payload(cassette)
-    assert feed_version(payload) == version
+    assert vintage.endswith(f"-{feed_version(payload)}")
     assert feed_publisher(payload) == publisher
     with SqliteCache() as cache:
         cache.put(
@@ -66,6 +75,7 @@ def test_a_keyed_cc0_feed_replays_through_its_adapter_with_no_key(
         ctx = AdapterContext(cache=cache, budget=Budget(), offline=True)
         result = adapter.fetch(None, DAY, ctx)
     assert result.answered and not result.key_missing, result.reason
+    assert result.vintage == vintage
     assert len(result.features) == len(payload["features"])
     assert all(f.tier == 1 and f.kind == "closures" and f.detail for f in result.features)
     assert ctx.budget.api_calls_used == 0
@@ -73,12 +83,12 @@ def test_a_keyed_cc0_feed_replays_through_its_adapter_with_no_key(
 
 @pytest.mark.network
 @pytest.mark.parametrize(
-    ("short", "cassette", "version", "publisher", "adapter", "key"),
+    ("short", "cassette", "vintage", "publisher", "adapter", "key"),
     KEYED_CC0,
     ids=[k[0] for k in KEYED_CC0],
 )
 def test_a_keyed_feed_still_declares_the_licence_its_cassette_was_committed_under(
-    short: str, cassette: str, version: str, publisher: str, adapter: Any, key: Any
+    short: str, cassette: str, vintage: str, publisher: str, adapter: Any, key: Any
 ) -> None:
     """Fetched through the adapter, so the check authenticates exactly as a plan does; the
     raw payload is then read back out of the cache it was written to."""

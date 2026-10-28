@@ -113,6 +113,8 @@ FAMILIES: dict[str, Callable[[Path], str | None]] = {
     "wzdx_": _wzdx_family,
     "portal_": _portal_family,
     "state511_caltrans_": _caltrans_family,
+    # CWZ 1.0 keeps WZDx's envelope, licence field included (ADR 0058).
+    "cwz_": _wzdx_family,
 }
 
 
@@ -159,6 +161,7 @@ def test_an_unknown_family_is_refused_rather_than_waved_through() -> None:
     assert _family("arcgis_kcmo.json") is None
     assert _family("portal_socrata_kcmo.json") is _portal_family
     assert _family("wzdx_modot.json") is _wzdx_family
+    assert _family("cwz_massdot.json") is _wzdx_family
 
 
 @pytest.mark.parametrize(

@@ -51,8 +51,8 @@ and this milestone is about jurisdictions with no adapter at all.
 
 *Out of scope by a rule already written.* Quebec City is outside the United States
 (scope §2) and was not called. `pbs`, `cdot_cwz`, `idot_cwz` and `massdot__cwz` are CWZ
-1.0, which this package has never parsed and now records a decision not to guess at - see
-**ADR 0039**.
+1.0, which M14 declined to guess at (ADR 0039). M19 held keys for two of them, and the
+shared reader parsed every record of both, so CWZ now reads here (**ADR 0058**).
 
 *The keyed feeds are data, not prose* (`AWAITING_KEY` below, ADR 0057). M14 refused them on
 the rule "prefer keyless feeds; do not add keys nobody has", because an adapter that could
