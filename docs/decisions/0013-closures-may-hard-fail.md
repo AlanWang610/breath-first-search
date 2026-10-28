@@ -1,6 +1,8 @@
 # 0013 — Closures may hard-fail a route; trail status and access hours may not
 
-Status: accepted (2026-09-10)
+Status: accepted (2026-09-10). Gate 5 refined by
+[ADR 0059](0059-tier-two-fails-a-route-only-along-a-drawn-line.md) (M20): at tier 2 a
+record's confidence also says whether the publisher drew it, and only a drawn one clears.
 
 ## Context
 
