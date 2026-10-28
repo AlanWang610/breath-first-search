@@ -306,7 +306,7 @@
       "checked": false,
       "jurisdiction": "San Francisco Maritime National Historical Park (padus:NPS)",
       "kind": "closures",
-      "reason": "tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
+      "reason": "tier 1 wzdx.nps: LONGRUN_NPS_API_KEY is not set; the NPS data API needs a free key (https://www.nps.gov/subjects/developer/get-started.htm). Then tier 4 extraction: tier-4 extraction is not wired up: a model extractor exists (adapters/extraction/model.py) and nothing in this build searches for or fetches a jurisdiction's closure page for it to read",
       "source": "closures",
       "tier": null,
       "vintage": null
