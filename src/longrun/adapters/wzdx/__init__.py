@@ -128,20 +128,14 @@ AWAITING_KEY: tuple[AwaitingKey, ...] = (
         ),
     ),
     AwaitingKey(
-        registry_id="idot_cwz",
-        jurisdiction="tiger:state:17",
-        url="https://wzad-idot.illinois.gov/cwz/01.00",
-        register_at="https://wzad-idot.illinois.gov/cwz/api-key/",
-        why="HTTP 422, the query parameter api_key required; CWZ 1.0",
-    ),
-    AwaitingKey(
         registry_id="iltollway",
         jurisdiction="tiger:state:17",
         url="https://tims2go.tollway.state.il.us/wzdx/v4.2",
         register_at="https://tims2go.tollway.state.il.us/",
         why=(
-            "its certificate chain fails to validate, as in M14; a partial network, so "
-            "adopt it with complete = False"
+            "its certificate chain fails to validate, as in M14; its records already reach "
+            "IDOT's CWZ feed (`ildot.py`), and it is a partial network, so adopt it with "
+            "complete = False"
         ),
     ),
     AwaitingKey(

@@ -195,6 +195,11 @@ LICENCES: dict[str, SourceLicence] = {
         licence="CC0 1.0",
         attribution="Work zone data: Oregon Department of Transportation",
     ),
+    "wzdx_ildot": SourceLicence(
+        source="wzdx_ildot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Illinois Department of Transportation and Illinois Tollway",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",

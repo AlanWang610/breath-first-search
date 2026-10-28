@@ -20,8 +20,8 @@ from typing import Any
 import pytest
 
 from longrun.adapters.base import AdapterContext
-from longrun.adapters.keys import MASSDOT, ORDOT
-from longrun.adapters.wzdx import massdot, ordot
+from longrun.adapters.keys import IDOT, MASSDOT, ORDOT
+from longrun.adapters.wzdx import ildot, massdot, ordot
 from longrun.adapters.wzdx.client import wzdx_args
 from longrun.adapters.wzdx.feed import feed_publisher, feed_version
 from longrun.core.data.cache import SqliteCache, args_hash, peek
@@ -46,6 +46,14 @@ KEYED_CC0 = [
         "MassDOT Work Zone Manager",
         massdot.CLOSURES,
         MASSDOT,
+    ),
+    (
+        "ildot",
+        "cwz_ildot.json",
+        "cwz-1.0",
+        "Illinois Department of Transportation",
+        ildot.CLOSURES,
+        IDOT,
     ),
 ]
 

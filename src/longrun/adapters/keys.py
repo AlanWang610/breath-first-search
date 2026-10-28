@@ -77,6 +77,14 @@ ORDOT = ApiKey(
     register_at="https://apiportal.odot.state.or.us/",
 )
 
+#: Illinois DOT's CWZ feed (M19). The name it arrived under, kept so nobody has to rename a
+#: working line: IDOT is Illinois here, and the registry's `idot` - Iowa's - needs no key.
+IDOT = ApiKey(
+    env_var="LONGRUN_IDOT_API_KEY",
+    service="Illinois DOT's work-zone feed",
+    register_at="https://wzad-idot.illinois.gov/cwz/api-key/",
+)
+
 #: The National Park Service alerts API - what `trail_status` reads for any route crossing
 #: `padus:NPS` land, which PAD-US resolves for every national park in the country.
 NPS = ApiKey(
@@ -106,6 +114,6 @@ SOCRATA = ApiKey(
     register_at="https://dev.socrata.com/docs/app-tokens.html",
 )
 
-ALL_KEYS = (SF_BAY_511, MASSDOT, ORDOT, NPS, ANTHROPIC, SOCRATA)
+ALL_KEYS = (SF_BAY_511, MASSDOT, ORDOT, IDOT, NPS, ANTHROPIC, SOCRATA)
 
-__all__ = ["ALL_KEYS", "MASSDOT", "NPS", "ORDOT", "SF_BAY_511", "SOCRATA", "ApiKey"]
+__all__ = ["ALL_KEYS", "IDOT", "MASSDOT", "NPS", "ORDOT", "SF_BAY_511", "SOCRATA", "ApiKey"]

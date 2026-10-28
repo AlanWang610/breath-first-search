@@ -24,9 +24,9 @@ import respx
 from shapely.geometry import box
 
 from longrun.adapters.base import AdapterContext
-from longrun.adapters.keys import ALL_KEYS, MASSDOT, NPS, ORDOT, SF_BAY_511
+from longrun.adapters.keys import ALL_KEYS, IDOT, MASSDOT, NPS, ORDOT, SF_BAY_511
 from longrun.adapters.portals import nps as nps_portal
-from longrun.adapters.wzdx import azdot, massdot, ordot, sfbay
+from longrun.adapters.wzdx import azdot, ildot, massdot, ordot, sfbay
 from longrun.core.data.cache import SqliteCache, args_hash
 from longrun.core.models.context import Budget
 
@@ -42,6 +42,7 @@ KEYED = [
     ("sfbay", sfbay.CLOSURES, SF_BAY_511),
     ("massdot", massdot.CLOSURES, MASSDOT),
     ("ordot", ordot.CLOSURES, ORDOT),
+    ("ildot", ildot.CLOSURES, IDOT),
     ("nps", nps_portal.TRAIL_STATUS, NPS),
     ("nps_hours", nps_portal.ACCESS_HOURS, NPS),
 ]
