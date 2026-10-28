@@ -71,7 +71,8 @@ data/          region builds and caches; gitignored
 - **Router behind an interface.** Only `core/routing/` knows GraphHopper exists.
 - **Tool and CLI before UI.** A capability lands in `core/` -> `tools/` -> `cli/` before
   `api/` or `ui/` gets a control for it.
-- **The only state-specific code lives in `adapters/jurisdictions/`.**
+- **Jurisdiction-specific code and data live only under `adapters/`** (ADR 0060): the WZDx
+  modules, the NPS units and the portal catalog. Nothing in `core/` names a city or a state.
 
 ## Licensing
 
