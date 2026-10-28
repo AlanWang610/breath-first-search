@@ -470,6 +470,49 @@ def adapter_coverage(
     )
 
 
+def survey_portal(
+    platform: str = typer.Argument(..., help="socrata or arcgis."),
+    target: str = typer.Argument(
+        ..., help="Socrata: the portal's domain. ArcGIS: a layer or service URL, or a search."
+    ),
+    dataset: str | None = typer.Option(None, "--dataset", help="Socrata: a dataset id."),
+    query: str | None = typer.Option(None, "--query", help="Search instead of describing."),
+    bbox: str | None = typer.Option(
+        None, "--bbox", help="ArcGIS search: west,south,east,north in degrees."
+    ),
+) -> None:
+    """What a portal dataset is, for deciding whether to adopt it - never writes (M21).
+
+    Prints the dataset's name, when its rows last changed, its licence verbatim and whether
+    a payload may be committed under it (ADR 0061), its columns and a `catalog.yaml` stub.
+    `--query` searches instead: a Socrata domain's catalog, or ArcGIS Online inside a box.
+    """
+    import httpx
+
+    from longrun.adapters.portals import survey
+
+    try:
+        if platform == "socrata" and query:
+            lines = survey.search_socrata(target, query)
+        elif platform == "socrata" and dataset:
+            lines = survey.describe_socrata(target, dataset)
+        elif platform == "arcgis" and query:
+            if not bbox:
+                typer.echo("error: an ArcGIS search needs --bbox", err=True)
+                raise typer.Exit(code=2)
+            lines = survey.search_arcgis(query, bbox)
+        elif platform == "arcgis":
+            lines = survey.describe_arcgis(target)
+        else:
+            typer.echo("error: socrata needs --dataset or --query; platforms are socrata|arcgis")
+            raise typer.Exit(code=2)
+    except httpx.HTTPError as exc:
+        typer.echo(f"error: {type(exc).__name__}: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    for line in lines:
+        typer.echo(line)
+
+
 def _how(row: Any) -> str:
     """One jurisdiction's coverage as a phrase: what answers, and what waits on a key."""
     if row.claimed_tier is None:
@@ -539,5 +582,6 @@ def register(app: typer.Typer) -> None:
     app.command("region-config")(region_config)
     app.command("promote-adapter")(promote_adapter)
     app.command("adapter-coverage")(adapter_coverage)
+    app.command("survey-portal")(survey_portal)
     app.command("jurisdiction-table")(jurisdiction_table)
     app.command("nps-units")(nps_units)
