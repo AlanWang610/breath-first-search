@@ -9,9 +9,9 @@ Three deliberate choices.
 
 **Unparseable opening hours are unknown, never closed.** OSM `opening_hours` is a small
 language with a long tail — `Mo-Fr 07:00-19:00; Sa 08:00-17:00; PH off`, seasonal rules,
-sunset-relative times. This parses the common forms and returns `None` for the rest, and a
-`None` counts as *available* while lowering confidence. Treating an unrecognised string as
-closed would manufacture dry gaps out of syntax this module simply does not speak.
+sunset-relative times. `_hours` reads most of it (M18) and returns `None` for the rest, and
+a `None` counts as *available* while lowering confidence. Treating an unrecognised string as
+closed would manufacture dry gaps out of syntax nobody here speaks.
 
 **A tap with no hours at all is open.** A drinking fountain in a park usually carries no
 `opening_hours` tag because it has none. Reading absence as closure is the same scope 12
@@ -25,8 +25,7 @@ so that when it is wrong it is wrong somewhere legible.
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from longrun.core.data.file_store import LayerNotFound
@@ -42,6 +41,7 @@ from longrun.core.models.measurement import (
 from longrun.core.models.waypoint import PlanWaypoint
 from longrun.core.preferences.floors import DRY_GAP_HARD_MIN, WBGT_HARD_C
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, row_tags
+from longrun.core.scorers._hours import is_open, sun_at
 from longrun.core.scorers.base import record_coverage, unavailable
 from longrun.core.scorers.crossings import NODES_LAYER
 from longrun.core.scorers.heat import WBGT_SOFT_C
@@ -50,6 +50,7 @@ from longrun.core.scorers.services import DEFAULT_BUFFER_M, all_kinds, category_
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.context import ScorerContext
     from longrun.core.models.geometry import Route, Segment
+    from longrun.core.scorers._hours import SunOn
 
 name = "resupply_schedule"
 
@@ -63,68 +64,6 @@ ML_PER_MINUTE = 10.0
 
 #: Confidence for a gap computed with at least one unparseable `opening_hours`.
 UNKNOWN_HOURS_CONFIDENCE = 0.6
-
-_DAYS = ("mo", "tu", "we", "th", "fr", "sa", "su")
-_RULE = re.compile(
-    r"^(?P<days>(?:[A-Za-z]{2}(?:-[A-Za-z]{2})?)(?:,[A-Za-z]{2}(?:-[A-Za-z]{2})?)*)?\s*"
-    r"(?P<from>\d{1,2}:\d{2})\s*-\s*(?P<to>\d{1,2}:\d{2})$"
-)
-
-
-def _day_indices(spec: str) -> set[int]:
-    days: set[int] = set()
-    for part in spec.lower().split(","):
-        if "-" in part:
-            start, _, end = part.partition("-")
-            if start in _DAYS and end in _DAYS:
-                lo, hi = _DAYS.index(start), _DAYS.index(end)
-                days.update(range(lo, hi + 1) if lo <= hi else [*range(lo, 7), *range(0, hi + 1)])
-        elif part in _DAYS:
-            days.add(_DAYS.index(part))
-    return days
-
-
-def _to_time(text: str) -> time | None:
-    try:
-        hour, _, minute = text.partition(":")
-        return time(int(hour) % 24, int(minute))
-    except ValueError:  # pragma: no cover - guarded by the regex
-        return None
-
-
-def is_open(spec: str | None, when: datetime) -> bool | None:
-    """`True` open, `False` closed, `None` not understood — three answers.
-
-    `None` is the load-bearing one: it means this module does not speak the dialect, not
-    that the door is locked.
-    """
-    if spec is None:
-        return True  # no tag at all: a public fountain has no hours
-    text = spec.strip().lower()
-    if not text:
-        return True
-    if text in {"24/7", "24x7", "open"}:
-        return True
-    if text in {"off", "closed"}:
-        return False
-
-    understood = False
-    for rule in (r.strip() for r in text.split(";") if r.strip()):
-        match = _RULE.match(rule)
-        if match is None:
-            continue
-        understood = True
-        days = _day_indices(match.group("days") or "mo-su")
-        if days and when.weekday() not in days:
-            continue
-        start, end = _to_time(match.group("from")), _to_time(match.group("to"))
-        if start is None or end is None:
-            continue
-        now = when.time()
-        inside = start <= now <= end if start <= end else (now >= start or now <= end)
-        if inside:
-            return True
-    return False if understood else None
 
 
 def heat_scaled(threshold_min: float, wbgt: float | None) -> float:
@@ -178,6 +117,7 @@ def resupply_schedule(
         return unavailable(name, "no amenities layer: opening hours not established")
 
     frame = RouteFrame(route)
+    sun = _sun(route, etas, ctx)
     open_at: dict[str, list[float]] = {"water": [], "toilet": [], "food": []}
     unknown_hours = 0
     found_places: list[PlanWaypoint] = []
@@ -196,7 +136,7 @@ def resupply_schedule(
 
         minutes = _minutes_at(route, etas, cum_m)
         arrival = etas[0] + timedelta(minutes=minutes)
-        state = is_open(tags.get("opening_hours"), arrival)
+        state = is_open(tags.get("opening_hours"), arrival, sun)
         if state is None:
             unknown_hours += 1
         if state is not False:
@@ -278,6 +218,20 @@ def resupply_schedule(
             )
         )
     return result
+
+
+def _sun(route: Route, etas: list[datetime], ctx: ScorerContext) -> SunOn:
+    """The day's sun at the start, for hours written as `sunrise-sunset`.
+
+    One place for the whole route: a park's dawn-to-dusk fountain fifteen kilometres on
+    sees the same sunrise to within a minute, and the events are computed only if some
+    service's hours actually mention the sun.
+    """
+    from longrun.core.geo.solar import utc_offset_for
+
+    lat, lon = route.points[0].lat, route.points[0].lon
+    offset, _ = utc_offset_for(lat, lon, etas[0], ctx.utc_offset_hours)
+    return sun_at(lat, lon, offset)
 
 
 def _max_gap_min(marks: list[float], total_min: float) -> float:

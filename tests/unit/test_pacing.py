@@ -14,7 +14,7 @@ import pytest
 from longrun.core.geo.segments import segment_route
 from longrun.core.models.geometry import Route, RoutePoint
 from longrun.core.pacing.curves import PacingCurves
-from longrun.core.pacing.model import ETAVector, pacing_model
+from longrun.core.pacing.model import ETAVector, eta_at_distance, pacing_model
 from longrun.core.pacing.population import (
     FLAT_COST,
     MAX_DOWNHILL_SPEED_FACTOR,
@@ -194,6 +194,29 @@ def test_at_distance_clamps_outside_the_route() -> None:
     vector = pacing_model(route, START)
     assert vector.at_distance(-100.0, route) == vector.start
     assert vector.at_distance(99_999.0, route) == vector.finish
+
+
+def test_eta_at_distance_reads_the_point_at_that_distance_not_the_one_at_that_index() -> None:
+    """The bare-list reader three scorers needed (M18). On this route point *k* sits at
+    k x 100 m; segment *k* of a 1 km segmentation starts at k x 1000 m. Indexing the
+    per-point list by segment number reads segment 5 at 500 m."""
+    route = _route()
+    etas = [START + timedelta(minutes=i) for i in range(len(route.points))]
+    segments = segment_route(route, max_len_m=1000.0)
+    assert eta_at_distance(route, etas, segments[5].cum_start_m) == START + timedelta(minutes=50)
+    assert eta_at_distance(route, etas, 550.0) == START + timedelta(minutes=5, seconds=30)
+    assert eta_at_distance(route, etas, -1.0) == etas[0]
+    assert eta_at_distance(route, etas, 99_999.0) == etas[-1]
+
+
+def test_a_short_eta_list_is_held_at_its_last_value_rather_than_refused() -> None:
+    """Tests pass one ETA per segment; a scorer is not where a resolution mismatch should
+    surface as an IndexError."""
+    route = _route()
+    etas = [START, START + timedelta(minutes=1), START + timedelta(minutes=2)]
+    assert eta_at_distance(route, etas, 150.0) == START + timedelta(minutes=1, seconds=30)
+    assert eta_at_distance(route, etas, 5000.0) == etas[-1]
+    assert eta_at_distance(route, [START], 5000.0) == START
 
 
 def test_segment_etas_use_the_midpoint() -> None:

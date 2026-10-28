@@ -196,10 +196,14 @@ def describe(exc: BaseException) -> str:
     deduplicated. `forecast.py` settled this and the wording is deliberately identical.
     """
     from longrun.core.data.cache import CacheMiss
-    from longrun.core.models.context import BudgetExceeded
+    from longrun.core.models.context import BudgetExceeded, DeadlineExceeded
 
     if isinstance(exc, CacheMiss):
         return "not in the cassette"
+    if isinstance(exc, DeadlineExceeded):
+        # Said as it is (M18): "API call budget exhausted" for a plan that ran out of time
+        # sent the reader looking for a call count that was nowhere near its limit.
+        return str(exc)
     if isinstance(exc, BudgetExceeded):
         return "API call budget exhausted"
     return f"{type(exc).__name__}: {exc}"

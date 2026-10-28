@@ -443,9 +443,10 @@ def adapter_coverage(
                 typer.echo(f"  statewide at tier {tier}: {len(states)} - " + _states(states, names))
         if s["states_key_missing"]:
             typer.echo(
-                f"  statewide, key not set: {len(s['states_key_missing'])} - "
+                f"  statewide, a better claimant's key not set: {len(s['states_key_missing'])} - "
                 + _states(s["states_key_missing"], names)
             )
+        typer.echo(f"  statewide with every key set: {len(s['states_claimed'])}")
         typer.echo(
             f"  no statewide claimant: {len(s['states_uncovered'])} - "
             + _states(s["states_uncovered"], names)
@@ -456,24 +457,32 @@ def adapter_coverage(
         )
         if largest:
             for row in largest_places(rows, k, largest):  # type: ignore[arg-type]
-                how = (
-                    "not covered"
-                    if row.tier is None
-                    else f"tier {row.tier} ({', '.join(row.adapters)})"
-                    + (", key not set" if row.key_missing else "")
-                )
-                typer.echo(f"    {row.name} ({row.population:,}): {how}")
+                typer.echo(f"    {row.name} ({row.population:,}): {_how(row)}")
         if state is not None:
             for row in rows:
                 if row.kind == k and row.statefp == state:
-                    how = "-" if row.tier is None else f"tier {row.tier} {', '.join(row.adapters)}"
-                    typer.echo(f"    {row.id} {row.name}: {how}")
+                    typer.echo(f"    {row.id} {row.name}: {_how(row)}")
 
     townships = sum(summary["cousubs_uncoverable"].values())
     typer.echo(
         f"\n{townships:,} functioning county subdivisions (townships, New England towns) have "
         "no jurisdiction id level, so no adapter can be registered against them."
     )
+
+
+def _how(row: Any) -> str:
+    """One jurisdiction's coverage as a phrase: what answers, and what waits on a key."""
+    if row.claimed_tier is None:
+        how = "not covered"
+    elif row.tier is None:
+        how = f"claimed at tier {row.claimed_tier} ({', '.join(row.adapters)}), key not set"
+    else:
+        how = f"tier {row.tier} ({', '.join(row.adapters)})"
+        if row.key_missing:
+            how += f"; tier {row.claimed_tier} waits on a key"
+    if row.partial:
+        how += f"; partial: {', '.join(row.partial)}"
+    return how
 
 
 def _states(fips: list[str], names: dict[str, str]) -> str:
@@ -499,6 +508,28 @@ def jurisdiction_table(
     typer.echo(f"wrote {len(rows)} jurisdictions to {target}")
 
 
+def nps_units(
+    boundaries: Path = typer.Argument(..., help="GeoJSON of the NPS LRD nps_boundary layer."),
+    read_on: str = typer.Option(..., "--read-on", help="The date it was downloaded, ISO."),
+    out: Path | None = typer.Option(None, "--out", help="Defaults to the packaged file."),
+) -> None:
+    """Rebuild the park-code boxes the NPS adapters choose parks by (M18, ADR 0054).
+
+    From a GeoJSON download of the Land Resources Division's `nps_boundary` layer, a federal
+    work and public domain (`adapters/portals/nps_units.py` names the service). Deterministic,
+    so a rebuild from the same download and date is the same bytes.
+    """
+    import json
+
+    from longrun.adapters.portals.nps_units import UNITS, build_units, write_units
+
+    units = build_units(json.loads(boundaries.read_text(encoding="utf-8")), read_on=read_on)
+    target = out or UNITS
+    write_units(units, target)
+    boxes = sum(len(b) for b in units["units"].values())
+    typer.echo(f"wrote {len(units['units'])} units ({boxes} boxes) to {target}")
+
+
 def register(app: typer.Typer) -> None:
     app.command("load-osm")(load_osm)
     app.command("load-tiger")(load_tiger)
@@ -509,3 +540,4 @@ def register(app: typer.Typer) -> None:
     app.command("promote-adapter")(promote_adapter)
     app.command("adapter-coverage")(adapter_coverage)
     app.command("jurisdiction-table")(jurisdiction_table)
+    app.command("nps-units")(nps_units)

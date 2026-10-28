@@ -18,7 +18,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
+import respx
+from shapely.geometry import box
 
 from longrun.adapters.base import AdapterContext
 from longrun.adapters.keys import ALL_KEYS, MASSDOT, NPS, SF_BAY_511
@@ -39,7 +42,15 @@ KEYED = [
     ("sfbay", sfbay.CLOSURES, SF_BAY_511),
     ("massdot", massdot.CLOSURES, MASSDOT),
     ("nps", nps_portal.TRAIL_STATUS, NPS),
+    ("nps_hours", nps_portal.ACCESS_HOURS, NPS),
 ]
+
+#: The corridor a live check asks with, where an adapter needs one: the NPS adapters ask per
+#: park, and a corridor that meets none is a reason, not an answer (M18).
+LIVE_CORRIDORS: dict[str, Any] = {
+    "nps": box(-91.6, 37.0, -91.2, 37.3),
+    "nps_hours": box(-91.6, 37.0, -91.2, 37.3),
+}
 
 
 def _ctx(cache: Any) -> AdapterContext:
@@ -321,9 +332,25 @@ def test_the_live_endpoint_answers_when_a_key_is_present(
     if not key.value(dict(os.environ)):
         pytest.skip(f"{key.env_var} is not set")
 
+    from datetime import date as calendar
+
+    corridor = LIVE_CORRIDORS.get(short)
     with SqliteCache() as cache:
-        result = adapter.fetch(None, DAY, AdapterContext(cache=cache, budget=Budget()))
+        result = adapter.fetch(
+            corridor, calendar.today(), AdapterContext(cache=cache, budget=Budget())
+        )
     assert result.answered, result.reason
+
+
+@pytest.mark.network
+def test_a_live_test_keeps_the_keys_it_needs() -> None:
+    """The conftest clears every `LONGRUN_*` variable - except, for a `network` test, the
+    keys in `ALL_KEYS`. If it did not, the live check above could never run anywhere."""
+    import sys
+
+    conftest = sys.modules.get("conftest")
+    assert conftest is not None, "the root conftest is loaded as `conftest`"
+    assert conftest.live_test_credentials() == {k.env_var for k in ALL_KEYS}
 
 
 def test_every_key_this_module_defines_is_in_all_keys() -> None:
@@ -389,19 +416,70 @@ def test_a_keyed_feed_replays_its_cassette_with_no_key() -> None:
     assert ctx.budget.api_calls_used == 0
 
 
+#: A corridor box around the Ozark National Scenic Riverways and nothing else (M18).
+OZARKS = box(-91.6, 37.0, -91.2, 37.3)
+
+
 def test_nps_replays_its_cassette_with_no_key() -> None:
     """Alerts are US public domain, so an NPS payload is the one keyed recording this
-    project may commit - and it has to replay in keyless CI to be worth committing."""
-    payload = {"data": [{"title": "Trail closed", "category": "Park Closure", "url": ""}]}
+    project may commit - and it has to replay in keyless CI to be worth committing. Since
+    M18 a recording is per park, keyed by the park the corridor meets."""
+    payload = {"data": [{"id": "a1", "title": "Trail closed", "category": "Park Closure"}]}
     with SqliteCache() as cache:
         cache.put(
             "adapter.portal.nps",
-            args_hash(nps_portal.nps_args(None, DAY)),
+            args_hash(nps_portal.nps_args(["ozar"], DAY)),
             DAY.isoformat(),
             payload,
         )
-        result = nps_portal.TRAIL_STATUS.fetch(None, DAY, _ctx(cache))
-    assert result.answered and len(result.features) == 1
+        result = nps_portal.TRAIL_STATUS.fetch(OZARKS, DAY, _ctx(cache))
+    assert result.answered and [f.ref for f in result.features] == ["a1"]
+
+
+def test_nps_asks_only_for_the_parks_the_corridor_meets() -> None:
+    """Until M18 it asked for no park, got the first fifty alerts in the country, and every
+    one of them was read as being about whatever NPS route had asked (ADR 0054)."""
+    assert nps_portal.park_codes(OZARKS) == ["ozar"]
+    assert nps_portal.park_codes(box(-122.43, 37.80, -122.40, 37.81)) == ["goga", "safr"]
+    # Sequoia and Kings Canyon are two boundary units and one API park.
+    assert nps_portal.park_codes(box(-118.9, 36.4, -118.6, 36.8)) == ["seki"]
+    assert nps_portal.park_codes(None) == []
+
+
+def test_a_corridor_meeting_no_park_box_is_a_reason_not_an_empty_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PAD-US said NPS land and no unit's box met the corridor: nobody was asked."""
+    monkeypatch.setenv(nps_portal.NPS.env_var, "test-key")
+    with SqliteCache() as cache:
+        result = nps_portal.TRAIL_STATUS.fetch(box(-100.0, 40.0, -99.99, 40.01), DAY, _ctx(cache))
+    assert result.reason == nps_portal.NO_UNIT_REASON and not result.key_missing
+
+
+@respx.mock
+def test_nps_asks_one_park_per_request_and_pages_rather_than_truncating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The API reads only the first code of `parkCode=a,b` (checked 2026-10-23), so one
+    request per park; and a park with more pages than `MAX_PAGES` is refused, not cut."""
+    monkeypatch.setenv(nps_portal.NPS.env_var, "test-key")
+    asked: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        code = request.url.params["parkCode"]
+        asked.append(code)
+        start = int(request.url.params["start"])
+        total = 3 if code == "goga" else 999
+        data = [{"id": f"{code}-{start}", "title": "t"}] if start < total else []
+        return httpx.Response(200, json={"total": str(total), "data": data})
+
+    respx.get(nps_portal.URL).mock(side_effect=answer)
+    with SqliteCache() as cache:
+        golden_gate = nps_portal.per_park("portal.nps", nps_portal.URL, ["goga"], DAY, _ctx(cache))
+        busy = nps_portal.per_park("portal.nps", nps_portal.URL, ["busy"], DAY, _ctx(cache))
+    assert isinstance(golden_gate, list) and len(golden_gate[0]["data"]) == 3
+    assert asked.count("goga") == 3, "one page per request, three records"
+    assert isinstance(busy, nps_portal.AdapterResult) and "more than" in (busy.reason or "")
 
 
 def test_peek_is_none_on_a_miss_even_offline() -> None:
@@ -411,3 +489,122 @@ def test_peek_is_none_on_a_miss_even_offline() -> None:
 
     with SqliteCache(offline=True) as cache:
         assert peek(cache, "adapter.anything", {"a": 1}, DAY) is None
+
+
+# --- NPS park hours, for access_hours (M18) ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("published", "rule"),
+    [
+        ("All Day", "00:00-24:00"),
+        ("Closed", "off"),
+        ("Sunrise to Sunset", "sunrise-sunset"),
+        ("10:00AM - 5:00PM", "10:00-17:00"),
+        ("12:30PM - 3:30PM", "12:30-15:30"),
+        ("6:00AM - Sunset", "06:00-sunset"),
+        ("12:00AM - 11:59PM", "00:00-23:59"),
+        ("By reservation", "unknown"),
+        (None, "unknown"),
+    ],
+)
+def test_an_nps_day_reads_as_an_opening_hours_selector(published: Any, rule: str) -> None:
+    """Every form ten parks posted on 2026-10-23, and the one thing anything else becomes:
+    `unknown`, which `_hours` reads as not understood rather than closed."""
+    assert nps_portal.nps_day_hours(published) == rule
+
+
+def _park(**overrides: Any) -> dict[str, Any]:
+    week = {
+        d: "All Day"
+        for d in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    }
+    park: dict[str, Any] = {
+        "parkCode": "ozar",
+        "fullName": "Ozark National Scenic Riverways",
+        "latitude": "37.14",
+        "longitude": "-91.26",
+        "url": "https://www.nps.gov/ozar/index.htm",
+        "operatingHours": [
+            {"name": "Ozark National Scenic Riverways", "standardHours": week, "exceptions": []},
+            {"name": "Alley Mill", "standardHours": {"monday": "9:00AM - 4:00PM"}},
+        ],
+    }
+    park.update(overrides)
+    return park
+
+
+def test_a_park_posts_its_own_hours_and_a_facilitys_are_not_the_gates() -> None:
+    features = nps_portal.parse_park_hours({"data": [_park()]})
+    assert [f.detail for f in features] == ["standard hours"]
+    [standing] = features
+    assert standing.kind == "access_hours" and standing.geometry == {}
+    assert standing.name == "Ozark National Scenic Riverways"
+    assert standing.hours is not None and standing.hours.startswith(
+        "Mo 00:00-24:00; Tu 00:00-24:00"
+    )
+    assert standing.start is None and standing.end is None
+
+
+def test_a_dated_exception_holds_for_its_local_days_as_utc_instants() -> None:
+    """Thanksgiving in the Ozarks is a Central-time day: 06:00Z to 05:59:59Z next day."""
+    from datetime import datetime
+
+    closed = {
+        "name": "Thanksgiving",
+        "startDate": "2026-11-26",
+        "endDate": "2026-11-26",
+        "exceptionHours": {},
+    }
+    park = _park()
+    park["operatingHours"][0]["exceptions"] = [closed]
+    standing, exception = nps_portal.parse_park_hours({"data": [park]})
+    assert exception.hours == "off" and exception.detail == "Thanksgiving"
+    assert exception.start == datetime(2026, 11, 26, 6, 0)
+    assert exception.end == datetime(2026, 11, 27, 5, 59, 59)
+    assert standing.name == exception.name, "one gate, so access_hours judges them together"
+
+
+def test_north_cascades_posts_its_hours_under_the_complex_name() -> None:
+    park = _park(fullName="North Cascades National Park")
+    park["operatingHours"][0]["name"] = "North Cascades National Park Service Complex"
+    assert len(nps_portal.parse_park_hours({"data": [park]})) == 1
+
+
+def test_park_hours_replay_from_a_weekly_cassette_with_no_key() -> None:
+    """Hours change by season, so a week of plans asks once - keyed by the Monday."""
+    monday = date(2026, 9, 14)
+    with SqliteCache() as cache:
+        cache.put(
+            "adapter.portal.nps_hours",
+            args_hash(nps_portal.nps_args(["ozar"], monday, "portal.nps_hours")),
+            monday.isoformat(),
+            {"data": [_park()]},
+        )
+        wednesday = nps_portal.ACCESS_HOURS.fetch(OZARKS, date(2026, 9, 16), _ctx(cache))
+    assert wednesday.answered and [f.name for f in wednesday.features] == [
+        "Ozark National Scenic Riverways"
+    ]
+
+
+def test_a_week_of_nps_hours_reads_back_through_the_parser_access_hours_uses() -> None:
+    from datetime import datetime
+
+    from longrun.core.scorers._hours import is_open, read_hours
+
+    rule = nps_portal.nps_hours_rule(
+        {
+            "monday": "Closed",
+            "tuesday": "10:00AM - 5:00PM",
+            "wednesday": "All Day",
+            "thursday": "6:00AM - Sunset",
+            "friday": "Sunrise to Sunset",
+            "saturday": "By reservation",
+            "sunday": "All Day",
+        }
+    )
+    assert read_hours(rule).unread == 0
+    assert is_open(rule, datetime(2026, 9, 14, 12)) is False  # Monday, closed
+    assert is_open(rule, datetime(2026, 9, 15, 18)) is False  # Tuesday after 17:00
+    assert is_open(rule, datetime(2026, 9, 16, 3)) is True  # Wednesday, all day
+    assert is_open(rule, datetime(2026, 9, 19, 12)) is None  # Saturday, unknown

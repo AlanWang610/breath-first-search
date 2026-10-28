@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -47,6 +48,13 @@ CIVIL_TWILIGHT_DEG = -6.0
 #: matter. Used only to keep the shade summary honest about near-noon geometry.
 HIGH_SUN_DEG = 60.0
 
+#: Where the centre of the sun sits at sunrise and sunset: 34' of refraction and a 16'
+#: semidiameter below the geometric horizon. The almanac convention - USNO's, NOAA's, and
+#: pvlib's own `sun_rise_set_transit_spa`, which the tests hold `sun_events` to.
+SOLAR_DISC_DEG = -0.8333
+
+_MINUTES_PER_DAY = 24 * 60
+
 
 @dataclass(frozen=True)
 class SolarPosition:
@@ -62,6 +70,22 @@ class SolarPosition:
     @property
     def above_horizon(self) -> NDArray[np.bool_]:
         return self.elevation > 0.0
+
+
+@dataclass(frozen=True)
+class SunEvents:
+    """When the light changes on one local day, as naive **local** clock times.
+
+    Local because the rules that ask - "dawn to dusk", `sunrise-sunset` - are rules on the
+    local clock (ADR 0046 §5), and `_hours` compares them against a local ETA without
+    converting anything. `None` where the sun never crosses that line on that day: a polar
+    day has no sunset, and a polar night can still have a dawn.
+    """
+
+    dawn: datetime | None
+    sunrise: datetime | None
+    sunset: datetime | None
+    dusk: datetime | None
 
 
 @dataclass(frozen=True)
@@ -143,6 +167,54 @@ def solar_positions(
     )
 
 
+def sun_events(lat: float, lon: float, day: date, utc_offset_hours: float) -> SunEvents:
+    """Dawn, sunrise, sunset and dusk at a place, on a local day (M18).
+
+    **One solver for all four, on the same sun `lighting` reads.** The geometric elevation
+    is sampled once a minute across the local day and each crossing interpolated: sunrise
+    and sunset where the centre passes `SOLAR_DISC_DEG`, dawn and dusk where it passes
+    `CIVIL_TWILIGHT_DEG`. Below the horizon pvlib applies no refraction, so dusk here is the
+    minute `lighting` starts calling a segment dark - a gate that "closes at dusk" and a
+    segment that "goes dark" cannot disagree. pvlib's `sun_rise_set_transit_spa` knows no
+    twilight, which is why it is the test oracle rather than a second code path.
+
+    Cached by place to two decimal places - about a kilometre, a few seconds of sunrise -
+    because a plan asks about the same park for every gate in it.
+    """
+    return _sun_events(round(lat, 2), round(lon, 2), day, float(utc_offset_hours))
+
+
+@lru_cache(maxsize=256)
+def _sun_events(lat: float, lon: float, day: date, utc_offset_hours: float) -> SunEvents:
+    import pvlib
+
+    midnight = datetime.combine(day, time())
+    times = [midnight + timedelta(minutes=m) for m in range(_MINUTES_PER_DAY + 1)]
+    frame = pvlib.solarposition.get_solarposition(_index(times, utc_offset_hours), lat, lon)
+    elevation = frame["elevation"].to_numpy(dtype=float)
+    return SunEvents(
+        dawn=_crossing(times, elevation, CIVIL_TWILIGHT_DEG, rising=True),
+        sunrise=_crossing(times, elevation, SOLAR_DISC_DEG, rising=True),
+        sunset=_crossing(times, elevation, SOLAR_DISC_DEG, rising=False),
+        dusk=_crossing(times, elevation, CIVIL_TWILIGHT_DEG, rising=False),
+    )
+
+
+def _crossing(
+    times: Sequence[datetime], elevation: NDArray[np.float64], degrees: float, *, rising: bool
+) -> datetime | None:
+    """The day's first upward, or last downward, crossing of `degrees`, to the second."""
+    above = elevation > degrees
+    changes = [int(i) for i in np.flatnonzero(above[1:] != above[:-1])]
+    found = [i for i in changes if bool(above[i + 1]) is rising]
+    if not found:
+        return None
+    i = found[0] if rising else found[-1]
+    span = float(elevation[i + 1] - elevation[i])
+    fraction = (degrees - float(elevation[i])) / span if span else 0.0
+    return times[i] + timedelta(seconds=round(60.0 * fraction))
+
+
 def clear_sky(
     times: Sequence[datetime],
     lat: float,
@@ -176,10 +248,13 @@ __all__ = [
     "CIVIL_TWILIGHT_DEG",
     "DEGREES_PER_HOUR",
     "HIGH_SUN_DEG",
+    "SOLAR_DISC_DEG",
     "ClearSky",
     "SolarPosition",
+    "SunEvents",
     "clear_sky",
     "solar_positions",
+    "sun_events",
     "utc_offset_for",
     "utc_offset_from_longitude",
 ]

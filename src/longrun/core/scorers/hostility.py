@@ -37,7 +37,11 @@ from longrun.core.models.measurement import (
     Tier,
 )
 from longrun.core.preferences.floors import LTS_HARD
-from longrun.core.routing.lts import lts_from_tags
+from longrun.core.routing.lts import (
+    SURVEY_SOURCE_COLUMN,
+    lts_for_way,
+    survey_speed_of,
+)
 from longrun.core.scorers._common import (
     ROUTE_SUMMARY_ID,
     UNKNOWN_WAY_CONFIDENCE,
@@ -96,22 +100,24 @@ def segment_hostility(
             )
             continue
 
-        aadt = aadt_of(tags)
-        lts = lts_from_tags(tags, aadt=aadt)
+        lts = lts_for_way(tags)
         severity = severity_for_level(lts.level)
+        values: dict[str, float | int | str | bool | None] = {
+            "lts": lts.level,
+            "lts_confidence": lts.confidence,
+            "lts_reasons": ",".join(lts.reasons),
+            "aadt": aadt_of(tags),
+            "severity": severity,
+        }
+        surveyed = survey_speed_of(tags)
+        if surveyed is not None:
+            # Only where a region build merged a survey onto the way (M18), so no plan on
+            # a region without one gains a key - which is why adding this moved no golden.
+            values["speed_85_kph"] = surveyed
+            values["speed_source"] = str(tags.get(SURVEY_SOURCE_COLUMN) or "survey")
 
         result.measurements.append(
-            SegmentMeasurement(
-                segment_id=segment.id,
-                values={
-                    "lts": lts.level,
-                    "lts_confidence": lts.confidence,
-                    "lts_reasons": ",".join(lts.reasons),
-                    "aadt": aadt,
-                    "severity": severity,
-                },
-                confidence=lts.confidence,
-            )
+            SegmentMeasurement(segment_id=segment.id, values=values, confidence=lts.confidence)
         )
 
         scored_m += segment.length_m

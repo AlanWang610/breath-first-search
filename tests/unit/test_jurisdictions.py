@@ -365,6 +365,68 @@ def test_one_agency_managing_many_parks_is_one_jurisdiction() -> None:
     assert [j.id for j in found] == ["padus:NPS"]
 
 
+# --- where a park is along the route (M18) ----------------------------------
+
+
+def _east(lons: list[float]) -> Route:
+    """A route along latitude 0.5, one point per longitude, a kilometre apart."""
+    return Route(
+        id="east",
+        points=[RoutePoint(lat=0.5, lon=lon, cum_dist_m=i * 1000.0) for i, lon in enumerate(lons)],
+    )
+
+
+def _nps(boxes: list[Any]) -> Any:
+    return _frame(
+        [{"agency": "NPS", "name": f"Unit {i}", "agency_type": "FED"} for i in range(len(boxes))],
+        boxes,
+    )
+
+
+def test_two_units_of_one_agency_are_one_record_with_two_spans() -> None:
+    """`_merged` keeps one `padus:NPS` - and so loses where each unit is. The spans are the
+    part it cannot keep: a park-wide rule is read where the route enters *a* park, not at
+    0 m (M18)."""
+    from shapely.geometry import box
+
+    from longrun.core.data.jurisdictions import _from_frames, park_spans
+
+    route = _east([i / 10 for i in range(11)])
+    records, rows = _from_frames(None, _nps([box(0.15, 0, 0.45, 1), box(0.65, 0, 0.85, 1)]))
+    assert [j.id for j in records] == ["padus:NPS"]
+    assert park_spans(route, rows) == {"padus:NPS": ((2000.0, 4000.0), (7000.0, 8000.0))}
+
+
+def test_a_park_beside_the_route_is_placed_at_its_nearest_point() -> None:
+    """The parks layer is asked with a 500 m corridor, so a park the route only passes is
+    on its way and its gate still matters; it gets a run of no length."""
+    from shapely.geometry import box
+
+    from longrun.core.data.jurisdictions import _from_frames, park_spans
+
+    route = _east([i / 10 for i in range(11)])
+    _, rows = _from_frames(None, _nps([box(0.48, 0.6, 0.52, 0.7)]))
+    assert park_spans(route, rows) == {"padus:NPS": ((5000.0, 5000.0),)}
+
+
+def test_a_loop_through_a_park_twice_is_two_runs() -> None:
+    from shapely.geometry import box
+
+    from longrun.core.data.jurisdictions import _from_frames, park_spans
+
+    out_and_back = _east([0.0, 0.1, 0.2, 0.3, 0.4, 0.3, 0.2, 0.1, 0.0])
+    _, rows = _from_frames(None, _nps([box(0.05, 0, 0.15, 1)]))
+    assert park_spans(out_and_back, rows) == {"padus:NPS": ((1000.0, 1000.0), (7000.0, 7000.0))}
+
+
+def test_a_park_with_no_geometry_places_nothing_rather_than_failing() -> None:
+    from shapely.geometry import Polygon
+
+    from longrun.core.data.jurisdictions import park_spans
+
+    assert park_spans(_east([0.0, 0.1]), [(None, "padus:NPS"), (Polygon(), "padus:NPS")]) == {}
+
+
 # --- absence ----------------------------------------------------------------
 
 

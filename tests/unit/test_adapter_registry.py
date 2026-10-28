@@ -591,6 +591,26 @@ def test_a_ceiling_ends_a_ladder_and_says_so_in_the_manifest() -> None:
     assert any("ceiling" in line for line in budget.degradation)
 
 
+def test_a_feed_cut_off_by_the_plans_clock_ends_the_climb_like_a_ceiling(
+    registry_factory: Any,
+) -> None:
+    """ADR 0047 §3 for time as for calls (M18): a feed stopped by the deadline says nothing
+    about Missouri's sources, and passing the climb down would spend the time that ran out
+    on the next tier."""
+    from longrun.core.models.context import DEADLINE_REASON
+
+    slow = FakeAdapter(
+        name="wzdx.slow",
+        jurisdictions=("tiger:state:29",),
+        result=AdapterResult(reason=f"{DEADLINE_REASON} (180 s); 181 s elapsed"),
+    )
+    portal = FakeAdapter(name="portal.mo", jurisdictions=("tiger:state:29",), tier=3)
+    found = registry_factory(slow, portal).fetch("closures", [MISSOURI], None, DAY)
+    assert [a.outcome for a in found.answers[0].attempts] == ["ceiling"]
+    assert portal.calls == []
+    assert not found.answers[0].checked
+
+
 def test_the_same_question_twice_is_one_fetch(registry_factory: Any) -> None:
     """The loop scores every candidate on one context. Before M17 each pass spent a fresh
     slot on the same answer, and candidates scored later met the ceiling first."""

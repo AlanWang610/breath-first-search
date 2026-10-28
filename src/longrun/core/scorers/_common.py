@@ -25,6 +25,10 @@ from longrun.core.geo.projections import local_crs, transformer_to
 from longrun.core.geo.segments import DEFAULT_CORRIDOR_BUFFER_M, corridor
 from longrun.core.models.geometry import Route, Segment
 
+# Re-exported: they moved beside `lts_from_tags` when a way's LTS inputs got one reader
+# (`lts_for_way`, M18), and `regions/lts.py` and the tests still name them here.
+from longrun.core.routing.lts import AADT_COLUMNS, aadt_of
+
 if TYPE_CHECKING:  # pragma: no cover
     from longrun.core.models.context import ScorerContext
 
@@ -34,10 +38,6 @@ WAYS_LAYER = "ways"
 
 #: Column carrying the OSM way id in a `ways` frame; the join key to `Segment.way_id`.
 WAY_ID_COLUMN = "way_id"
-
-#: Columns an HPMS conflation may have written onto the ways frame (scope 5, 7.2). AADT
-#: is a confidence-raiser for `lts_from_tags`, never a requirement.
-AADT_COLUMNS = ("aadt", "AADT", "aadt_veh_day")
 
 #: `SegmentMeasurement.segment_id` for the one row describing the whole route. Route
 #: totals ("fraction of length at LTS >= 3", scope 7.1) have no segment to live on, and
@@ -103,18 +103,6 @@ def segment_tags(segment: Segment, by_way: dict[int, dict[str, Any]]) -> dict[st
     if segment.way_id is None:
         return None
     return by_way.get(int(segment.way_id))
-
-
-def aadt_of(tags: dict[str, Any]) -> float | None:
-    """Annual average daily traffic from a conflated column, if the frame carries one."""
-    for column in AADT_COLUMNS:
-        if column not in tags:
-            continue
-        try:
-            return float(tags[column])
-        except (TypeError, ValueError):
-            return None
-    return None
 
 
 class RouteFrame:

@@ -75,3 +75,59 @@ def test_a_volume_refines_the_level_rather_than_being_required_for_one() -> None
     assert without.level >= 1
     assert quiet.level <= without.level
     assert busy.level >= without.level
+
+
+# --- a surveyed speed (M18, ADR 0053) ---------------------------------------
+
+
+def test_a_surveyed_speed_above_the_limit_is_the_speed_read() -> None:
+    """A 40 km/h street where traffic does 65 is a 65 km/h street to someone beside it."""
+    from longrun.core.routing.lts import SURVEY_SPEED_COLUMN, lts_for_way
+
+    tags = {"highway": "secondary", "maxspeed": "40", "sidewalk": "both"}
+    posted = lts_for_way(tags)
+    surveyed = lts_for_way({**tags, SURVEY_SPEED_COLUMN: 65.0})
+    assert surveyed.level == posted.level + 2  # one step down for 40, one up for 65
+    assert "speed85_65kph" in surveyed.reasons
+    assert "maxspeed_40kph" not in surveyed.reasons
+
+
+def test_a_survey_under_the_limit_is_no_reason_to_believe_the_sign_less() -> None:
+    from longrun.core.routing.lts import SURVEY_SPEED_COLUMN, lts_for_way
+
+    tags = {"highway": "secondary", "maxspeed": "70", "sidewalk": "both"}
+    assert lts_for_way({**tags, SURVEY_SPEED_COLUMN: 52.0}) == lts_for_way(tags)
+
+
+def test_a_surveyed_speed_is_a_measured_speed_so_it_lifts_the_missing_speed_penalty() -> None:
+    from longrun.core.routing.lts import SURVEY_SPEED_COLUMN, lts_for_way
+
+    tags = {"highway": "tertiary", "sidewalk": "both"}
+    assert "maxspeed_unknown" in lts_for_way(tags).reasons
+    surveyed = lts_for_way({**tags, SURVEY_SPEED_COLUMN: 48.0})
+    assert "maxspeed_unknown" not in surveyed.reasons
+    assert surveyed.confidence > lts_for_way(tags).confidence
+
+
+def test_without_a_survey_the_one_reader_is_the_function_it_wraps() -> None:
+    """The guarantee that let M18 add the reader without moving a golden: every way that
+    has no survey scores exactly as it did."""
+    from longrun.core.routing.lts import lts_for_way
+
+    for tags in (
+        {"highway": "primary", "maxspeed": "55 mph"},
+        {"highway": "residential"},
+        {"highway": "secondary", "sidewalk": "separate", "lanes": "4"},
+        {"highway": "tertiary", "maxspeed": "50", "aadt": 25_000},
+    ):
+        assert lts_for_way(tags) == lts_from_tags(tags, aadt=tags.get("aadt"))
+
+
+@pytest.mark.parametrize("value", [None, float("nan"), "", "fast", 0.0, -5.0])
+def test_a_survey_cell_with_nothing_in_it_is_no_survey(value: object) -> None:
+    """A frame read from PostGIS carries the column on every way, null where no survey
+    matched; a null must read as absent, not as a speed of zero."""
+    from longrun.core.routing.lts import SURVEY_SPEED_COLUMN, survey_speed_of
+
+    assert survey_speed_of({SURVEY_SPEED_COLUMN: value}) is None
+    assert survey_speed_of({}) is None

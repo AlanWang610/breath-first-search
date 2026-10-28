@@ -49,6 +49,19 @@ class BudgetExceeded(RuntimeError):
     """
 
 
+#: How a deadline's message begins, so a reason built from one can be recognised as the
+#: plan's clock rather than a source's failure (`adapters.registry._outcome`, M18).
+DEADLINE_REASON = "plan latency budget exhausted"
+
+
+class DeadlineExceeded(BudgetExceeded):
+    """The plan's time ran out, as opposed to its calls (M18).
+
+    A subclass so that everything catching `BudgetExceeded` still does, and so a feed cut
+    off mid-stream by the clock can be told from one that refused to answer.
+    """
+
+
 @dataclass
 class Budget:
     """Hard caps per plan (scope 6.4).
@@ -131,9 +144,8 @@ class Budget:
         caller picks the rung of the ladder to drop to, and records the choice.
         """
         if self.latency_budget_s is not None and self.elapsed_s > self.latency_budget_s:
-            raise BudgetExceeded(
-                f"plan latency budget exhausted ({self.latency_budget_s:.0f} s); "
-                f"{self.elapsed_s:.0f} s elapsed"
+            raise DeadlineExceeded(
+                f"{DEADLINE_REASON} ({self.latency_budget_s:.0f} s); {self.elapsed_s:.0f} s elapsed"
             )
 
 

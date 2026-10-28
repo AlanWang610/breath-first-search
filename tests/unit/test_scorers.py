@@ -448,6 +448,34 @@ def test_an_unmatched_segment_is_unknown_not_low_stress(tmp_path: Path) -> None:
     assert _confidence(result, segments[0].id) == UNKNOWN_WAY_CONFIDENCE
 
 
+def test_a_surveyed_speed_on_the_ways_layer_is_measured_and_reported(tmp_path: Path) -> None:
+    """The plan-time half of ADR 0053: a frozen `ways` layer carries the survey under the
+    column the build scored with, and the scorer reads it - and says so - only there."""
+    from longrun.core.routing.lts import SURVEY_SOURCE_COLUMN, SURVEY_SPEED_COLUMN
+
+    route = _route(4)
+    way_ids = [1] * 4
+    street = {"highway": "secondary", "maxspeed": "40", "sidewalk": "both"}
+    _write_ways(tmp_path, route, way_ids, {1: street})
+    plain = segment_hostility(route, _segments(route, way_ids), _ctx(tmp_path))
+
+    surveyed = tmp_path / "surveyed"
+    surveyed.mkdir()
+    _write_ways(
+        surveyed,
+        route,
+        way_ids,
+        {1: {**street, SURVEY_SPEED_COLUMN: 66.0, SURVEY_SOURCE_COLUMN: "portal.x"}},
+    )
+    measured = segment_hostility(route, _segments(route, way_ids), _ctx(surveyed))
+
+    segment = _segments(route, way_ids)[0].id
+    assert "speed_85_kph" not in _values(plain, segment)
+    assert _values(measured, segment)["speed_85_kph"] == 66.0
+    assert _values(measured, segment)["speed_source"] == "portal.x"
+    assert _values(measured, segment)["lts"] == _values(plain, segment)["lts"] + 2
+
+
 def test_an_aadt_column_is_used_when_the_frame_carries_one(tmp_path: Path) -> None:
     """Scope 7.2: HPMS volume where populated. Same tags, different level."""
     route = _route(4)

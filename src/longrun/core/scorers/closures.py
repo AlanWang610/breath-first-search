@@ -33,9 +33,11 @@ from typing import TYPE_CHECKING, Any
 from longrun.core.data.jurisdictions import route_jurisdictions, unqualified_reason
 from longrun.core.models.coverage import CoverageEntry
 from longrun.core.models.measurement import Flag, FlagKind, ScorerResult, SegmentMeasurement, Tier
+from longrun.core.pacing.model import eta_at_distance
 from longrun.core.scorers._common import ROUTE_SUMMARY_ID, RouteFrame, segment_at
 
 if TYPE_CHECKING:  # pragma: no cover
+    from longrun.core.data.features import RouteFeatures
     from longrun.core.models.context import ScorerContext
     from longrun.core.models.features import Feature, FeatureKind, FeatureSet
     from longrun.core.models.geometry import Route, Segment
@@ -69,6 +71,11 @@ IMPASSABLE_CATEGORIES = frozenset({"full-closure", "road-closure", "sidewalk-clo
 
 #: Severity for a closure that does not clear all five gates. Scaled by confidence.
 SOFT_SEVERITY = 0.5
+
+#: The lowest tier whose records may name a whole jurisdiction rather than a place in it: a
+#: portal or a page says "all trails in the county are closed"; a structured feed with no
+#: geometry is a fault in the feed (M18).
+JURISDICTION_WIDE_MIN_TIER = 3
 
 
 def _bearing(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -252,14 +259,22 @@ def closures(
 
     frame = RouteFrame(route)
     counts: dict[str, dict[str, int]] = {}
+    wide = 0
 
     for feature in found.features:
+        if not _coordinates(feature.geometry):
+            # A record about a whole jurisdiction ("every trail in the county is closed
+            # through the 30th"). It was dropped here as off-route, which made a portal's or
+            # a page's answer count as checked while saying nothing (M18).
+            if _note_jurisdiction_wide(feature, clock, etas, result):
+                wide += 1
+            continue
         parallel, offset_m, cum_m = runs_along(feature, frame, route)
         if offset_m > CLOSURE_BUFFER_M * 3:
             continue  # not on this route at all; the adapter answered about a polygon
         segment = segment_at(segments, cum_m)
         segment_id = segment.id if segment is not None else ROUTE_SUMMARY_ID
-        arrival = _eta_for(segment, segments, etas)
+        arrival = _eta_for(route, etas, cum_m)
         when = clock.to_utc(arrival) if arrival is not None else None
         hard = is_hard(feature, parallel, when)
 
@@ -268,24 +283,57 @@ def closures(
         counts[segment_id][code] = counts[segment_id].get(code, 0) + 1
         result.flags.append(_flag(segment_id, feature, hard, offset_m))
 
-    return _summarise(result, segments, counts, jurisdictions=len(scan.jurisdictions))
+    return _summarise(result, segments, counts, jurisdictions=len(scan.jurisdictions), wide=wide)
 
 
-def _eta_for(
-    segment: Segment | None, segments: list[Segment], etas: list[datetime] | None
-) -> datetime | None:
-    """ADR 0013 gate 3: the *segment's* arrival time, not the route's date.
+def _note_jurisdiction_wide(
+    feature: Feature, clock: RouteFeatures, etas: list[datetime] | None, result: ScorerResult
+) -> bool:
+    """A soft, route-level note for a closure that names a jurisdiction and no place in it.
+
+    **Never hard, by construction:** it is a SOFT flag on no segment, so check 6 - which
+    reads hard flags - cannot see it, whatever the record's tier or confidence. ADR 0013's
+    gates already forbid it in practice, since only tier 3 and 4 sources publish records
+    like this, and both sit below `MIN_HARD_FLAG_TIER`. A tier-1 or 2 record with no
+    geometry is a feed fault rather than a statement about a jurisdiction, and is dropped
+    as before.
+
+    Kept only if its window meets the run - a county-wide closure that ended last week is
+    not a note about this morning - and kept when the clock cannot tell.
+    """
+    if feature.tier < JURISDICTION_WIDE_MIN_TIER:
+        return False
+    if etas:
+        start, finish = clock.to_utc(etas[0]), clock.to_utc(etas[-1])
+        if start is not None and finish is not None:
+            if (feature.end is not None and feature.end < start) or (
+                feature.start is not None and feature.start > finish
+            ):
+                return False
+    detail = feature.detail or feature.category or "closure"
+    result.flags.append(
+        Flag(
+            scorer=name,
+            segment_id=ROUTE_SUMMARY_ID,
+            kind=FlagKind.SOFT,
+            tier=Tier.COMFORT,
+            severity=round(SOFT_SEVERITY * feature.confidence, 3),
+            reason_code="closure_jurisdiction_wide",
+            detail=f"{detail} (all of {feature.jurisdiction or 'a jurisdiction crossed'}, "
+            f"tier {feature.tier})",
+        )
+    )
+    return True
+
+
+def _eta_for(route: Route, etas: list[datetime] | None, cum_m: float) -> datetime | None:
+    """ADR 0013 gate 3: the arrival time *at the closure*, not the route's date.
 
     A closure lifting at noon does not block a runner who reaches it at 14:00, and a route
-    scored by its start date alone cannot tell the difference.
+    scored by its start date alone cannot tell the difference. Read at the closure's own
+    distance: this used to index the per-point ETAs by segment number (M18).
     """
-    if not etas or segment is None:
-        return None
-    try:
-        index = segments.index(segment)
-    except ValueError:  # pragma: no cover - defensive
-        return None
-    return etas[min(index, len(etas) - 1)]
+    return eta_at_distance(route, etas, cum_m) if etas else None
 
 
 def _flag(segment_id: str, feature: Feature, hard: bool, offset_m: float) -> Flag:
@@ -319,6 +367,7 @@ def _summarise(
     segments: list[Segment],
     counts: dict[str, dict[str, int]],
     jurisdictions: int,
+    wide: int = 0,
 ) -> ScorerResult:
     total = 0
     for segment in segments:
@@ -336,19 +385,20 @@ def _summarise(
     # a park agency that could not be placed. Counting those made the three numbers fail to
     # add up, which is the loudest possible sign that a count is measuring the wrong thing.
     answered = sum(1 for c in result.coverage if c.checked and c.jurisdiction)
+    values: dict[str, float | int | str | bool | None] = {
+        "closures": total,
+        "jurisdictions_crossed": jurisdictions,
+        "jurisdictions_answered": answered,
+        "jurisdictions_unanswered": sum(
+            1 for c in result.coverage if not c.checked and c.jurisdiction
+        ),
+    }
+    if wide:
+        # Present only when there is one, so no plan that met none gains a key - the "no key
+        # versus zero" rule `expectation.py` states, and the reason no golden moved.
+        values["jurisdiction_wide_closures"] = wide
     result.measurements.append(
-        SegmentMeasurement(
-            segment_id=ROUTE_SUMMARY_ID,
-            values={
-                "closures": total,
-                "jurisdictions_crossed": jurisdictions,
-                "jurisdictions_answered": answered,
-                "jurisdictions_unanswered": sum(
-                    1 for c in result.coverage if not c.checked and c.jurisdiction
-                ),
-            },
-            confidence=1.0,
-        )
+        SegmentMeasurement(segment_id=ROUTE_SUMMARY_ID, values=values, confidence=1.0)
     )
     return result
 
