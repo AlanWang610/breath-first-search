@@ -246,6 +246,11 @@ LICENCES: dict[str, SourceLicence] = {
         licence="no licence declared by the layer; City of Atlanta terms of use",
         attribution="Road closures: City of Atlanta Department of Public Works",
     ),
+    "portal_oakland": SourceLicence(
+        source="portal_oakland",
+        licence="no licence declared by the layer; City of Oakland terms of use",
+        attribution="Speed counts: City of Oakland Department of Transportation",
+    ),
     "portal_louisville": SourceLicence(
         source="portal_louisville",
         licence="no licence declared by the layer; Louisville Metro terms of use",

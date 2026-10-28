@@ -172,6 +172,37 @@ adopted:
       wrong all summer, so the local start_dt/end_dt are read instead. The portal moved
       from data.sfgov.org to data.sf.gov.
 
+  # --- Speed surveys (M21.8) ------------------------------------------------
+
+  # Oakland DOT's tube counts: each a street segment, drawn as a line, with the 85th- and
+  # 95th-percentile speeds the count measured, in mph, and the day it was taken. What the
+  # M18 build step merges onto the ways it measured (ADR 0053). Read whole, once a day.
+  - name: portal.arcgis.oakland-85th-percentile-speeds
+    jurisdiction: tiger:place:0653000
+    kind: speed_survey
+    platform: arcgis
+    domain: services.arcgis.com
+    dataset: /9tC74aDHuml0x5Yz/arcgis/rest/services/Oakland_Speed_Limits__ADT__and_85th_Percentile_Speeds_WFL1/FeatureServer/8
+    source: portal_oakland
+    zone: America/Los_Angeles
+    geometry: {kind: field, field: geometry}
+    category: {kind: const, value: speed-survey}
+    measures:
+      speed_85_kph: {kind: field, field: F85_PCT_SD, unit: mph}
+    observed_on: {kind: field, field: COUNTDATED, format: epoch_ms_date}
+    label: {kind: field, field: STREET}
+    ref: {kind: field, field: GIS_ID}
+    detail:
+      kind: template
+      template: "{STREET} from {ST_BEGIN} to {ST_END}: 85th percentile {F85_PCT_SD} mph ({SOURCE_MET}, {COUNT_YEAR})"
+    scope: feed
+    licence: {id: null, read_on: 2026-10-28, from: "https://services.arcgis.com/9tC74aDHuml0x5Yz/arcgis/rest/services/Oakland_Speed_Limits__ADT__and_85th_Percentile_Speeds_WFL1/FeatureServer/8?f=json"}
+    survey: {read_on: 2026-10-28, rows: 356, updated: 2025-11-26, max_staleness_days: 730}
+    note: >-
+      "85th Percentile Speed (Batch #2)", 356 segments counted 2019-2025 by tube counter.
+      A survey ages in years: a street's speed does not change because nobody re-counted
+      it this month, so the table is refused only past two years without an edit.
+
   # --- ArcGIS (M21.5) -------------------------------------------------------
 
   # Phoenix Street Transportation's planned restrictions along streets, the layer behind
