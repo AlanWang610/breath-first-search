@@ -181,6 +181,13 @@ LICENCES: dict[str, SourceLicence] = {
         licence="no licence declared by the feed; WSDOT terms of use",
         attribution="Work zone data: Washington State DOT",
     ),
+    # M19's keyed feeds. A key decides who can fetch a feed and the envelope decides who may
+    # republish it: these need a key and declare CC0 1.0, read on 2026-10-28.
+    "wzdx_ordot": SourceLicence(
+        source="wzdx_ordot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Oregon Department of Transportation",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",

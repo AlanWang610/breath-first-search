@@ -103,6 +103,9 @@ wzdx-iowadot = "longrun.adapters.wzdx.iowadot:CLOSURES"
 wzdx-nysdot = "longrun.adapters.wzdx.nysdot:CLOSURES"
 wzdx-ncdot = "longrun.adapters.wzdx.ncdot:CLOSURES"
 wzdx-wsdot = "longrun.adapters.wzdx.wsdot:CLOSURES"
+# M19: keyed feeds, adopted by whoever holds the key (ADR 0057). Each declares CC0 in its
+# envelope, so each backs a cassette that replays with no key.
+wzdx-ordot = "longrun.adapters.wzdx.ordot:CLOSURES"
 # Tier 2: a state DOT's own feed that is not WZDx (M20). Caltrans' Lane Closure System,
 # keyless, read per district; California had no statewide closure source before it.
 state511-caltrans = "longrun.adapters.state511.caltrans_lcs:CLOSURES"

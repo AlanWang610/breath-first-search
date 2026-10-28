@@ -68,6 +68,15 @@ MASSDOT = ApiKey(
     register_at="https://api-app.massdot-swzm.com/",
 )
 
+#: Oregon DOT's WZDx feed, through its Azure API Management portal (M19). Named after the
+#: registry's `ordot` rather than "ODOT", which is also Ohio's and Oklahoma's: the key this
+#: project was given as `LONGRUN_ODOT_API_KEY` turned out, by calling, to be Oregon's.
+ORDOT = ApiKey(
+    env_var="LONGRUN_ORDOT_API_KEY",
+    service="Oregon DOT's work-zone feed",
+    register_at="https://apiportal.odot.state.or.us/",
+)
+
 #: The National Park Service alerts API - what `trail_status` reads for any route crossing
 #: `padus:NPS` land, which PAD-US resolves for every national park in the country.
 NPS = ApiKey(
@@ -97,6 +106,6 @@ SOCRATA = ApiKey(
     register_at="https://dev.socrata.com/docs/app-tokens.html",
 )
 
-ALL_KEYS = (SF_BAY_511, MASSDOT, NPS, ANTHROPIC, SOCRATA)
+ALL_KEYS = (SF_BAY_511, MASSDOT, ORDOT, NPS, ANTHROPIC, SOCRATA)
 
-__all__ = ["ALL_KEYS", "MASSDOT", "NPS", "SF_BAY_511", "SOCRATA", "ApiKey"]
+__all__ = ["ALL_KEYS", "MASSDOT", "NPS", "ORDOT", "SF_BAY_511", "SOCRATA", "ApiKey"]

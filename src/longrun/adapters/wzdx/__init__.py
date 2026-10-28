@@ -179,13 +179,6 @@ AWAITING_KEY: tuple[AwaitingKey, ...] = (
         why="HTTP 401 without a key in M14",
     ),
     AwaitingKey(
-        registry_id="ordot",
-        jurisdiction="tiger:state:41",
-        url="https://api.odot.state.or.us/WZDx/v4.0/Workzones",
-        register_at="https://apiportal.odot.state.or.us/",
-        why="HTTP 401 'missing subscription key'",
-    ),
-    AwaitingKey(
         registry_id="ptc",
         jurisdiction="tiger:state:42",
         url="https://atms.paturnpike.com/api/WZDxWorkZoneFeed",

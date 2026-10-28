@@ -169,7 +169,8 @@ def test_statewide_closure_coverage_with_every_key_set_never_falls(
     """The keyed half of the ratchet (M18). CI has no keys, so the ratchet above can only
     ever be raised by a keyless feed; a keyed adoption is counted here instead. Every key is
     set to a placeholder - `coverage_table` asks nobody, it only counts who could be asked.
-    M18 measured 21: the 20 above and Massachusetts. M20 measured 22, adding California."""
+    M18 measured 21: the 20 above and Massachusetts. M20 measured 22, adding California.
+    M19 adds Oregon (23)."""
     from longrun.adapters.keys import ALL_KEYS
     from longrun.adapters.registry import discover
 
@@ -179,7 +180,7 @@ def test_statewide_closure_coverage_with_every_key_set_never_falls(
     table = load_table(TABLE)
     summary = summarise(coverage_table(adapters, table, ["closures"]), table)["closures"]
     usable = summary["states_by_tier"]["1"] + summary["states_by_tier"]["2"]
-    assert len(usable) >= 22, sorted(usable)
+    assert len(usable) >= 23, sorted(usable)
 
 
 def test_a_claim_and_an_answer_are_counted_apart(tmp_path: Path) -> None:
