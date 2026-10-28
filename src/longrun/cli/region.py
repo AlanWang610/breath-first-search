@@ -403,9 +403,14 @@ def adapter_coverage(
         typer.echo(f"error: unknown kind {kind!r}", err=True)
         raise typer.Exit(code=2)
 
+    from longrun.adapters.portals.catalog import decisions
+    from longrun.adapters.portals.catalog import read as read_catalog
+
     adapters, failures = discover()
     table = load_table()
     rows = coverage_table(adapters, table, kinds)  # type: ignore[arg-type]
+    # Tier 3's decisions, so `--largest` says why a place is uncovered as well as that it is.
+    decided_by = decisions(read_catalog())
     summary = summarise(rows, table)
     agencies = {k: claimed_agencies(adapters, k) for k in kinds}  # type: ignore[arg-type]
 
@@ -457,7 +462,9 @@ def adapter_coverage(
         )
         if largest:
             for row in largest_places(rows, k, largest):  # type: ignore[arg-type]
-                typer.echo(f"    {row.name} ({row.population:,}): {_how(row)}")
+                decided = decided_by.get((row.id, k))
+                said = f" - catalog: {decided}" if decided else ""
+                typer.echo(f"    {row.name} ({row.population:,}): {_how(row)}{said}")
         if state is not None:
             for row in rows:
                 if row.kind == k and row.statefp == state:

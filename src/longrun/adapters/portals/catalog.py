@@ -402,6 +402,19 @@ def read(path: Path = CATALOG) -> Catalog:
     return catalog
 
 
+def decisions(catalog: Catalog) -> dict[tuple[str, str], str]:
+    """What the catalog decided for each (jurisdiction, kind) it mentions, as a phrase:
+    the adopted rows that claim it, or the refusal's reason. For `adapter-coverage
+    --largest`, so the fifty largest places print why as well as what."""
+    out: dict[tuple[str, str], str] = {}
+    for entry in catalog.adopted:
+        key = (entry.jurisdiction, entry.kind)
+        out[key] = f"{out[key]}, {entry.name}" if key in out else f"adopted {entry.name}"
+    for refusal in catalog.refused:
+        out.setdefault((refusal.jurisdiction, refusal.kind), f"refused ({refusal.reason})")
+    return out
+
+
 def _first(exc: ValidationError) -> str:
     error = exc.errors()[0]
     where = ".".join(str(p) for p in error.get("loc", ()))
@@ -633,6 +646,7 @@ __all__ = [
     "RefusalReason",
     "Survey",
     "committable",
+    "decisions",
     "load",
     "read",
     "to_features",
