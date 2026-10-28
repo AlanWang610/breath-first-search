@@ -1,4 +1,5 @@
-"""The sixteen WZDx feeds M14 adopted, and the rule that decided which may be committed.
+"""The sixteen WZDx feeds M14 adopted, Minnesota, which M19's re-survey found answering, and
+the rule that decided which may be committed.
 
 `test_wzdx.py` is about the *parser*: three feeds pinned at three spec versions, chosen to
 demonstrate that one reader covers 4.0 through 4.2. This file is about the *set*. It asks
@@ -39,6 +40,7 @@ from longrun.adapters.wzdx import (
     kytc,
     ladotd,
     mdotsha,
+    mndot,
     msdot,
     ncdot,
     nddot,
@@ -72,6 +74,8 @@ COMMITTABLE = [
     ("njdot", "4.1", "NJIT", njdot.CLOSURES),
     ("wisdot", "4.2", "Work Zone Manager", wisdot.CLOSURES),
     ("austin", "4.2", "City of Austin", austin.CLOSURES),
+    # M19's re-survey, which found the feed M14 timed out on answering.
+    ("mndot", "4.0", "MnDOTCastleRock", mndot.CLOSURES),
 ]
 
 #: Feeds that declare no licence. Live, adopted, and deliberately *without* a cassette -
@@ -99,6 +103,7 @@ URLS = {
     "njdot": njdot.URL,
     "wisdot": wisdot.URL,
     "austin": austin.URL,
+    "mndot": mndot.URL,
     "necdot": necdot.URL,
     "iddot": iddot.URL,
     "iowadot": iowadot.URL,

@@ -207,6 +207,12 @@ LICENCES: dict[str, SourceLicence] = {
         licence="CC0 1.0",
         attribution="Road events: National Park Service",
     ),
+    # Keyless, refused by M14 for timing out, adopted by M19's re-survey.
+    "wzdx_mndot": SourceLicence(
+        source="wzdx_mndot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Minnesota Department of Transportation",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",

@@ -61,6 +61,24 @@ that reason away: coverage now counts a claim and an answer apart (`claimed_tier
 `tier`), so a keyed feed is adopted by whoever holds its key. The ones nobody here holds are
 listed with the URL to register at, so adopting one is a single commit.
 
+**M19 called the refusals again on 2026-10-28**, so the record above is a first survey and
+this is the second:
+
+- **Minnesota answers now.** HTTP 200, twice, the second in under four seconds: 404 live
+  records, CC0. Adopted (`mndot.py`), the first keyless state since M14.
+- **Hawaii is still a generated file.** HTTP 200 and CC0, with 102 records this time, all
+  102 carrying the identical window 2026-10-27 19:51:56 to 2026-11-03 19:51:56 and all
+  updated the same day. The envelope is still dated 2024-02-22. A window written
+  identically onto every record by the publisher's own clock is not a window. Refused again.
+- **Utah now answers HTTP 403**, which is no improvement on 2023's frozen file.
+- **New Mexico answers HTTP 503, `no healthy upstream`, again.**
+- **The Illinois Tollway's certificate still fails to validate.** Its records reach IDOT's
+  CWZ feed as one of four data sources (`ildot.py`).
+- **Two hosts accepted no connection at all:** `publicapi.ohgo.com`, Ohio's, and
+  `atms.paturnpike.com`, the Turnpike's, each tried three times. Ohio's key is in hand and
+  `www.transportation.ohio.gov` answered from the same network, so what blocks Ohio is a
+  route to one host, not a credential. Both stay in `AWAITING_KEY` with that said.
+
 **Which feeds may be committed as cassettes is ADR 0038**, and the short version is that
 the project acts on `feed_info.license` in the payload and on nothing else. Ten of the
 sixteen adopted feeds declare CC0 1.0 there and have cassettes; six declare nothing and do
@@ -163,7 +181,10 @@ AWAITING_KEY: tuple[AwaitingKey, ...] = (
         jurisdiction="tiger:state:39",
         url="https://publicapi.ohgo.com/api/work-zones/wzdx/4.2",
         register_at="https://publicapi.ohgo.com/accounts/registration",
-        why="HTTP 401 without a key in M14",
+        why=(
+            "the key is in hand, but publicapi.ohgo.com accepted no TCP connection on "
+            "2026-10-28 while ohio.gov answered; adopt it from a network that reaches it"
+        ),
     ),
     AwaitingKey(
         registry_id="ptc",
@@ -175,8 +196,8 @@ AWAITING_KEY: tuple[AwaitingKey, ...] = (
             "&filename=WZDx_API_Key_Instructions.docx"
         ),
         why=(
-            "HTTP 401 without a key in M14; the Turnpike's own road, so adopt it with "
-            "complete = False"
+            "HTTP 401 without a key in M14, and no TCP connection on 2026-10-28; the "
+            "Turnpike's own road, so adopt it with complete = False"
         ),
     ),
     AwaitingKey(
