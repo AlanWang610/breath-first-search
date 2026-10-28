@@ -54,11 +54,12 @@ and this milestone is about jurisdictions with no adapter at all.
 1.0, which this package has never parsed and now records a decision not to guess at - see
 **ADR 0039**.
 
-*The ten remaining keyed feeds* were refused on the rule "prefer keyless feeds; do not add
-keys nobody has". `registry.adapters_for` does not check whether a key is present, so an
-adapter that can never authenticate still counts toward *"N of M jurisdictions have a
-closure adapter"* - adding ten would have inflated the one number this milestone is
-measured by.
+*The keyed feeds are data, not prose* (`AWAITING_KEY` below, ADR 0057). M14 refused them on
+the rule "prefer keyless feeds; do not add keys nobody has", because an adapter that could
+never authenticate counted toward *"N of M jurisdictions have a closure adapter"*. M18 took
+that reason away: coverage now counts a claim and an answer apart (`claimed_tier` against
+`tier`), so a keyed feed is adopted by whoever holds its key. The ones nobody here holds are
+listed with the URL to register at, so adopting one is a single commit.
 
 **Which feeds may be committed as cassettes is ADR 0038**, and the short version is that
 the project acts on `feed_info.license` in the payload and on nothing else. Ten of the
@@ -66,3 +67,155 @@ sixteen adopted feeds declare CC0 1.0 there and have cassettes; six declare noth
 not. New York publishes an explicit prohibition on redistributing any part of 511NY, which
 is why the rule is not over-caution - see `nysdot.py`.
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class AwaitingKey:
+    """A keyed registry feed with no adapter, and what adopting it needs (ADR 0057).
+
+    `url` is the feed without any credential. Two registry rows carry a shared credential
+    inside the URL itself, and this repository commits nobody's key, published or not.
+    """
+
+    #: The USDOT registry's `feedname`, so a re-read of the registry finds the row.
+    registry_id: str
+    #: What the adapter will claim: the state, or for park roads the agency.
+    jurisdiction: str
+    url: str
+    #: Where to get the key. For the two rows that publish a shared credential and no
+    #: registration page, the registry itself.
+    register_at: str
+    #: What calling it without a key returned, and anything adopting it must know.
+    why: str
+
+
+#: Where the registry publishes Oklahoma's and Florida's credentials, inside their URLs.
+REGISTRY = (
+    "https://data.transportation.gov/Roadways-and-Bridges/"
+    "Work-Zone-Data-Exchange-WZDx-Feed-Registry/69qe-yiui"
+)
+
+#: The registry's keyed feeds with no adapter, each called without a key on 2026-10-28.
+#: Adopting one is one commit: a module, an `ApiKey`, an entry point and a licence row, and
+#: deleting its entry here, which `test_wzdx_breadth` holds to.
+AWAITING_KEY: tuple[AwaitingKey, ...] = (
+    AwaitingKey(
+        registry_id="cdot",
+        jurisdiction="tiger:state:08",
+        url="https://data.cotrip.org/api/v1/wzdx",
+        register_at="https://maps.cotrip.org/help/section/for-developers.html",
+        why="HTTP 403 'Not Authorized' without a key",
+    ),
+    AwaitingKey(
+        registry_id="cdot_cwz",
+        jurisdiction="tiger:state:08",
+        url="https://data.cotrip.org/api/v1/cwz",
+        register_at="https://manage-api.cotrip.org/subscriber/subscription",
+        why="HTTP 403 'Not Authorized'; the same publisher's CWZ form, so adopt one of the two",
+    ),
+    AwaitingKey(
+        registry_id="fldot",
+        jurisdiction="tiger:state:12",
+        url="https://us-datacloud.one.network/fdot/feed.json",
+        register_at=REGISTRY,
+        why=(
+            "HTTP 401 'API key was not provided'; 109 MB, past the 32 MB ceiling, so it "
+            "needs ADR 0056's tiling, built with it"
+        ),
+    ),
+    AwaitingKey(
+        registry_id="idot_cwz",
+        jurisdiction="tiger:state:17",
+        url="https://wzad-idot.illinois.gov/cwz/01.00",
+        register_at="https://wzad-idot.illinois.gov/cwz/api-key/",
+        why="HTTP 422, the query parameter api_key required; CWZ 1.0",
+    ),
+    AwaitingKey(
+        registry_id="iltollway",
+        jurisdiction="tiger:state:17",
+        url="https://tims2go.tollway.state.il.us/wzdx/v4.2",
+        register_at="https://tims2go.tollway.state.il.us/",
+        why=(
+            "its certificate chain fails to validate, as in M14; a partial network, so "
+            "adopt it with complete = False"
+        ),
+    ),
+    AwaitingKey(
+        registry_id="mdot_4",
+        jurisdiction="tiger:state:26",
+        url=(
+            "https://mdotridedata.state.mi.us/api/v1/organization/"
+            "michigan_department_of_transportation/dataset/work_zone_information/query"
+        ),
+        register_at="https://www.michigan.gov/mdot/travel/safety/efforts/its/its-data",
+        why="HTTP 403 without a key",
+    ),
+    AwaitingKey(
+        registry_id="nps",
+        jurisdiction="padus:NPS",
+        url="https://developer.nps.gov/api/v1/roadevents",
+        register_at="https://www.nps.gov/subjects/developer/get-started.htm",
+        why="HTTP 403 without a key; park roads, so it claims the agency rather than a state",
+    ),
+    AwaitingKey(
+        registry_id="odot",
+        jurisdiction="tiger:state:40",
+        url="https://oktraffic.org/api/Geojsons/workzones",
+        register_at=REGISTRY,
+        why=(
+            "HTTP 403 without a key; the registry publishes a shared access_token in the "
+            "URL and no registration page, and that token belongs in a .env, never here"
+        ),
+    ),
+    AwaitingKey(
+        registry_id="ohio",
+        jurisdiction="tiger:state:39",
+        url="https://publicapi.ohgo.com/api/work-zones/wzdx/4.2",
+        register_at="https://publicapi.ohgo.com/accounts/registration",
+        why="HTTP 401 without a key in M14",
+    ),
+    AwaitingKey(
+        registry_id="ordot",
+        jurisdiction="tiger:state:41",
+        url="https://api.odot.state.or.us/WZDx/v4.0/Workzones",
+        register_at="https://apiportal.odot.state.or.us/",
+        why="HTTP 401 'missing subscription key'",
+    ),
+    AwaitingKey(
+        registry_id="ptc",
+        jurisdiction="tiger:state:42",
+        url="https://atms.paturnpike.com/api/WZDxWorkZoneFeed",
+        register_at=(
+            "https://datahub.transportation.gov/api/views/69qe-yiui/files/"
+            "de6330ba-7e11-4335-9a3f-caf24015dc1a?download=true"
+            "&filename=WZDx_API_Key_Instructions.docx"
+        ),
+        why=(
+            "HTTP 401 without a key in M14; the Turnpike's own road, so adopt it with "
+            "complete = False"
+        ),
+    ),
+    AwaitingKey(
+        registry_id="txdot_v4_2",
+        jurisdiction="tiger:state:48",
+        url="https://api.drivetexas.org/api/conditions.wzdx.geojson",
+        register_at="https://api.drivetexas.org/",
+        why="HTTP 401 'Unauthorized'; Austin answers for its own streets meanwhile",
+    ),
+    AwaitingKey(
+        registry_id="vdot",
+        jurisdiction="tiger:state:51",
+        url=(
+            "https://data.511-atis-ttrip-prod.iteriscloud.com/smarterRoads/workzone/"
+            "workZoneJSON/current/workZone.json"
+        ),
+        register_at="https://smarterroads.vdot.virginia.gov/register",
+        why="HTTP 401 'Unauthorized'",
+    ),
+)
+
+__all__ = ["AWAITING_KEY", "REGISTRY", "AwaitingKey"]
