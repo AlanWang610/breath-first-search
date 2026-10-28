@@ -21,8 +21,8 @@ from shapely.geometry import box
 
 from longrun.adapters.base import AdapterContext
 from longrun.adapters.keys import ApiKey
-from longrun.adapters.state511 import caltrans_lcs, ibi_v2
-from longrun.adapters.state511.client import events_args
+from longrun.adapters.state511 import AWAITING_KEY, caltrans_lcs, ibi_v2
+from longrun.adapters.state511.client import EVENTS_PATH, events_args
 from longrun.core.data.cache import SqliteCache, args_hash
 from longrun.core.models.context import Budget
 from longrun.core.scorers.closures import HARD_FLAG_CONFIDENCE, blocks_pedestrians, is_hard
@@ -358,7 +358,48 @@ def test_caltrans_is_discovered_and_the_bay_area_still_asks_its_own_feed() -> No
     assert "tiger:state:06" not in sfbay.CLOSURES.jurisdictions
 
 
+# --- the survey, as data -----------------------------------------------------
+
+
+def test_nothing_is_both_waiting_for_a_key_and_adopted() -> None:
+    """The day a key arrives, the platform moves from the list to the registry in the same
+    commit - or this fails."""
+    from longrun.adapters.registry import discover
+
+    found, _ = discover()
+    adopted = {a.name for a in found}
+    claimed_at_two = {
+        claim
+        for a in found
+        if int(a.tier) == 2 and a.kind == "closures"
+        for claim in a.jurisdictions
+    }
+    for entry in AWAITING_KEY:
+        assert entry.name not in adopted, entry.name
+        assert f"tiger:state:{entry.statefp}" not in claimed_at_two, entry.name
+
+
+def test_every_platform_waiting_for_a_key_says_where_to_get_one() -> None:
+    names = [entry.name for entry in AWAITING_KEY]
+    assert len(names) == len(set(names))
+    for entry in AWAITING_KEY:
+        assert entry.name.startswith("state511.")
+        assert entry.register_at.startswith("https://") and entry.url.startswith("https://")
+        assert entry.url.endswith(EVENTS_PATH), "every IBI platform serves the same endpoint"
+        assert len(entry.statefp) == 2 and entry.statefp.isdigit()
+
+
 # --- live --------------------------------------------------------------------
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("entry", AWAITING_KEY, ids=[e.name for e in AWAITING_KEY])
+def test_every_platform_waiting_for_a_key_is_still_there_and_still_keyed(entry: Any) -> None:
+    """Asked with no key, an IBI platform refuses - 400 with "Invalid Key" on 2026-10-28, or
+    403 from Utah to everything. A 200 would mean it opened up, and a 404 that it moved;
+    either way the list is wrong."""
+    response = httpx.get(entry.url, params={"format": "json"}, timeout=30, follow_redirects=True)
+    assert response.status_code in (400, 401, 403), (entry.name, response.status_code)
 
 
 def _paths(node: Any, prefix: str = "") -> set[str]:
