@@ -2,6 +2,12 @@
 
 Status: **accepted**, M14, 2026-09-23.
 
+**Superseded 2026-10-28 (M19) by
+[ADR 0058](0058-cwz-reads-through-the-wzdx-reader-because-two-feeds-showed-us.md).** The first
+of the three routes back below arrived: with MassDOT's and Illinois's keys, both feeds were
+read, and the shared WZDx reader parsed every record of each. What follows is kept as the
+record of why nothing was written before then.
+
 ## Context
 
 Four feeds in the USDOT registry publish **CWZ 1.0** — Connected Work Zones, developed from
