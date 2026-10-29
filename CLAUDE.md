@@ -14,7 +14,9 @@ generate for itself. An agent must never:
   saves the file and runs the import;
 - write or edit anything under `~/.longrun/labels/` (or `LONGRUN_LABELS_DIR`);
 - write `by: human` into `tests/eval/`, or add pairs to `tests/eval/pairs/`;
-- run `longrun label publish` - the person runs it and reviews the diff.
+- run `longrun label publish` - the person runs it and reviews the diff;
+- run `longrun tune --save`, which makes a fit of the person's labels the vector their routes
+  are drawn with (ADR 0051) - the person runs it. `tune --reroute` saves nothing.
 
 Building, testing and fixing the label machinery is fine; tests use a temporary ledger
 (`tests/conftest.py::_labels_stay_out_of_home`). `tools/` (the MCP surface) must never gain a

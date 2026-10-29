@@ -91,3 +91,10 @@ the terms and to count ways.
 Asking for details is a different question from not asking, so it has its own cache key;
 `route_args` adds `details` only when present, and every cassette recorded before this keeps
 its key.
+
+## Amendment, 2026-10-23 (M24): the deferred pass is built, as a gate
+
+The validation pass this ADR deferred - re-route on the fitted vector only, one call per pair,
+and compare what comes back with the chosen routes - is `core/labels/reroute.py`, and it is
+the last gate a fit passes before `tune --save` writes it to a profile (ADR 0051). The fit
+itself still only costs; nothing about the 15,625-vector search changed.

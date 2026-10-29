@@ -29,6 +29,7 @@ from longrun.core.models.request import PlanRequest
 from longrun.core.models.routing import NO_ROUTER, NOT_REQUESTED, CueSheet
 from longrun.core.plan.pipeline import build_plan, score_once
 from longrun.core.preferences.store import load_profile
+from longrun.core.routing.custom_model import DrawnWith
 from longrun.runtime import open_context
 
 
@@ -119,6 +120,7 @@ def score_route(
     router: Any = None,
     cache: Any = None,
     budget: Any = None,
+    drawn_with: DrawnWith | None = None,
 ) -> Plan:
     """Score one route and render its sheet. The one pipeline both modes run through.
 
@@ -147,7 +149,9 @@ def score_route(
         cache=cache,
         budget=budget,
     ) as ctx:
-        manifest = Manifest(snapshot=snapshot)
+        # `None` for repair's own line, which no router drew; `plan --rounds 0` passes the
+        # vector its opening route was drawn with.
+        manifest = Manifest(snapshot=snapshot, drawn_with=drawn_with)
         scored = score_once(
             route, request, ctx, start_at=start_at, router=router, manifest=manifest
         )

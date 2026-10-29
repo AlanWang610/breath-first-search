@@ -17,6 +17,8 @@ remember to re-check.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,18 @@ DEFAULTS_PATH = Path(__file__).with_name("defaults.yaml")
 
 #: Where a user's profile lives when the caller does not say (scope 6.3).
 USER_PROFILE_PATH = Path.home() / ".longrun" / "profile.yaml"
+
+#: Overrides `USER_PROFILE_PATH`. `.env.example` has documented it since the scaffold and
+#: nothing read it, which did not matter while a profile changed only thresholds. Since M24
+#: a profile can hold a fitted routing vector, and a test that loaded the runner's own file
+#: would route with it - a cache miss in every cassette, on one machine and not in CI.
+PROFILE_PATH_ENV_VAR = "LONGRUN_PROFILE_PATH"
+
+
+def profile_path_from_env(env: Mapping[str, str] | None = None) -> Path:
+    source = os.environ if env is None else env
+    configured = source.get(PROFILE_PATH_ENV_VAR, "").strip()
+    return Path(configured).expanduser() if configured else USER_PROFILE_PATH
 
 
 class ProfileError(ValueError):
@@ -47,7 +61,7 @@ def load_profile(path: Path | None = None) -> PreferenceProfile:
     A missing file is normal, not an error: a first-time user has no profile and scope
     6.3 forbids an up-front questionnaire to create one.
     """
-    target = path or USER_PROFILE_PATH
+    target = path or profile_path_from_env()
     if not target.exists():
         return load_defaults()
 
@@ -64,12 +78,72 @@ def load_profile(path: Path | None = None) -> PreferenceProfile:
 
 def save_profile(profile: PreferenceProfile, path: Path | None = None) -> Path:
     """Persist a profile. Called only after the user confirms a change (scope 6.3)."""
-    target = path or USER_PROFILE_PATH
+    target = path or profile_path_from_env()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         yaml.safe_dump(profile.model_dump(mode="json"), sort_keys=False),
         encoding="utf-8",
     )
+    return target
+
+
+def save_entry(
+    key: str,
+    entry: PreferenceEntry[Any],
+    path: Path | None = None,
+    *,
+    comment: str | None = None,
+) -> Path:
+    """Write one axis into a profile file and leave every other line of it as it was.
+
+    `save_profile` dumps the whole model, which is right for a file this project wrote and
+    wrong for one a runner keeps by hand: their comments go, and every default they never
+    stated is written out as though they had. So this replaces the one top-level block for
+    `key` - its line and the indented lines under it - or appends it, with `comment` above
+    it, when the file has none. Everything else is copied byte for byte.
+
+    Checked before it lands: the new text must load as a profile, pass the safety floors,
+    and read back `entry` for `key`. Written through a temporary file, so a failure leaves
+    the old one whole.
+    """
+    import re
+
+    if key not in PreferenceProfile.model_fields or key == "version":
+        raise ProfileError(f"unknown preference {key!r}")
+    target = path or profile_path_from_env()
+    existing = target.read_text(encoding="utf-8") if target.exists() else ""
+    block = yaml.safe_dump({key: entry.model_dump(mode="json")}, sort_keys=False)
+
+    lines = existing.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if re.match(rf"{key}\s*:", line)), None)
+    if start is None:
+        gap = "" if not existing.strip() else ("\n" if existing.endswith("\n") else "\n\n")
+        header = "".join(f"# {line}".rstrip() + "\n" for line in (comment or "").splitlines())
+        text = existing + gap + header + block
+    else:
+        end = start + 1
+        # The block is its own line and everything indented under it. A comment or a key
+        # back at column 0 is the next entry's, and so are the blank lines before it.
+        while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t"):
+            end += 1
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1
+        text = "".join(lines[:start]) + block + "".join(lines[end:])
+
+    try:
+        raw = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:  # pragma: no cover - the block is safe_dump's own output
+        raise ProfileError(f"writing {key} would leave {target} unreadable: {exc}") from exc
+    merged = load_defaults().model_dump()
+    merged.update(raw)
+    written = _check_floors(PreferenceProfile.model_validate(merged))
+    if getattr(written, key) != entry:
+        raise ProfileError(f"writing {key} into {target} would not read back what was written")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = target.with_name(target.name + ".tmp")
+    staging.write_text(text, encoding="utf-8", newline="")
+    staging.replace(target)
     return target
 
 

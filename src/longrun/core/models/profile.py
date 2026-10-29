@@ -22,6 +22,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from longrun.core.pacing.curves import PacingCurves
+from longrun.core.routing.custom_model import NEUTRAL, CustomModelParams
 
 #: -1..+1 throughout: negative avoids, positive seeks, 0 reports without scoring.
 Weight = Annotated[float, Field(ge=-1.0, le=1.0)]
@@ -110,6 +111,37 @@ class GradePreference(BaseModel):
 SurfaceKind = Literal["paved", "dirt", "mixed"]
 
 
+class FittedRouting(BaseModel):
+    """Scope 7.1's six multipliers as fitted to one runner's answers, and what they beat.
+
+    The vector is the routing half of a preference; the rest is the record a plan sheet
+    needs to say where it came from. `longrun tune --save` writes it, and only when every
+    gate ADR 0051 sets has passed, so a profile holding a non-neutral vector is one a
+    person chose to adopt - a fit never adopts itself.
+
+    The date is the entry's `updated`, not a field here: one date, kept where every other
+    axis keeps its own.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    params: CustomModelParams = NEUTRAL
+    #: Whose answers. ADR 0021: a vector is fitted for one runner, never globally.
+    labeler: str | None = None
+    #: Real pairs the fit saw.
+    pairs: int = 0
+    #: Held-out agreement, the fit's and NEUTRAL's on the same folds, with the 95% Wilson
+    #: interval on the fit's. ADR 0021's bar is the interval's floor above NEUTRAL.
+    held_out: float | None = None
+    held_out_interval: tuple[float, float] | None = None
+    neutral_held_out: float | None = None
+    #: ADR 0020's deferred pass, run before saving: pairs re-drawn with this vector, and how
+    #: many came back on the line the runner chose and on the one they turned down.
+    rerouted: int | None = None
+    followed_chosen: int | None = None
+    followed_rejected: int | None = None
+
+
 class PreferenceProfile(BaseModel):
     """The scope 6.3 table. Persisted as versioned YAML at ~/.longrun/profile.yaml."""
 
@@ -136,6 +168,12 @@ class PreferenceProfile(BaseModel):
     #: overridable by a runner who says otherwise, which is scope 6.3's rule that `stated`
     #: always beats `inferred`.
     pacing: PreferenceEntry[PacingCurves] = PreferenceEntry(value=PacingCurves())
+    #: The vector the router draws this runner's lines with (scope 7.1). NEUTRAL until a
+    #: fit is saved, which is ADR 0021's "the default for the runner it was fitted for" and
+    #: the only way a non-neutral vector reaches a plan without a flag asking for one.
+    #: `inferred` when `tune --save` writes it: derived from the runner's answers, like the
+    #: pacing curve above, and so overridden by anything they state.
+    routing: PreferenceEntry[FittedRouting] = PreferenceEntry(value=FittedRouting())
 
     @property
     def scores_sun(self) -> bool:
