@@ -25,11 +25,21 @@ Confirmed 2026-09-13: the endpoint is live and answers **HTTP 401** without a ke
 lands beside 511 SF Bay as a feed that names the key it needs rather than one that quietly
 does not exist.
 
-**Not yet known to parse.** The registry lists the feed's version as **CWZ 1.0** -
-Connected Work Zones, developed from WZDx - not one of the WZDx 4.x versions the shared
-reader was written against. It may well read; nobody with a key has yet seen whether it
-does, and a feed that answers and parses to nothing would look exactly like a state with
-no work zones.
+**Called with a key on 2026-10-28, which settles both questions this module used to
+carry** (ADR 0058):
+
+* **The header is right.** `Authorization: Bearer <key>` answered **HTTP 200**. The same key
+  as `x-api-key`, or as an `api_key` query parameter, answered 401.
+* **CWZ 1.0 reads.** **3,245,157 bytes, 1,363 features, all 1,363 parsed** by the shared
+  WZDx reader, publisher "MassDOT Work Zone Manager", envelope seconds old, 259 active at
+  the call. CWZ keeps WZDx's `core_details`, `vehicle_impact` and dates where the reader
+  looks for them, so nothing needed a second parser. The impact is stated on all but 12:
+  720 `some-lanes-closed`, 244 `all-lanes-open`, 237 `alternating-one-way` and 150
+  `all-lanes-closed`.
+
+**CC0 1.0 is declared in the envelope** (ADR 0038), so it backs a cassette that replays
+with no key, `cwz_massdot.json`. Reported as `cwz-1.0` rather than `wzdx-1.0`, which would
+name a WZDx version from 2019.
 """
 
 from __future__ import annotations
@@ -61,14 +71,12 @@ class MassDotClosures:
     def fetch(self, polygon: Any, day: date, ctx: AdapterContext) -> AdapterResult:
         value = MASSDOT.value()
         if value is None:
-            return replay_or_refuse(URL, self.name, day, ctx, MASSDOT)
-        # Header rather than a query parameter, which is the shape the 401 body asks for.
-        # Unverified against a live key — see the module docstring: this is written from the
-        # unauthenticated response, and the first person with a key will find out whether
-        # the header name is right. Written down here rather than implied, because an
-        # adapter that fails with a *wrong* credential and one that fails with none look
-        # identical on the sheet unless the reason says which.
-        return fetch_feed(URL, self.name, day, ctx, headers={"Authorization": f"Bearer {value}"})
+            return replay_or_refuse(URL, self.name, day, ctx, MASSDOT, spec="cwz")
+        # A bearer header: verified with a key on 2026-10-28, when `x-api-key` and an
+        # `api_key` query parameter were both refused (see the module docstring).
+        return fetch_feed(
+            URL, self.name, day, ctx, headers={"Authorization": f"Bearer {value}"}, spec="cwz"
+        )
 
 
 CLOSURES = MassDotClosures()

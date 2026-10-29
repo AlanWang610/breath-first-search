@@ -1,4 +1,5 @@
-"""The sixteen WZDx feeds M14 adopted, and the rule that decided which may be committed.
+"""The sixteen WZDx feeds M14 adopted, Minnesota, which M19's re-survey found answering, and
+the rule that decided which may be committed.
 
 `test_wzdx.py` is about the *parser*: three feeds pinned at three spec versions, chosen to
 demonstrate that one reader covers 4.0 through 4.2. This file is about the *set*. It asks
@@ -20,6 +21,7 @@ and skipped by the gate; what runs in CI is the recorded half.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,8 @@ import pytest
 
 from longrun.adapters.base import AdapterContext, valid_jurisdiction_id
 from longrun.adapters.wzdx import (
+    AWAITING_KEY,
+    AwaitingKey,
     austin,
     deldot,
     iddot,
@@ -36,6 +40,7 @@ from longrun.adapters.wzdx import (
     kytc,
     ladotd,
     mdotsha,
+    mndot,
     msdot,
     ncdot,
     nddot,
@@ -69,6 +74,8 @@ COMMITTABLE = [
     ("njdot", "4.1", "NJIT", njdot.CLOSURES),
     ("wisdot", "4.2", "Work Zone Manager", wisdot.CLOSURES),
     ("austin", "4.2", "City of Austin", austin.CLOSURES),
+    # M19's re-survey, which found the feed M14 timed out on answering.
+    ("mndot", "4.0", "MnDOTCastleRock", mndot.CLOSURES),
 ]
 
 #: Feeds that declare no licence. Live, adopted, and deliberately *without* a cassette -
@@ -96,6 +103,7 @@ URLS = {
     "njdot": njdot.URL,
     "wisdot": wisdot.URL,
     "austin": austin.URL,
+    "mndot": mndot.URL,
     "necdot": necdot.URL,
     "iddot": iddot.URL,
     "iowadot": iowadot.URL,
@@ -336,6 +344,50 @@ def test_the_adapter_set_covers_the_states_m14_claimed() -> None:
     }
     assert expected <= states
     assert austin.AUSTIN in states
+
+
+# --- the keyed feeds with no adapter (M19, ADR 0057) -------------------------
+
+
+def _feed(url: str) -> tuple[str, str]:
+    """A feed's identity: host and path, without the query a credential travels in."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    return parts.netloc.lower(), parts.path.rstrip("/").lower()
+
+
+def test_no_feed_is_both_awaiting_a_key_and_adopted() -> None:
+    """Adopting a keyed feed is one commit, and deleting its `AWAITING_KEY` entry is part of
+    it. A feed in both lists is one the next reader would register a key for twice."""
+    import sys
+
+    from longrun.adapters.registry import discover
+
+    found, failures = discover()
+    assert not failures, failures
+    adopted = {
+        _feed(url)
+        for a in found
+        if isinstance(url := getattr(sys.modules[type(a).__module__], "URL", None), str)
+    }
+    waiting = {_feed(f.url) for f in AWAITING_KEY}
+    assert not adopted & waiting, sorted(adopted & waiting)
+
+
+@pytest.mark.parametrize("feed", AWAITING_KEY, ids=[f.registry_id for f in AWAITING_KEY])
+def test_every_awaiting_feed_says_where_its_key_comes_from(feed: AwaitingKey) -> None:
+    assert feed.register_at.startswith("https://")
+    assert valid_jurisdiction_id(feed.jurisdiction), feed.jurisdiction
+    assert feed.why
+    assert not re.search(r"(?i)(key|token)=", feed.url), (
+        "a credential has no place in this repository, published or not"
+    )
+
+
+def test_each_registry_row_is_awaited_once() -> None:
+    ids = [f.registry_id for f in AWAITING_KEY]
+    assert len(ids) == len(set(ids))
 
 
 # --- live, and separate ------------------------------------------------------

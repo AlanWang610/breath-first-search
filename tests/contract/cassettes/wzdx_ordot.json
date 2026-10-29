@@ -1,0 +1,234 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -122.60045,
+      45.36561
+     ],
+     [
+      -122.61036,
+      45.36273
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "22T046983-SB",
+   "properties": {
+    "beginning_accuracy": "estimated",
+    "beginning_milepost": 9.3,
+    "core_details": {
+     "creation_date": "2022-06-10T12:07:40Z",
+     "data_source_id": "1",
+     "description": "Traffic Impacts: Lane closures in Oregon City and West Linn. \u2022 I-205 Northbound lane(s) Monday through Thursday from 10:00 pm to 5:00 am and Friday from 10:00 pm to 7:00 am. \u2022 I-205 Southbound lane(s) Monday through Thursday from 10:00 pm to 5:00 am and Friday from 10:00 pm to 7:00 am and Saturday from 10:00 pm to 8:00 am. Flagging - \u2022 Main Street \u2013 Oregon City Monday 6:00 am to 5:00 pm.\n<!--Links Start Here-->\n[Link to Additional Information](https://www.i205corridor.org/updates)",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "relationship": {
+      "parents": [
+       "22T046983"
+      ]
+     },
+     "road_names": [
+      "I205"
+     ],
+     "update_date": "2026-10-24T14:31:13Z"
+    },
+    "end_date": "2026-11-17T11:00:00Z",
+    "end_date_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "ending_milepost": 8.8,
+    "event_status": "active",
+    "lanes": [],
+    "location_method": "other",
+    "start_date": "2022-05-27T00:00:00Z",
+    "start_date_accuracy": "estimated",
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -122.56315,
+      45.49683
+     ],
+     [
+      -122.48293,
+      45.49196
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "22T075374-EB",
+   "properties": {
+    "beginning_accuracy": "estimated",
+    "beginning_milepost": 5.85,
+    "core_details": {
+     "creation_date": "2022-09-07T15:23:32Z",
+     "data_source_id": "1",
+     "description": "Traffic Impacts: Lane closures, traffic shifts, shoulder closures and up to 20-minute traffic holds 8 a.m. to 5 p.m., weekdays. Temporary sidewalk closures with accessible pedestrian detours. Possible nighttime work with closures. Travelers can expect congestion during construction. Alternate routes are available. Flaggers may be directing traffic.\n<!--Links Start Here-->\n[Link to Additional Information](https://www.oregon.gov/odot/Regions/Pages/Outer%20Powell%20Transportation%20Safety%20Improvements.aspx)",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "relationship": {
+      "parents": [
+       "22T075374"
+      ]
+     },
+     "road_names": [
+      "US26"
+     ],
+     "update_date": "2026-10-24T14:31:32Z"
+    },
+    "end_date": "2030-11-10T08:00:00Z",
+    "end_date_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "ending_milepost": 9.96,
+    "event_status": "active",
+    "lanes": [],
+    "location_method": "other",
+    "start_date": "2022-09-26T08:00:00Z",
+    "start_date_accuracy": "estimated",
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -122.48293,
+      45.49196
+     ],
+     [
+      -122.56315,
+      45.49683
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "22T075374-WB",
+   "properties": {
+    "beginning_accuracy": "estimated",
+    "beginning_milepost": 9.96,
+    "core_details": {
+     "creation_date": "2022-09-07T15:23:32Z",
+     "data_source_id": "1",
+     "description": "Traffic Impacts: Lane closures, traffic shifts, shoulder closures and up to 20-minute traffic holds 8 a.m. to 5 p.m., weekdays. Temporary sidewalk closures with accessible pedestrian detours. Possible nighttime work with closures. Travelers can expect congestion during construction. Alternate routes are available. Flaggers may be directing traffic.\n<!--Links Start Here-->\n[Link to Additional Information](https://www.oregon.gov/odot/Regions/Pages/Outer%20Powell%20Transportation%20Safety%20Improvements.aspx)",
+     "direction": "westbound",
+     "event_type": "work-zone",
+     "relationship": {
+      "parents": [
+       "22T075374"
+      ]
+     },
+     "road_names": [
+      "US26"
+     ],
+     "update_date": "2026-10-24T14:31:32Z"
+    },
+    "end_date": "2030-11-10T08:00:00Z",
+    "end_date_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "ending_milepost": 5.85,
+    "event_status": "active",
+    "lanes": [],
+    "location_method": "other",
+    "start_date": "2022-09-26T08:00:00Z",
+    "start_date_accuracy": "estimated",
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -121.17846,
+      44.36915
+     ],
+     [
+      -121.17808,
+      44.34025
+     ]
+    ],
+    "type": "MultiPoint"
+   },
+   "id": "24T065783-SB",
+   "properties": {
+    "beginning_accuracy": "estimated",
+    "beginning_milepost": 114.56,
+    "core_details": {
+     "creation_date": "2024-08-06T15:38:43Z",
+     "data_source_id": "1",
+     "description": "Road construction is occurring causing minimal delay to traffic. Use caution and watch for workers. The contractor will be working on Smith Rock Way. Use caution, prepare to slow or move over.\n<!--Links Start Here-->\n[Link to Additional Information](https://www.oregon.gov/odot/projects/pages/project-details.aspx?project=21162)",
+     "direction": "southbound",
+     "event_type": "work-zone",
+     "relationship": {
+      "parents": [
+       "24T065783"
+      ]
+     },
+     "road_names": [
+      "US97"
+     ],
+     "update_date": "2026-10-26T01:30:55Z"
+    },
+    "end_date": "2026-11-02T03:00:00Z",
+    "end_date_accuracy": "estimated",
+    "ending_accuracy": "estimated",
+    "ending_milepost": 116.56,
+    "event_status": "active",
+    "lanes": [
+     {
+      "order": 1,
+      "status": "closed",
+      "type": "median"
+     },
+     {
+      "order": 2,
+      "status": "closed",
+      "type": "general"
+     },
+     {
+      "order": 3,
+      "status": "closed",
+      "type": "shoulder"
+     },
+     {
+      "order": 4,
+      "status": "open",
+      "type": "exit-ramp"
+     },
+     {
+      "order": 5,
+      "status": "open",
+      "type": "entrance-ramp"
+     }
+    ],
+    "location_method": "other",
+    "start_date": "2024-08-06T15:38:43Z",
+    "start_date_accuracy": "estimated",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  }
+ ],
+ "road_event_feed_info": {
+  "contact_email": "TripCheck.Support.ODOT@odot.oregon.gov",
+  "contact_name": "ODOT TripCheck Support",
+  "data_sources": [
+   {
+    "data_source_id": "1",
+    "organization_name": "Oregon-DOT"
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "Oregon-DOT",
+  "update_date": "2026-10-28T03:11:51Z",
+  "update_frequency": 30,
+  "version": "4.0"
+ },
+ "type": "FeatureCollection"
+}

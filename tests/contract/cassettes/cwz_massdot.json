@@ -1,0 +1,366 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -71.0991471,
+      41.7697275
+     ],
+     [
+      -71.0990818,
+      41.769805
+     ],
+     [
+      -71.0989049,
+      41.7702738
+     ],
+     [
+      -71.0988769,
+      41.7703628
+     ],
+     [
+      -71.0988537,
+      41.7704362
+     ],
+     [
+      -71.0988461,
+      41.7704615
+     ],
+     [
+      -71.098827,
+      41.7705247
+     ],
+     [
+      -71.0988232,
+      41.7705374
+     ],
+     [
+      -71.0987981,
+      41.7706105
+     ],
+     [
+      -71.0987736,
+      41.7706818
+     ],
+     [
+      -71.0987376,
+      41.7707869
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "67ff63be-3710-e45a-9ebe-950e0780140b",
+   "properties": {
+    "core_details": {
+     "creation_date": "2026-10-21T19:04:47.2238585+00:00",
+     "data_source_id": "13008598-f797-8f59-a89a-129aecdd6bcc",
+     "description": "A temporary right shoulder/lane closure will be in effect on S. Main Street NB. Lane shifts will be in place during work hours only.\nAt least one travel lane in each direction will be maintained at all times during work. Police details will be on-site to assist with traffic control.",
+     "direction": "northbound",
+     "event_type": "work-zone",
+     "name": "WZM-1038946",
+     "project_id": "1fde611e-1a76-4d8a-92c8-b71b13c611e9",
+     "related_road_events": [
+      {
+       "id": "455b3616-a483-4259-b3f2-1266e227b41f",
+       "type": "next-occurrence"
+      },
+      {
+       "id": "c0f6a485-f5df-b052-bcb5-2a00011510d0",
+       "type": "related-work-zone"
+      }
+     ],
+     "road_names": [
+      "NORTH MAIN STREET, SOUTH MAIN STREET - NB"
+     ],
+     "update_date": "2026-10-22T19:56:50.4404972+00:00"
+    },
+    "end_date": "2026-10-28T08:00:00+00:00",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "lanes": [
+     {
+      "order": 1,
+      "status": "shift-left",
+      "type": "general"
+     },
+     {
+      "order": 2,
+      "status": "closed",
+      "type": "shoulder"
+     }
+    ],
+    "location_method": "unknown",
+    "restrictions": [],
+    "start_date": "2026-10-28T00:00:00+00:00",
+    "vehicle_impact": "all-lanes-open"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -71.71982801182028,
+      42.17724759202934
+     ],
+     [
+      -71.7199189707231,
+      42.17698546780385
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "0a129754-7407-d05e-9723-7bb1d92357b0",
+   "properties": {
+    "core_details": {
+     "creation_date": "2025-08-14T18:36:19.7807593+00:00",
+     "data_source_id": "13008598-f797-8f59-a89a-129aecdd6bcc",
+     "direction": "undefined",
+     "event_type": "work-zone",
+     "name": "WZM-1008998",
+     "project_id": "56db0a1d-5ccb-4407-b031-0fd9270ff621",
+     "road_names": [
+      "Depot St"
+     ],
+     "update_date": "2025-08-14T19:29:52.7053844+00:00"
+    },
+    "end_date": "2026-11-02T19:34:00+00:00",
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "unknown",
+    "start_date": "2025-08-11T18:34:00+00:00",
+    "vehicle_impact": "all-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -71.8138511,
+      42.239849
+     ],
+     [
+      -71.8136396,
+      42.2400311
+     ],
+     [
+      -71.8132993,
+      42.2403258
+     ],
+     [
+      -71.8127964,
+      42.2407737
+     ],
+     [
+      -71.8126187,
+      42.240932
+     ],
+     [
+      -71.8122511,
+      42.2412614
+     ],
+     [
+      -71.8120438,
+      42.2414394
+     ],
+     [
+      -71.8118211,
+      42.2416022
+     ],
+     [
+      -71.8115478,
+      42.2417841
+     ],
+     [
+      -71.8112808,
+      42.2419389
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "82ab1ba8-9f22-e957-b24c-c4b29a3f2449",
+   "properties": {
+    "beginning_reference_post": 16.07,
+    "core_details": {
+     "creation_date": "2026-10-23T00:03:29.8748546+00:00",
+     "data_source_id": "13008598-f797-8f59-a89a-129aecdd6bcc",
+     "direction": "eastbound",
+     "event_type": "work-zone",
+     "name": "WZM-1039244",
+     "project_id": "ef8536d6-1a69-4edf-8562-705756f7a617",
+     "related_road_events": [
+      {
+       "id": "ef704c2a-4694-e15a-9ffe-b45585004c47",
+       "type": "next-occurrence"
+      }
+     ],
+     "road_names": [
+      "I290 EB"
+     ],
+     "update_date": "2026-10-23T10:30:57.9384625+00:00"
+    },
+    "end_date": "2026-10-28T09:00:00+00:00",
+    "ending_reference_post": 16.266,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "unknown",
+    "reference_post_unit": "miles",
+    "restrictions": [],
+    "start_date": "2026-10-28T01:00:00+00:00",
+    "vehicle_impact": "some-lanes-closed"
+   },
+   "type": "Feature"
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      -70.1833355,
+      41.6662654
+     ],
+     [
+      -70.1838998,
+      41.6664361
+     ],
+     [
+      -70.1839007,
+      41.6664363
+     ],
+     [
+      -70.1842849,
+      41.6665423
+     ],
+     [
+      -70.185095,
+      41.6667658
+     ],
+     [
+      -70.1850951,
+      41.6667658
+     ],
+     [
+      -70.1854425,
+      41.66687
+     ],
+     [
+      -70.1854778,
+      41.6668806
+     ],
+     [
+      -70.1857907,
+      41.6669602
+     ],
+     [
+      -70.1858328,
+      41.6669725
+     ],
+     [
+      -70.1860416,
+      41.6670108
+     ],
+     [
+      -70.1860422,
+      41.6670109
+     ],
+     [
+      -70.1861888,
+      41.6670345
+     ],
+     [
+      -70.1863398,
+      41.6670442
+     ],
+     [
+      -70.1865384,
+      41.667059
+     ],
+     [
+      -70.1867232,
+      41.6670728
+     ],
+     [
+      -70.186971,
+      41.6670835
+     ],
+     [
+      -70.1872114,
+      41.6670886
+     ],
+     [
+      -70.1877059,
+      41.6670943
+     ],
+     [
+      -70.1878182,
+      41.6670946
+     ],
+     [
+      -70.1879778,
+      41.667095
+     ]
+    ],
+    "type": "LineString"
+   },
+   "id": "c054965f-9d74-4f59-b102-c684fa45db5c",
+   "properties": {
+    "beginning_reference_post": 22.17,
+    "core_details": {
+     "creation_date": "2026-10-23T19:01:50.046335+00:00",
+     "data_source_id": "13008598-f797-8f59-a89a-129aecdd6bcc",
+     "direction": "northbound",
+     "event_type": "work-zone",
+     "name": "WZM-1039317",
+     "project_id": "1c452935-c160-475a-8cff-c04db2432eec",
+     "related_road_events": [
+      {
+       "id": "897b78e6-3450-2452-8098-c3aa5f129f5b",
+       "type": "next-occurrence"
+      }
+     ],
+     "road_names": [
+      "SR28 NB"
+     ],
+     "update_date": "2026-10-23T20:34:53.8135182+00:00"
+    },
+    "end_date": "2026-10-28T19:30:00+00:00",
+    "ending_reference_post": 22.42,
+    "is_end_date_verified": false,
+    "is_end_position_verified": false,
+    "is_start_date_verified": false,
+    "is_start_position_verified": false,
+    "location_method": "unknown",
+    "reference_post_unit": "miles",
+    "restrictions": [],
+    "start_date": "2026-10-28T11:00:00+00:00",
+    "vehicle_impact": "alternating-one-way"
+   },
+   "type": "Feature"
+  }
+ ],
+ "feed_info": {
+  "contact_email": "neil.boudreau@state.ma.us",
+  "contact_name": "Neil Boudreau",
+  "data_sources": [
+   {
+    "data_source_id": "13008598-f797-8f59-a89a-129aecdd6bcc",
+    "organization_name": "MassDOT",
+    "update_date": "2026-10-27T23:12:20.6669027-04:00",
+    "update_frequency": 0
+   }
+  ],
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "publisher": "MassDOT Work Zone Manager",
+  "update_date": "2026-10-28T03:12:20.6669027+00:00",
+  "update_frequency": 60,
+  "version": "1.0"
+ },
+ "type": "FeatureCollection"
+}

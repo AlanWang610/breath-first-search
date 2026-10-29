@@ -22,6 +22,14 @@ found the error. `_detail` still looks in both places, which costs nothing and c
 publisher that flattens, but it is defensive rather than load-bearing and should not be
 described as the reason one parser serves three versions.
 
+**CWZ 1.0 reads here too** (ADR 0058, superseding 0039). Connected Work Zones was developed
+from WZDx 4.2 and keeps its work-zone event: `core_details`, `vehicle_impact`, `start_date`
+and `end_date` sit where this reader looks. That was measured, not read off the spec: MassDOT
+(1,363 records) and Illinois DOT (800) parsed in full on 2026-10-28. What CWZ adds -
+`worker_presence`, per-lane `status`, `restrictions` - is not read, and nothing here
+depends on it. The adapter says which specification it publishes, so the vintage reads
+`cwz-1.0`.
+
 **Nothing here raises on a malformed feature.** A feed that changes shape mid-release drops
 the features it broke and keeps the ones it did not, because the alternative is a route
 losing every closure in a state over one bad record.

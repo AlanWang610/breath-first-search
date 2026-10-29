@@ -181,6 +181,38 @@ LICENCES: dict[str, SourceLicence] = {
         licence="no licence declared by the feed; WSDOT terms of use",
         attribution="Work zone data: Washington State DOT",
     ),
+    # M19's keyed feeds. A key decides who can fetch a feed and the envelope decides who may
+    # republish it: these need a key and declare CC0 1.0, read on 2026-10-28.
+    # MassDOT predates M19 and answered through the generic `wzdx` row by prefix. Its own row
+    # now that a payload has been read: CWZ 1.0, CC0 in the envelope.
+    "wzdx_massdot": SourceLicence(
+        source="wzdx_massdot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Massachusetts Department of Transportation",
+    ),
+    "wzdx_ordot": SourceLicence(
+        source="wzdx_ordot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Oregon Department of Transportation",
+    ),
+    "wzdx_ildot": SourceLicence(
+        source="wzdx_ildot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Illinois Department of Transportation and Illinois Tollway",
+    ),
+    # Its own row, ahead of the `nps` one by prefix: the alerts API is US public domain by
+    # statute, and this feed declares CC0 in its envelope, which is what ADR 0038 reads.
+    "wzdx_nps": SourceLicence(
+        source="wzdx_nps",
+        licence="CC0 1.0",
+        attribution="Road events: National Park Service",
+    ),
+    # Keyless, refused by M14 for timing out, adopted by M19's re-survey.
+    "wzdx_mndot": SourceLicence(
+        source="wzdx_mndot",
+        licence="CC0 1.0",
+        attribution="Work zone data: Minnesota Department of Transportation",
+    ),
     "state511": SourceLicence(
         source="state511",
         licence="per state DOT terms of use",

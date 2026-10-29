@@ -27,10 +27,15 @@ registry's entire budget story.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from longrun.adapters.base import AdapterResult, describe
 from longrun.adapters.wzdx.feed import feed_publisher, feed_version, parse_wzdx
+
+#: Which specification a feed publishes. CWZ 1.0 reads through the same parser (ADR 0058);
+#: what differs is the vintage it is reported under, so `cwz-1.0` is never mistaken for
+#: the WZDx 1.0 of 2019.
+Spec = Literal["wzdx", "cwz"]
 
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import date
@@ -67,6 +72,7 @@ def fetch_feed(
     headers: dict[str, str] | None = None,
     timeout_s: float = HTTP_TIMEOUT_S,
     max_bytes: int = MAX_FEED_BYTES,
+    spec: Spec = "wzdx",
 ) -> AdapterResult:
     """One WZDx feed, cached, parsed, and never raised out of.
 
@@ -93,7 +99,7 @@ def fetch_feed(
         payload = fetch(ctx.cache, f"adapter.{adapter}", wzdx_args(adapter, day), day, produce)
     except Exception as exc:  # noqa: BLE001 - a feed that is down is a reason, not a crash
         return AdapterResult(reason=describe(exc), source_url=url)
-    return _result(payload, url, kind)
+    return _result(payload, url, kind, spec)
 
 
 def replay_or_refuse(
@@ -104,6 +110,7 @@ def replay_or_refuse(
     key: ApiKey,
     *,
     kind: FeatureKind = "closures",
+    spec: Spec = "wzdx",
 ) -> AdapterResult:
     """A keyed feed whose key is not set: what was recorded, or the key's own reason (M17).
 
@@ -120,10 +127,10 @@ def replay_or_refuse(
         return AdapterResult(reason=describe(exc), source_url=url)
     if payload is None:
         return AdapterResult(reason=key.missing_reason(), source_url=url, key_missing=True)
-    return _result(payload, url, kind)
+    return _result(payload, url, kind, spec)
 
 
-def _result(payload: Any, url: str, kind: FeatureKind) -> AdapterResult:
+def _result(payload: Any, url: str, kind: FeatureKind, spec: Spec = "wzdx") -> AdapterResult:
     """A payload, fetched or replayed, as one adapter's answer."""
     version = feed_version(payload)
     features = parse_wzdx(payload, kind=kind, source_url=url)
@@ -131,22 +138,23 @@ def _result(payload: Any, url: str, kind: FeatureKind) -> AdapterResult:
     # "No envelope AND no features" is a feed that did not answer - a 200 carrying an error
     # page, most likely. An envelope-less feed that parsed 480 work zones answered fine, and
     # calling it unavailable would discard a whole state's closures over a metadata key.
+    name = "CWZ" if spec == "cwz" else "WZDx"
     reason = (
         None
         if (features or version or feed_publisher(payload))
-        else "the feed returned no WZDx envelope and no features"
+        else f"the feed returned no {name} envelope and no features"
     )
     if not features and isinstance(published, list) and published:
         # Records that all failed to parse are not an empty feed (M18): it is the hole ADR
-        # 0039 describes, a CWZ feed read as WZDx answering "checked, nothing here" while
-        # carrying every work zone in the state.
-        reason = f"the feed carried {len(published)} record(s) and none read as WZDx"
+        # 0039 feared, a feed answering "checked, nothing here" while carrying every work
+        # zone in the state.
+        reason = f"the feed carried {len(published)} record(s) and none read as {name}"
     return AdapterResult(
         features=features,
-        vintage=f"wzdx-{version}" if version else "wzdx-unversioned",
+        vintage=f"{spec}-{version}" if version else f"{spec}-unversioned",
         source_url=url,
         reason=reason,
     )
 
 
-__all__ = ["HTTP_TIMEOUT_S", "fetch_feed", "replay_or_refuse", "wzdx_args"]
+__all__ = ["HTTP_TIMEOUT_S", "Spec", "fetch_feed", "replay_or_refuse", "wzdx_args"]

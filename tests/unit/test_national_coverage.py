@@ -153,14 +153,15 @@ def test_the_committed_table_is_whole_and_consistent() -> None:
 def test_statewide_closure_coverage_never_falls() -> None:
     """The ratchet. M17 measured 20 states answered at tier 1 with no key needed; every
     later milestone may raise this number and none may lower it. Update it upward in the
-    commit that earns it. M20 earned 21: California, at tier 2, through Caltrans."""
+    commit that earns it. M20 earned 21: California, at tier 2, through Caltrans. M19 earned
+    22: Minnesota, keyless and answering again."""
     from longrun.adapters.registry import discover
 
     adapters, _ = discover()
     table = load_table(TABLE)
     summary = summarise(coverage_table(adapters, table, ["closures"]), table)["closures"]
     usable = summary["states_by_tier"]["1"] + summary["states_by_tier"]["2"]
-    assert len(usable) >= 21, sorted(usable)
+    assert len(usable) >= 22, sorted(usable)
 
 
 def test_statewide_closure_coverage_with_every_key_set_never_falls(
@@ -169,7 +170,8 @@ def test_statewide_closure_coverage_with_every_key_set_never_falls(
     """The keyed half of the ratchet (M18). CI has no keys, so the ratchet above can only
     ever be raised by a keyless feed; a keyed adoption is counted here instead. Every key is
     set to a placeholder - `coverage_table` asks nobody, it only counts who could be asked.
-    M18 measured 21: the 20 above and Massachusetts. M20 measured 22, adding California."""
+    M18 measured 21: the 20 above and Massachusetts. M20 measured 22, adding California.
+    M19 adds Oregon (23), Illinois (24) and Minnesota (25)."""
     from longrun.adapters.keys import ALL_KEYS
     from longrun.adapters.registry import discover
 
@@ -179,7 +181,7 @@ def test_statewide_closure_coverage_with_every_key_set_never_falls(
     table = load_table(TABLE)
     summary = summarise(coverage_table(adapters, table, ["closures"]), table)["closures"]
     usable = summary["states_by_tier"]["1"] + summary["states_by_tier"]["2"]
-    assert len(usable) >= 22, sorted(usable)
+    assert len(usable) >= 25, sorted(usable)
 
 
 def test_a_claim_and_an_answer_are_counted_apart(tmp_path: Path) -> None:

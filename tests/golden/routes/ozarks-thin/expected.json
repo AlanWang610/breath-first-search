@@ -261,7 +261,7 @@
       "checked": true,
       "jurisdiction": "Ozark National Scenic Riverway (padus:NPS)",
       "kind": "closures",
-      "reason": null,
+      "reason": "tier 1 wzdx.nps: LONGRUN_NPS_API_KEY is not set; the NPS data API needs a free key (https://www.nps.gov/subjects/developer/get-started.htm)",
       "source": "closures",
       "tier": 1,
       "vintage": "wzdx-4.1"
